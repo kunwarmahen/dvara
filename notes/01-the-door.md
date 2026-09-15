@@ -262,6 +262,16 @@ $ dvara runs
 2026-09-15 17:46  guest/greeter  end_turn          $0.0468  'hello'
 ```
 
+**A turn that crashes still pays for what it spent.** Three model calls
+and then a 500 is still three model calls, and the accounting has to
+happen in the same `finally` that saves the session — the handler that
+catches the exception has a run record and no agent left to ask. Leave it
+out and a crash erases its own cost, so the daily allowance never sees
+it, and somebody with a $2 day can spend the afternoon in failing turns.
+The other direction matters too: a turn that never reached a model costs
+`$0.0000`, not "unpriced". "Unpriced" is the store admitting a doubt, and
+about a turn that never happened there is no doubt to admit.
+
 Three later features are all queries over this one table, which is why it
 exists in the first slice rather than the fourth. Money over time is a
 `SUM` over it. An audit is a `SELECT`. And a failed run is a *trace* —

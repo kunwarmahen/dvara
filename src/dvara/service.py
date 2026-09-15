@@ -172,8 +172,14 @@ class Service:
                          run_id=None, agent=agent, stop_reason="refused")
 
         async with self._lock(key):
+            # Costing zero until something is spent. The distinction the
+            # ledger draws is between "nothing was spent" and "tokens
+            # were spent that nobody can price", and a refusal is firmly
+            # the first: reading "unpriced" against a turn that never
+            # reached a model is the store admitting to a doubt it does
+            # not have.
             run = Run(actor=actor, agent=agent, thread=thread, message=text,
-                      started_at=started)
+                      started_at=started, cost_usd=0.0)
             try:
                 return await self._turn(spec=spec, who=who, key=key, run=run)
             except Refused as exc:
@@ -242,11 +248,18 @@ class Service:
             # synthesized results -- so what is written is always loadable.
             self.sessions.save(agent, provider_name=provider_name,
                                session_id=key)
+            # AND ACCOUNT FOR IT. A turn that raised on its fourth model
+            # call still paid for the first three, and this is the only
+            # place that knows it: the handler upstairs has a Run and no
+            # agent. Leave it out and a crash erases its own cost --
+            # which the daily allowance then never sees, so a person with
+            # a $2 day can spend all afternoon in failing turns. Zero
+            # tokens is also a real answer, and cheap to write down.
+            run.usage = _delta(before_total, agent.total_usage)
+            run.cost_usd = _cost(before_models, agent.usage_by_model,
+                                 provider_name=provider_name)
+            run.ended_at = datetime.now(UTC)
 
-        run.usage = _delta(before_total, agent.total_usage)
-        run.cost_usd = _cost(before_models, agent.usage_by_model,
-                             provider_name=provider_name)
-        run.ended_at = datetime.now(UTC)
         run.stop_reason = end.reason if end else "error"
         run.detail = end.detail if end else None
         run.reply = (end.response.message.text().strip()

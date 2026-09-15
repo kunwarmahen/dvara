@@ -278,3 +278,52 @@ def test_a_free_local_model_costs_zero_rather_than_unknown(make_service):
     hosted = make_service([says("hi", usage=Usage(50, 10, 0, 0))],
                           provider_name="anthropic", model="unknown-slug")
     assert deliver(hosted, thread="t2").cost_usd is None
+
+
+def test_a_turn_that_crashes_still_pays_for_what_it_spent(make_service,
+                                                          agents_root,
+                                                          priced_model):
+    # Three expensive calls and then a 500 is still three expensive
+    # calls. A crash that erased its own cost would let somebody spend
+    # all afternoon in failing turns without touching their allowance.
+    write_package(agents_root, "worker", body=(
+        '[agent]\nname = "worker"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["glob"]\n'))
+    # One tool call, then the script runs dry: the loop asks for a second
+    # response and the provider raises mid-turn.
+    service = make_service(
+        [calls("glob", {"pattern": "*"}, usage=Usage(100_000, 0, 0, 0))])
+    reply = asyncio.run(service.deliver(actor="owner", agent="worker",
+                                        thread="t", text="spend then break"))
+    assert reply.stop_reason == "error"
+
+    recorded = service.runs.recent()[0]
+    assert recorded.usage.input_tokens == 100_000
+    assert recorded.cost_usd == pytest.approx(100.0)   # 100k tok @ $1000/Mtok
+    # ...and the allowance can see it, which is the whole point.
+    from dvara.money import day_start
+    assert service.runs.spent_since("owner", day_start()) == pytest.approx(100.0)
+
+
+def test_a_recorded_refusal_costs_zero_rather_than_an_unknown(make_service):
+    # "unpriced" is the store admitting a doubt; nothing ran, so there is
+    # no doubt to admit. A spent allowance is the refusal that DOES leave
+    # a row -- it happened to somebody the service serves.
+    from datetime import UTC, datetime
+
+    from dvara.runs import Run
+    service = make_service([])
+    service.runs.record(Run(actor="guest", agent="greeter", thread="t",
+                            message="earlier", started_at=datetime.now(UTC),
+                            cost_usd=0.10, stop_reason="end_turn"))
+    reply = deliver(service, actor="guest", agent="greeter")
+    assert reply.stop_reason == "refused"
+    assert service.runs.recent()[0].cost_usd == 0.0
+
+
+def test_someone_the_service_does_not_serve_leaves_no_row(make_service):
+    # The other half of the rule, and it is a disk-fill defence: an
+    # identity nobody has heard of cannot write rows by knocking.
+    service = make_service([])
+    assert deliver(service, actor="nobody").run_id is None
+    assert service.runs.recent() == []
