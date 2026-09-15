@@ -143,6 +143,12 @@ def _say(service: Service, args) -> int:
 
     reply = asyncio.run(go())
     print(reply.text)
+    if reply.detail and not reply.ok:
+        # The owner is standing right here. A channel gets the polite
+        # sentence; the person who can FIX it gets the reason, because a
+        # misconfigured base URL that reports only "that went wrong at my
+        # end" is a afternoon spent guessing.
+        print(f"  {reply.detail}", file=sys.stderr)
     line = f"[{reply.stop_reason}"
     if reply.cost_usd is not None:
         line += f" · ${reply.cost_usd:.4f}"
@@ -166,6 +172,11 @@ def _runs(service: Service, args) -> int:
         stamp = run.started_at.strftime("%Y-%m-%d %H:%M")
         print(f"{stamp}  {run.actor}/{run.agent}  {run.stop_reason:<14} "
               f"{cost:>9}  {run.message[:48]!r}")
+        if run.detail and not run.ok:
+            # Why it went wrong, where the owner is already looking. The
+            # store has carried this since the first commit; not printing
+            # it made the ledger a list of shrugs.
+            print(f"{'':<18}{run.detail}")
     return 0
 
 

@@ -66,3 +66,42 @@ def test_the_shipped_example_root_lists_its_agents(tmp_path, capsys):
                  "--state", str(tmp_path / "state"), "agents"]) == 0
     out = capsys.readouterr().out
     assert "greeter" in out and "0.1.0" in out
+
+
+def test_a_failure_tells_the_owner_why_not_just_that(owned, capsys,
+                                                     monkeypatch):
+    # The polite sentence is for a channel. The person at the terminal is
+    # the one who can fix a wrong base URL, and they need the reason.
+    from dvara.service import Service
+
+    async def broken(self, **kwargs):
+        from dvara.service import Reply
+        return Reply(text="that went wrong at my end", run_id="abc",
+                     agent="greeter", stop_reason="error",
+                     detail="ProviderError: 404: 404 page not found")
+
+    monkeypatch.setattr(Service, "deliver", broken)
+    assert main([*owned, "say", "--actor", "owner", "--agent", "greeter",
+                 "hello"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out.startswith("that went wrong at my end")
+    assert "404 page not found" in captured.err
+
+
+def test_the_ledger_shows_why_a_run_failed(owned, capsys):
+    from datetime import UTC, datetime
+
+    from dvara.cli import _service
+    from dvara.runs import Run
+
+    args = main.__globals__["build_parser"]().parse_args([*owned, "runs"])
+    service = _service(args)
+    try:
+        service.runs.record(Run(actor="owner", agent="greeter", thread="t",
+                                message="hello", started_at=datetime.now(UTC),
+                                stop_reason="error",
+                                detail="ProviderError: 404: 404 page not found"))
+    finally:
+        service.close()
+    assert main([*owned, "runs"]) == 0
+    assert "404 page not found" in capsys.readouterr().out
