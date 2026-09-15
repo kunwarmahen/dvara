@@ -1,0 +1,15 @@
+# Who this service serves. An actor is ASSIGNED here, never asserted by
+# anything that arrives from outside: a channel adapter maps its own
+# native identity (a Telegram user id) onto one of these names, and an
+# identity with no name here is not served.
+#
+# No secrets in this file, ever. It is a thing you commit.
+
+[actor.owner]
+# No `agents` key: every agent in the roster. No ceilings: the package's
+# own is the only one in force.
+
+[actor.guest]
+agents           = ["greeter"]   # a complete whitelist
+max_usd_per_turn = 0.02          # lower than the package's own $0.05
+max_usd_per_day  = 0.10          # and only so many of those in a day

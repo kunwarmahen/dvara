@@ -1,0 +1,32 @@
+# The smallest package that proves a service works: no tools of its own,
+# no skills, no MCP. Everything interesting here is what dvara puts
+# AROUND it -- an actor who may reach it, a ceiling, a session that
+# survives a restart.
+[agent]
+name        = "greeter"
+description = "Answers in one short sentence. The service's hello-world."
+version     = "0.1.0"
+prompt      = "prompt.md"
+
+# No [model] table on purpose. The package names no provider and no
+# model, so it runs against whatever the machine has -- an Ollama box or
+# a cloud key, chosen by the service, never edited into somebody else's
+# package.
+
+[tools]
+# A package that only talks needs nothing that touches the disk. An
+# allowlist naming one harmless tool is also the cheapest demonstration
+# that the admission policy is real: ask this agent to read a file and
+# it will tell you it cannot.
+allow = ["ask_user"]
+
+[permissions]
+# A floor, not a decision. dvara may tighten this and never loosen it;
+# in a service with nobody watching, "ask" means read-only tools only.
+mode = "ask"
+
+[budget]
+# The author's estimate of what one greeting should cost. The owner may
+# raise it, and their own ceiling -- or what is left of somebody's daily
+# allowance -- may lower it.
+max_usd_per_turn = 0.05
