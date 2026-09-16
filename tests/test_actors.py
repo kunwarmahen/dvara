@@ -81,3 +81,25 @@ def test_the_shipped_example_parses():
     from tests.conftest import EXAMPLES
     people = ActorBook.from_toml(EXAMPLES / "actors.toml")
     assert people.ids() == ["guest", "owner"]
+
+
+# ---- the permissions rung ---------------------------------------------------
+
+def test_an_actor_with_no_permissions_key_has_no_opinion():
+    # The same convention as max_usd_per_turn: absent is not a ceiling.
+    assert book(owner={}).get("owner").permissions is None
+
+
+def test_a_rung_is_carried_through_to_the_gate():
+    quiet = book(guest={"permissions": "read_only"}).get("guest")
+    assert quiet.permissions == "read_only"
+
+
+def test_a_misspelled_rung_is_an_error_rather_than_the_tightest():
+    # At RUNTIME an unknown mode reads as the tightest, which is right for
+    # a package somebody else wrote. In the owner's own file it is a typo
+    # and the owner is standing right here to be told about it.
+    with pytest.raises(ConfigProblem, match="permissions must be one of"):
+        book(guest={"permissions": "read-only"})
+    with pytest.raises(ConfigProblem, match="permissions must be one of"):
+        book(guest={"permissions": True})

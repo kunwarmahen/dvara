@@ -42,6 +42,15 @@ Interleaving them would put two user messages into one history with one
 assistant reply between them, and Yantra's resumability invariant holds
 at prompt boundaries for a reason.
 
+That lock is held while a turn waits for a person to approve a tool call,
+and the consequence is worth stating before somebody meets it: A PENDING
+QUESTION IS NOT ANSWERED BY SENDING A MESSAGE. Typing "yes" into the
+thread queues that message behind the very turn it was meant to release,
+where it sits until the deadline passes. Answers arrive through the desk
+(``AskDesk.answer``, ``POST /asks/{id}``), which is a separate path on
+purpose -- an approval is not a sentence for the model to read, it is a
+decision about a call that is already in flight.
+
 No streaming in v1. One message, one reply: channels are turn-shaped, and
 a bot that streams is a bot that edits the same message forty times and
 gets rate-limited for it.
@@ -73,6 +82,7 @@ from yantra.errors import ConfigError
 
 from dvara import money
 from dvara.actors import Actor, ActorBook
+from dvara.asks import AskDesk
 from dvara.errors import Refused
 from dvara.gate import Policy
 from dvara.keys import session_key, workspace_parts
@@ -107,6 +117,7 @@ class Service:
 
     def __init__(self, *, roster: Roster, actors: ActorBook, state: Path,
                  policy: Policy | None = None,
+                 asks: AskDesk | None = None,
                  provider_name: str | None = None,
                  model: str | None = None,
                  provider_factory: Callable[[str], Provider] | None = None,
@@ -115,6 +126,13 @@ class Service:
         self.actors = actors
         self.state = Path(state).expanduser().resolve()
         self.policy = policy or Policy()
+        # Escalation is OPT-IN, and its absence is the whole of the old
+        # behaviour. No desk means no route to a person, which means "ask"
+        # decides by policy alone rather than waiting on somebody who was
+        # never wired up. A service that started blocking because a mode
+        # string somewhere said "ask" would be a service that hangs the
+        # day it is deployed.
+        self.asks = asks
         # The operator's overrides, in the CLI's own resolution order:
         # what the service was told  >  what the package says  >  the
         # environment's default. An Ollama owner must be able to run a
@@ -240,7 +258,12 @@ class Service:
         provider = self._provider(provider_name)
         try:
             agent = replace(spec, max_usd_per_turn=ceiling.amount).build_async(
-                permissions=self.policy.gate(spec.permissions_mode),
+                permissions=self.policy.gate(
+                    spec.permissions_mode,
+                    actor_mode=who.permissions,
+                    desk=self.asks,
+                    actor=who.id, agent=run.agent, thread=run.thread,
+                ),
                 cwd=self._workspace(key),
                 provider=provider,
                 provider_name=provider_name,

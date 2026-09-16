@@ -394,3 +394,164 @@ def test_someone_the_service_does_not_serve_leaves_no_row(make_service):
     service = make_service([])
     assert deliver(service, actor="nobody").run_id is None
     assert service.runs.recent() == []
+
+
+# ---- escalation: a turn that waits for a person ----------------------------
+
+def scribe(agents_root, name="scribe"):
+    """A package whose one tool can change something."""
+    write_package(agents_root, name, body=(
+        f'[agent]\nname = "{name}"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["write_file"]\n'
+        '[permissions]\nmode = "ask"\n'))
+
+
+async def when_asked(desk, *, approve: bool, actor: str = "owner"):
+    """Wait for the turn to reach the gate, then answer its question."""
+    while not desk.pending():
+        await asyncio.sleep(0)
+    ask = desk.pending()[0]
+    desk.answer(ask.id, actor=actor, approve=approve)
+    return ask
+
+
+def test_a_yes_lets_the_call_run(make_service, agents_root):
+    from dvara.asks import AskDesk
+    scribe(agents_root)
+    desk = AskDesk(timeout=5)
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+        says("written."),
+    ], asks=desk)
+
+    async def go():
+        turn = asyncio.create_task(service.deliver(
+            actor="owner", agent="scribe", thread="t", text="write it down"))
+        ask = await when_asked(desk, approve=True)
+        assert ask.tool == "write_file"
+        assert "notes.txt" in ask.summary     # the tool's own preview
+        assert ask.agent == "scribe" and ask.thread == "t"
+        return await turn
+
+    reply = asyncio.run(go())
+    assert reply.ok
+    work = service._workspace(session_key("owner", "scribe", "t"))
+    assert (work / "notes.txt").read_text() == "hi"
+
+
+def test_a_no_stops_it_and_says_who_said_no(make_service, agents_root):
+    from dvara.asks import AskDesk
+    scribe(agents_root)
+    desk = AskDesk(timeout=5)
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+        says("I could not write that."),
+    ], asks=desk)
+
+    async def go():
+        turn = asyncio.create_task(service.deliver(
+            actor="owner", agent="scribe", thread="t", text="write it down"))
+        await when_asked(desk, approve=False)
+        return await turn
+
+    reply = asyncio.run(go())
+    assert reply.ok
+    told = _tool_results(service.scripted.requests[-1]["messages"])
+    assert "owner was asked and said no" in told[0]
+    work = service._workspace(session_key("owner", "scribe", "t"))
+    assert not (work / "notes.txt").exists()
+
+
+def test_silence_refuses_the_call_rather_than_the_turn(make_service,
+                                                       agents_root):
+    # The turn still ANSWERS. A deadline that killed the conversation
+    # would make being away from your phone into an outage.
+    from dvara.asks import AskDesk
+    scribe(agents_root)
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+        says("nobody was around, so here it is in the reply instead: hi"),
+    ], asks=AskDesk(timeout=0.05))
+    reply = asyncio.run(service.deliver(actor="owner", agent="scribe",
+                                        thread="t", text="write it down"))
+    assert reply.ok
+    told = _tool_results(service.scripted.requests[-1]["messages"])
+    assert "nobody answered within 0.05 seconds" in told[0]
+
+
+def test_one_conversation_waiting_does_not_stop_another(make_service,
+                                                        agents_root):
+    # THE REASON THE GATE HAD TO BE AWAITABLE. The first turn is parked on
+    # a question; the second must run to completion underneath it. With a
+    # blocking gate this test deadlocks rather than fails, which is what
+    # it would have done in production too.
+    from dvara.asks import AskDesk
+    scribe(agents_root)
+    desk = AskDesk(timeout=5)
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+        says("second person, answered"),
+        says("written."),
+    ], asks=desk)
+
+    async def go():
+        waiting = asyncio.create_task(service.deliver(
+            actor="owner", agent="scribe", thread="t1", text="write it down"))
+        while not desk.pending():
+            await asyncio.sleep(0)
+
+        # A whole other conversation, start to finish, while the first one
+        # stands at the gate.
+        other = await service.deliver(actor="owner", agent="greeter",
+                                      thread="t2", text="hello?")
+        assert other.text == "second person, answered"
+        assert desk.pending(), "the first turn should still be waiting"
+
+        desk.answer(desk.pending()[0].id, actor="owner", approve=True)
+        return await waiting
+
+    assert asyncio.run(go()).ok
+
+
+def test_a_hung_up_caller_is_not_a_person_saying_no(make_service, agents_root):
+    # Cancellation propagates; it does not become a denial. History must
+    # not record a refusal nobody made.
+    from dvara.asks import AskDesk
+    scribe(agents_root)
+    desk = AskDesk(timeout=30)
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+    ], asks=desk)
+
+    async def go():
+        turn = asyncio.create_task(service.deliver(
+            actor="owner", agent="scribe", thread="t", text="write it down"))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        turn.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await turn
+        assert desk.pending() == []
+
+    asyncio.run(go())
+    assert service.runs.recent()[0].stop_reason == "cancelled"
+
+
+def test_an_actor_the_owner_will_not_be_woken_for_is_refused_outright(
+        make_service, agents_root):
+    from dvara.asks import AskDesk
+    scribe(agents_root)
+    desk = AskDesk(timeout=5)
+    quiet = ActorBook.from_dict({"actor": {
+        "guest": {"permissions": "read_only"}}})
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+        says("I could not write that."),
+    ], asks=desk, actors=quiet)
+
+    reply = asyncio.run(service.deliver(actor="guest", agent="scribe",
+                                        thread="t", text="write it down"))
+    assert reply.ok
+    assert desk.pending() == []          # nobody was disturbed
+    told = _tool_results(service.scripted.requests[-1]["messages"])
+    assert "Nobody is available to ask" in told[0]

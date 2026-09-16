@@ -1,0 +1,24 @@
+# The smallest package that has something worth asking about. `greeter`
+# only talks, so nothing it does could ever need permission; this one can
+# change a file, which is the whole difference.
+[agent]
+name        = "scribe"
+description = "Writes short files, once somebody says it may."
+version     = "0.1.0"
+prompt      = "prompt.md"
+
+[tools]
+# read_file is approved without asking, every time: a service that woke
+# somebody up to confirm a read is a service they turn off. write_file is
+# the one that becomes a question.
+allow = ["read_file", "write_file"]
+
+[permissions]
+# A floor, not a decision, and the one rung that means anything here.
+# With no route to a person -- no desk, no `--ask` -- this is read-only
+# tools only and write_file is refused with a sentence saying nobody was
+# available. With a route, it is a question somebody has to answer.
+mode = "ask"
+
+[budget]
+max_usd_per_turn = 0.05

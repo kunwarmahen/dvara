@@ -18,16 +18,19 @@ a door you decide who may knock on.
                         │  actors.toml · sessions · runs · workspaces
 ```
 
-Everything it knows how to do is in
-[notes/01-the-door.md](notes/01-the-door.md): the three nouns, the
-security rules, and why a daily allowance is enforced by a per-turn
-ceiling that shrinks.
+What it knows how to do is in the notes:
+[01 — the door](notes/01-the-door.md) has the three nouns, the security
+rules, and why a daily allowance is enforced by a per-turn ceiling that
+shrinks; [02 — a question that can wait](notes/02-a-question-that-can-wait.md)
+has escalation, and why a deadline that denies belongs here rather than
+in the framework.
 
 ## Status
 
-The first slice — roster, actors, sessions, budgets, run history and an
-HTTP surface — is covered by 111 tests. Channels do not exist yet. The
-API is not stable.
+Roster, actors, sessions, budgets, run history, an HTTP surface and
+escalation to a person — covered by 161 tests. Channels do not exist yet:
+the terminal is the only thing that asks you anything. The API is not
+stable.
 
 ## The shape of it
 
@@ -69,6 +72,12 @@ dvara --root examples/agents --actors examples/actors.toml \
       --provider ollama --model qwen3.8-64k:latest \
       say --actor guest --agent greeter "who are you, in one sentence?"
 
+# ask me before anything that could change something -- the question is
+# printed here and the answer is a keystroke
+dvara --root examples/agents --actors examples/actors.toml --ask \
+      --provider ollama --model qwen3.8-64k:latest \
+      say --actor owner --agent scribe "write a haiku into haiku.txt"
+
 # what it has been doing
 dvara --root examples/agents --actors examples/actors.toml runs
 
@@ -85,27 +94,35 @@ Who this service serves. It holds no secrets — it is a thing you commit.
 
 ```toml
 [actor.owner]
-# no keys at all: every agent in the roster, no ceilings
+# no keys at all: every agent in the roster, no ceilings, and this is
+# somebody the service may wake up to approve a tool call
 
 [actor.guest]
-agents           = ["greeter"]   # a COMPLETE whitelist; omit for all
+agents           = ["greeter"]     # a COMPLETE whitelist; omit for all
 max_usd_per_turn = 0.02
 max_usd_per_day  = 0.10
+permissions      = "read_only"     # served, but never asked to approve
 ```
+
+`permissions` can only ever tighten. The mode a turn runs under is the
+minimum of the package's, the owner's and this one, so `"yolo"` beside a
+guest's name grants them exactly nothing.
 
 An unknown key is an error, not a shrug:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, max_usd_per_day, max_usd_per_turn
+known: agents, max_usd_per_day, max_usd_per_turn, permissions
 ```
 
 ### The HTTP surface
 
 ```
-POST /message   {actor, agent, thread, text}   -> {text, ok, run_id, cost_usd, ...}
-GET  /agents                                   -> {agents: [...]}
+POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, cost_usd, ...}
+GET  /agents                                     -> {agents: [...]}
 GET  /health
+GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
+POST /asks/{id}    {actor, approve}              -> {answered, approved}
 ```
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
@@ -113,6 +130,37 @@ authenticates the caller, not the person**: a caller is a channel adapter
 inside your trust boundary, and it is the adapter's job to map its
 channel's identity onto an actor. A service with no token refuses to
 start, and binds to localhost unless told otherwise.
+
+## Asking a person
+
+With nobody attached, a service refuses anything that could change
+something and tells the model why — which is the right default at three
+in the morning and infuriating at three in the afternoon. Escalation is
+what you add when somebody is around, and it is **a route, not a
+setting**: somewhere a question can go, and somewhere an answer can come
+back from.
+
+```python
+from dvara import AskDesk, Service
+
+service = Service(roster=..., actors=..., state=...,
+                  asks=AskDesk(timeout=120, notify=send_it_to_them))
+```
+
+With a desk, `mode = "ask"` means ask: the turn suspends — it does not
+block, so every other conversation keeps running — until a person answers
+or the deadline passes. With no desk it means read-only tools only, which
+is exactly how a service behaved before any of this existed.
+
+Three refusals, three different sentences to the model, because they call
+for three different next moves: **they said no** (do not re-run it),
+**nobody answered** (silence, not a refusal — try again later), and
+**nobody could be reached** (asking again will not help).
+
+**Answers do not arrive as messages.** A turn holds its conversation's
+lock while it waits, so typing "yes" into the chat queues up behind the
+very turn it was meant to release. Answers come through the desk, or
+through `POST /asks/{id}`.
 
 ## Embedding it
 
@@ -139,7 +187,8 @@ print(reply.text, reply.cost_usd)
 | `actors.py` | who is served, what they may reach, what they may spend |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `money.py` | package ∧ actor ∧ what is left of today |
-| `gate.py` | a package's permission mode as a floor, never a grant |
+| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)) |
+| `asks.py` | questions waiting for a person, and the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)) |
 | `runs.py` | every turn that happened, including the ones that failed |
 | `http.py` | three endpoints and a bearer token (`[http]` extra) |
 | `cli.py` | `agents`, `say`, `runs`, `serve` |
@@ -153,7 +202,10 @@ print(reply.text, reply.cost_usd)
 2. **Actors are assigned, never asserted.** An identity that is not in
    the owner's file is not served.
 3. **A package's permission mode is a floor the service may tighten and
-   never loosen.** With nobody present, that means read-only tools only.
+   never loosen.** Three parties name a rung — the package, the owner and
+   the actor — and the tightest wins, so nothing anybody writes can
+   loosen what somebody else allowed. With no route to a person, that
+   means read-only tools only.
 4. **Nothing here is sandboxed by pretending.** Yantra's sandbox confines
    an agent's tool calls; it has nothing to say about a package's
    import-time side effects, and this service does not imply otherwise.

@@ -10,6 +10,13 @@
 # own is the only one in force.
 
 [actor.guest]
-agents           = ["greeter"]   # a complete whitelist
+agents           = ["greeter", "scribe"]
+permissions      = "read_only"   # served, but never woken up to approve
 max_usd_per_turn = 0.02          # lower than the package's own $0.05
 max_usd_per_day  = 0.10          # and only so many of those in a day
+
+# `permissions` is a rung on the ladder in gate.py and it can only ever
+# TIGHTEN: the mode a turn runs under is the minimum of the package's,
+# the owner's and this one. Writing "yolo" beside a guest grants them
+# nothing. What it is for is the line above -- somebody this service
+# serves, whom the owner would not want woken up to approve a write.

@@ -15,11 +15,21 @@ boring: TOML, reviewable, diffable, and it holds no secrets.
     agents           = ["researcher"]   # omit => every agent in the roster
     max_usd_per_turn = 0.25
     max_usd_per_day  = 2.00
+    permissions      = "ask"            # this person may be asked to approve
 
 ``agents`` follows ``AgentSpec.tool_allow``'s convention exactly: absent
 means everything, a list is a COMPLETE whitelist, and an empty list is an
 error rather than a silent "this person may reach nothing" -- because an
 empty allowlist is far likelier to be a bug than an intention.
+
+``permissions`` is a rung on the ladder in ``gate.py``, and it can only
+ever TIGHTEN: the mode a turn runs under is the minimum of the package's,
+the owner's and this one, so writing ``"yolo"`` beside a guest's name
+grants them nothing. What it is actually for is the other direction --
+``"read_only"`` beside somebody the owner serves but would not want woken
+up to approve a shell command, on a service where the owner themselves is
+asked. Absent means the tightest rung, which is what a person who was
+never considered should get.
 """
 
 from __future__ import annotations
@@ -29,12 +39,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dvara.errors import ConfigProblem, Refused
+from dvara.gate import LADDER
 
 #: Keys an actor table may carry. UNKNOWN KEYS ARE ERRORS: a misspelled
 #: ``max_usd_per_day`` that quietly means "no ceiling" is the exact
 #: failure a ceiling exists to prevent (the same rule Yantra's package
 #: loader applies to ``agent.toml``).
-ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day"})
+ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
+                        "permissions"})
 
 
 @dataclass(frozen=True)
@@ -46,6 +58,10 @@ class Actor:
     agents: tuple[str, ...] | None = None
     max_usd_per_turn: float | None = None
     max_usd_per_day: float | None = None
+    #: A rung on gate.py's ladder, or None for the tightest one. Composes
+    #: by minimum with the package's mode and the owner's policy, so it
+    #: can only ever make a turn stricter.
+    permissions: str | None = None
 
     def may_use(self, agent: str) -> bool:
         return self.agents is None or agent in self.agents
@@ -117,6 +133,7 @@ class ActorBook:
                 agents=_agents(body.get("agents"), name, where),
                 max_usd_per_turn=_money(body, "max_usd_per_turn", name, where),
                 max_usd_per_day=_money(body, "max_usd_per_day", name, where),
+                permissions=_mode(body.get("permissions"), name, where),
             )
         return cls(actors)
 
@@ -133,6 +150,24 @@ def _agents(value, name: str, where) -> tuple[str, ...] | None:
             f"allow every agent in the roster"
         )
     return tuple(value)
+
+
+def _mode(value, name: str, where) -> str | None:
+    """A rung, or a loud complaint.
+
+    Unknown modes read as the tightest at RUNTIME, which is the right
+    failure for a package somebody else wrote. In the owner's own file it
+    is the wrong one: a typo that silently means "this person may approve
+    nothing" is a support question, not a safety property, and the owner
+    is standing right here to be told.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in LADDER:
+        raise ConfigProblem(
+            f"{where}: [actor.{name}] permissions must be one of "
+            f"{', '.join(LADDER)} (got {value!r})")
+    return value
 
 
 def _money(body: dict, key: str, name: str, where) -> float | None:

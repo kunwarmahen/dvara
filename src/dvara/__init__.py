@@ -32,6 +32,7 @@ are enforced rather than promised:
 """
 
 from dvara.actors import Actor, ActorBook
+from dvara.asks import Answer, Ask, AskDesk, NotYours
 from dvara.errors import ConfigProblem, DvaraError, Refused
 from dvara.gate import Policy
 from dvara.keys import parse_key, session_key
@@ -43,9 +44,13 @@ from dvara.service import Reply, Service
 __all__ = [
     "Actor",
     "ActorBook",
+    "Answer",
+    "Ask",
+    "AskDesk",
     "Ceiling",
     "ConfigProblem",
     "DvaraError",
+    "NotYours",
     "Policy",
     "Refused",
     "Reply",

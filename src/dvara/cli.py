@@ -15,6 +15,14 @@ how the receipts in the notes were produced.
     dvara say --actor mahen --agent researcher "what changed today?"
     dvara runs --actor mahen
     dvara serve --host 127.0.0.1 --port 8765
+
+``--ask`` is where the terminal becomes a channel. The escalating gate
+needs somewhere to put a question and somewhere an answer can land, and
+which of those two a front end supplies is the only thing that differs
+between them: at a keyboard the question is printed and the answer is a
+keystroke, so ``say`` supplies both halves; a served process supplies
+neither, because the answer is going to arrive over HTTP from an adapter
+that is talking to somebody elsewhere.
 """
 
 from __future__ import annotations
@@ -26,6 +34,7 @@ import sys
 from pathlib import Path
 
 from dvara.actors import ActorBook
+from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
 from dvara.errors import ConfigProblem
 from dvara.gate import Policy
 from dvara.roster import Roster
@@ -62,6 +71,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "owner's half of the permission decision -- a "
                              "package that asks for yolo does not get it "
                              "unless this is set too")
+    parser.add_argument("--ask", action="store_true",
+                        help="escalate to a person instead of refusing. With "
+                             "`say` the question is printed here and you "
+                             "answer it; with `serve` it waits at GET /asks "
+                             "for whoever is talking to that person")
+    parser.add_argument("--ask-timeout", type=float, default=DEFAULT_TIMEOUT,
+                        metavar="SECONDS",
+                        help=f"how long a question waits before it is refused "
+                             f"for silence (default {DEFAULT_TIMEOUT:g})")
 
     subs = parser.add_subparsers(dest="command", required=True)
 
@@ -87,11 +105,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _service(args) -> Service:
+    desk = None
+    if args.ask:
+        try:
+            desk = AskDesk(timeout=args.ask_timeout)
+        except ValueError as exc:
+            raise ConfigProblem(str(exc)) from None
     return Service(
         roster=Roster(Path(args.root)),
         actors=ActorBook.from_toml(Path(args.actors)),
         state=Path(args.state),
         policy=Policy(mode="yolo" if args.yolo else "ask"),
+        asks=desk,
         provider_name=args.provider,
         model=args.model,
     )
@@ -133,7 +158,39 @@ def _agents(service: Service) -> int:
     return 0
 
 
+def _ask_at_the_keyboard(desk: AskDesk):
+    """Print the question, read the answer, hand it back to the desk.
+
+    ``to_thread`` rather than a bare ``input``: the turn that asked is
+    suspended on this coroutine's event loop, and a blocking read here
+    would stop every other task in the process -- which is precisely the
+    failure the awaitable gate exists to avoid, reintroduced one layer up.
+
+    ANYTHING THAT IS NOT YES IS NO. A stray newline, a closed pipe, a
+    person who typed "maybe" -- none of those are consent, and the
+    deadline is still running underneath in case nobody types at all.
+    """
+    async def notify(ask: Ask) -> None:
+        print(f"\n{ask.agent} wants to run {ask.tool}:", file=sys.stderr)
+        print(f"  {ask.summary}", file=sys.stderr)
+        try:
+            typed = await asyncio.to_thread(input, "approve? [y/N] ")
+        except EOFError:
+            typed = ""
+        desk.answer(ask.id, actor=ask.actor,
+                    approve=typed.strip().lower() in ("y", "yes"))
+
+    return notify
+
+
 def _say(service: Service, args) -> int:
+    if service.asks is not None:
+        # The terminal is the channel. Attached here rather than in
+        # `_service` because `serve` builds the same desk and must NOT
+        # get this: there is nobody at that process's keyboard, and a
+        # question printed to a log is a question nobody answers.
+        service.asks.notify = _ask_at_the_keyboard(service.asks)
+
     async def go():
         try:
             return await service.deliver(actor=args.actor, agent=args.agent,

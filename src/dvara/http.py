@@ -1,7 +1,14 @@
 """The HTTP surface -- a transport, and honest about being only that.
 
-Three endpoints, no session state, no cleverness. Everything that decides
+Five endpoints, no session state, no cleverness. Everything that decides
 anything lives in ``service.py``; this module moves JSON.
+
+TWO WAYS IN, AND THEY ARE NOT THE SAME WAY. ``/message`` starts a turn;
+``/asks`` and ``/asks/{id}`` release one that is already standing there
+waiting for a person to approve a tool call. They have to be separate
+paths, because a turn holds its conversation's lock while it waits -- an
+approval arriving as a MESSAGE would queue up behind the very turn it was
+meant to release, and sit there until the deadline passed.
 
 THE TOKEN AUTHENTICATES THE CALLER, NOT THE PERSON. That distinction is
 the whole security posture of this layer. A caller here is a channel
@@ -33,6 +40,7 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 
+from dvara.asks import NotYours
 from dvara.errors import ConfigProblem
 from dvara.service import Service
 
@@ -107,5 +115,60 @@ def create_app(service: Service, *, token: str) -> Any:
             "detail": reply.detail,
             "cost_usd": reply.cost_usd,
         }
+
+    @app.get("/asks")
+    async def asks(actor: str | None = None,
+                   authorization: str | None = Header(default=None)) -> dict:
+        """Questions standing right now, oldest first.
+
+        Unfiltered by default, because one adapter serves several people
+        and routes each question to its own person. That routing is the
+        adapter's job for the same reason the actor mapping is: it is the
+        only component that knows which chat belongs to whom.
+        """
+        check(authorization)
+        if service.asks is None:
+            return {"asks": []}
+        return {"asks": [ask.as_dict() for ask in service.asks.pending(actor)]}
+
+    @app.post("/asks/{ask_id}")
+    async def answer(ask_id: str, request: Request,
+                     authorization: str | None = Header(default=None)) -> dict:
+        """Release a waiting turn, one way or the other.
+
+        ``approve`` MUST BE A JSON BOOLEAN. Accepting anything truthy
+        would make the string "no" an approval, which is the exact shape
+        of the bug that ends with a shell command nobody agreed to: a
+        channel adapter forwarding a person's literal words into a field
+        that was expecting a decision.
+        """
+        check(authorization)
+        body = await request.json()
+        if not isinstance(body.get("actor"), str) or not body["actor"].strip():
+            raise HTTPException(status_code=400, detail="missing or empty: actor")
+        if not isinstance(body.get("approve"), bool):
+            raise HTTPException(status_code=400,
+                                detail="approve must be true or false")
+        if service.asks is None:
+            raise HTTPException(status_code=404,
+                                detail="this service does not escalate")
+        try:
+            landed = service.asks.answer(ask_id, actor=body["actor"],
+                                         approve=body["approve"])
+        except NotYours:
+            # Distinguished from 404 deliberately. Both sides of this line
+            # are inside the owner's trust boundary, and a routing bug in
+            # an adapter that looked like an expired question would be an
+            # afternoon lost; the id was already known to whoever sent it.
+            raise HTTPException(
+                status_code=403,
+                detail="that question was put to somebody else") from None
+        if not landed:
+            raise HTTPException(
+                status_code=404,
+                detail="no question with that id is waiting -- it was "
+                       "answered, it timed out, or the turn behind it went "
+                       "away")
+        return {"answered": True, "approved": body["approve"]}
 
     return app

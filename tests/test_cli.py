@@ -105,3 +105,89 @@ def test_the_ledger_shows_why_a_run_failed(owned, capsys):
         service.close()
     assert main([*owned, "runs"]) == 0
     assert "404 page not found" in capsys.readouterr().out
+
+
+# ---- the terminal as a channel ---------------------------------------------
+
+def test_without_ask_the_service_has_no_desk_at_all(owned):
+    from dvara.cli import _service, build_parser
+    service = _service(build_parser().parse_args([*owned, "agents"]))
+    try:
+        assert service.asks is None
+    finally:
+        service.close()
+
+
+def test_ask_gives_the_service_somewhere_to_put_a_question(owned):
+    from dvara.cli import _service, build_parser
+    args = build_parser().parse_args([*owned, "--ask", "--ask-timeout", "7",
+                                      "agents"])
+    service = _service(args)
+    try:
+        assert service.asks is not None
+        assert service.asks.timeout == 7
+        # And no notifier yet: `serve` must not inherit a prompt that
+        # would print a question into a log nobody reads.
+        assert service.asks.notify is None
+    finally:
+        service.close()
+
+
+def test_a_deadline_of_nothing_is_the_owners_mistake_not_a_traceback(owned,
+                                                                     capsys):
+    assert main([*owned, "--ask", "--ask-timeout", "0", "agents"]) == 2
+    assert "denies before it asks" in capsys.readouterr().err
+
+
+def test_say_prints_the_question_and_takes_the_answer(owned, monkeypatch,
+                                                      capsys):
+    # The keyboard is the channel. Both halves come from this front end:
+    # the question is printed here, and the answer is a keystroke.
+    typed = []
+
+    def fake_input(prompt=""):
+        typed.append(prompt)
+        return "y"
+
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    import asyncio
+
+    from dvara.asks import AskDesk
+    from dvara.cli import _ask_at_the_keyboard
+
+    desk = AskDesk(timeout=5)
+
+    async def go():
+        desk.notify = _ask_at_the_keyboard(desk)
+        return await desk.put(actor="owner", agent="scribe", thread="t",
+                              tool="write_file",
+                              summary="notes.txt <- 2 bytes")
+
+    assert asyncio.run(go()).approved
+    err = capsys.readouterr().err
+    assert "scribe wants to run write_file" in err
+    assert "notes.txt <- 2 bytes" in err
+    assert typed == ["approve? [y/N] "]
+
+
+@pytest.mark.parametrize("answer,approved",
+                         [("y", True), ("yes", True), ("Y", True),
+                          ("", False), ("n", False), ("maybe", False)])
+def test_anything_that_is_not_yes_is_no(owned, monkeypatch, answer, approved):
+    # A stray newline is not consent, and neither is "maybe".
+    monkeypatch.setattr("builtins.input", lambda prompt="": answer)
+
+    import asyncio
+
+    from dvara.asks import AskDesk
+    from dvara.cli import _ask_at_the_keyboard
+
+    desk = AskDesk(timeout=5)
+
+    async def go():
+        desk.notify = _ask_at_the_keyboard(desk)
+        return await desk.put(actor="owner", agent="scribe", thread="t",
+                              tool="write_file", summary="notes.txt")
+
+    assert asyncio.run(go()).approved is approved

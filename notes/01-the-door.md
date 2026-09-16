@@ -193,13 +193,16 @@ else is denied — and the denial arrives as *data*, which is what Yantra's
 gate already does: a refused call becomes an error result the model can
 read and work around, never an exception that kills the turn.
 
-Escalating properly — asking you, in the chat you are already in, whether
-this `bash` may run — is the next note, and it needs something Yantra
-does not have yet. `PermissionFn` is synchronous, and `AsyncAgent` calls
-it inline inside the running coroutine. A gate that waited for a human
-would block the event loop and every other conversation on the service
-with it. That is a missing seam in the framework, not a puzzle to be
-clever about here with a thread and a queue.
+Escalating properly — asking you whether this `bash` may run — needs
+something Yantra did not have when this was written. `PermissionFn` was
+synchronous, and `AsyncAgent` called it inline inside the running
+coroutine, so a gate that waited for a human would block the event loop
+and every other conversation on the service with it. That was a missing
+seam in the framework, not a puzzle to be clever about here with a
+thread and a queue. It is [note 02](02-a-question-that-can-wait.md): the
+framework grew an awaitable gate, and the deadline that denies lives
+here, because a timeout is policy and policy belongs to whoever owns the
+conversation.
 
 ## What a service does that a session never had to
 
@@ -304,15 +307,17 @@ message; an exception is a reply that silently never arrives.
 
 ## What is deliberately not here
 
-* **No channel.** Telegram is note 02, and the core it plugs into had to
-  exist first. `dvara say` drives the service in-process, with no HTTP
-  and no bot token, which is how every receipt above was produced.
-* **No escalation.** See the permission section: it needs an awaitable
-  gate in Yantra, which is Yantra's feature to argue.
-* **No policy ladder.** Tool + argument globs → allow / deny / ask is
-  note 04, and it only means anything once there is a human to escalate
-  to. Inventing the dialect twice is how two incompatible dialects are
-  born.
+* **No channel.** A bot is still the next note. `dvara say` drives the
+  service in-process, with no HTTP and no bot token, which is how every
+  receipt above was produced.
+* ~~**No escalation.**~~ Shipped in
+  [note 02](02-a-question-that-can-wait.md), and ahead of the channel it
+  was planned behind: "ask" means ask wherever there is a route for a
+  question to travel, and the terminal turned out to be one.
+* **No policy ladder.** Tool + argument globs → allow / deny / ask is a
+  later note, and it only means anything once there is a human to
+  escalate to. Inventing the dialect twice is how two incompatible
+  dialects are born.
 * **No streaming.** One message in, one reply out. Channels are
   turn-shaped, and a bot that streams is a bot that edits the same
   message forty times and gets rate-limited for it.
@@ -321,8 +326,9 @@ message; an exception is a reply that silently never arrives.
 
 ## What is not here yet
 
-* **Locks are never evicted.** One `asyncio.Lock` per session key the
-  process has ever served — a few hundred bytes against a correctness
+* **Locks are never evicted**, and [note 02](02-a-question-that-can-wait.md)
+  makes them hold for longer at a time. One `asyncio.Lock` per session key
+  the process has ever served — a few hundred bytes against a correctness
   property, and evicting them safely needs a refcount nobody has asked
   for yet.
 * ~~**A denied tool call still says "Permission denied by user."**~~
