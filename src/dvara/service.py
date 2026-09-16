@@ -17,22 +17,25 @@ edited on disk, and a crash that loses history nobody wrote down.
 Rebuilding is also the only version of this where a restart is a
 non-event, which is the entire point of an always-on thing.
 
-**ONE PROVIDER, HELD.** The opposite decision, for the opposite reason.
-``Provider.__init__`` opens an httpx connection pool -- two, in fact, one
-sync and one async -- so resolving a provider per turn would leak pools
-for as long as the process lived. Providers are cached by name for the
-life of the service and passed in via ``build_async(provider=...)``,
-the pre-resolved-provider seam Yantra grew for its CLI.
+**ONE PROVIDER, HELD -- AND GIVEN BACK.** The opposite decision, for the
+opposite reason. ``Provider.__init__`` opens an httpx connection pool --
+two, in fact, one sync and one async -- so resolving a provider per turn
+would leak pools for as long as the process lived. Providers are cached
+by name for the life of the service and passed in via
+``build_async(provider=...)``, the pre-resolved-provider seam Yantra grew
+for its CLI. Held is only half of it: ``aclose`` hands both pools back
+through the provider's own ``aclose``, because a process that is asked to
+stop should stop owning file descriptors.
 
-**HISTORY IS RESTORED; IDENTITY IS REBUILT.** ``apply_payload`` restores
-the system prompt, the model and ``max_iterations`` along with the
-messages, which is exactly right for ``/load`` at a keyboard and exactly
-wrong here: a package whose prompt was fixed this morning must take
-effect this afternoon, and an owner who switched models must not be
-silently overruled by whatever answered last week. So the three identity
-fields are captured from the freshly built agent and put back afterwards.
-What comes out of the store is the conversation; everything else comes
-out of the package.
+**HISTORY IS RESTORED; IDENTITY IS REBUILT.** A checkpoint holds two
+different things and only one of them is the conversation. Restoring the
+system prompt, the model and ``max_iterations`` along with the messages
+is exactly right for ``/load`` at a keyboard and exactly wrong here: a
+package whose prompt was fixed this morning must take effect this
+afternoon, and an owner who switched models must not be silently
+overruled by whatever answered last week. ``apply_payload(...,
+history_only=True)`` asks for the half this host wants. What comes out of
+the store is the conversation; everything else comes out of the package.
 
 **ONE LOCK PER SESSION KEY.** Two messages in one thread serialize.
 Interleaving them would put two user messages into one history with one
@@ -54,6 +57,7 @@ from pathlib import Path
 
 from yantra import (
     AgentSpec,
+    Provider,
     bills_nothing,
     SessionStore,
     TurnEnd,
@@ -76,7 +80,7 @@ from dvara.roster import Roster
 from dvara.runs import Run, RunStore
 
 
-def _default_provider(name: str):
+def _default_provider(name: str) -> Provider:
     """Yantra's own resolution: settings from the environment, one pool."""
     return get_provider(name, load_settings(name))
 
@@ -105,7 +109,7 @@ class Service:
                  policy: Policy | None = None,
                  provider_name: str | None = None,
                  model: str | None = None,
-                 provider_factory: Callable[[str], object] | None = None,
+                 provider_factory: Callable[[str], Provider] | None = None,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -126,27 +130,42 @@ class Service:
         # and so an embedder that already holds a provider does not open
         # a second connection pool to the same endpoint.
         self._provider_factory = provider_factory or _default_provider
-        self._providers: dict[str, object] = {}
+        self._providers: dict[str, Provider] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
     # ---- lifecycle ---------------------------------------------------------
 
     def close(self) -> None:
-        """Give back the sockets. A service that is asked to stop, stops."""
+        """Give back the sockets. A service that is asked to stop, stops.
+
+        ``Provider.close()`` is the framework's own promise, which it was
+        not when this was first written: shutdown used to reach past the
+        provider and close ``.client`` itself, because there was nothing
+        else to call. Reaching into another package's attributes works
+        right up until the day it does not, and a service that leaks a
+        connection pool per provider does not find out for hours.
+
+        THE SYNC HALF CANNOT CLOSE THE ASYNC POOL. An ``AsyncClient`` is
+        only closable from inside a running loop, so this closes what it
+        honestly can; ``aclose`` is what an async host wants, and what
+        every caller in this package uses.
+        """
         for provider in self._providers.values():
-            client = getattr(provider, "client", None)
-            if client is not None:
-                client.close()
+            provider.close()
         self._providers.clear()
         self.runs.close()
 
     async def aclose(self) -> None:
-        """The async half: httpx's async pools need awaiting to close."""
+        """Give back BOTH pools. The shutdown a running service calls.
+
+        Not ``close()`` with an await bolted on the front: the provider
+        closes both of its own pools in the right order, and this stays a
+        loop over providers rather than a loop over their internals.
+        """
         for provider in self._providers.values():
-            aclient = getattr(provider, "aclient", None)
-            if aclient is not None:
-                await aclient.aclose()
-        self.close()
+            await provider.aclose()
+        self._providers.clear()
+        self.runs.close()
 
     # ---- the verb ----------------------------------------------------------
 
@@ -283,7 +302,7 @@ class Service:
             remaining_today=money.remaining_today(who.max_usd_per_day, spent),
         )
 
-    def _provider(self, name: str):
+    def _provider(self, name: str) -> Provider:
         """One connection pool per provider, for the life of the service."""
         if name not in self._providers:
             self._providers[name] = self._provider_factory(name)
@@ -304,13 +323,20 @@ class Service:
         return work
 
     def _rehydrate(self, agent, key: str) -> None:
-        """Restore the conversation; keep the identity we just built."""
+        """Restore the conversation; keep the identity we just built.
+
+        ``history_only`` is the framework's word for this distinction, and
+        it did not exist when this service was first written: the code
+        here captured the three identity fields, let ``apply_payload``
+        overwrite them, and put them back. That worked, and it meant
+        dvara had to know WHICH fields a checkpoint carries -- so the day
+        a fourth one was added, this would have silently started
+        restoring it. Naming the half you want is the version that
+        survives the format growing.
+        """
         payload = self.sessions.load_latest(key)
-        if payload is None:
-            return
-        identity = (agent.system, agent.model, agent.max_iterations)
-        apply_payload(agent, payload)
-        agent.system, agent.model, agent.max_iterations = identity
+        if payload is not None:
+            apply_payload(agent, payload, history_only=True)
 
     def _lock(self, key: str) -> asyncio.Lock:
         """One lock per conversation.

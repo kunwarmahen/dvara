@@ -325,11 +325,18 @@ message; an exception is a reply that silently never arrives.
   process has ever served — a few hundred bytes against a correctness
   property, and evicting them safely needs a refcount nobody has asked
   for yet.
-* **A denied tool call still says "Permission denied by user."** There
-  was no user. The string is Yantra's, and the model is being told
-  something untrue about why it was refused.
-* **No `Provider.close()`.** Shutdown reaches into `.client` and
-  `.aclient` directly, which works and is not a seam anybody promised.
+* ~~**A denied tool call still says "Permission denied by user."**~~
+  Shipped in the framework: a gate may write a *reason*, and the one this
+  service runs under now says that the session is unattended and nobody
+  is available to ask. The model reads that instead, and a model told
+  nothing is attached goes looking for a read-only route rather than
+  apologising to an empty room.
+* ~~**No `Provider.close()`.**~~ Shipped in the framework, and this
+  service calls it: `aclose()` hands both connection pools back through
+  the provider's own shutdown instead of reaching past it into `.client`
+  and `.aclient`. The sync half closes only the sync pool and says so —
+  an `AsyncClient` can only be closed from inside a running loop, and a
+  shutdown that claimed otherwise would be lying.
 * **A package edited on disk changes a live conversation's next turn.**
   Desirable when you are fixing a prompt, alarming when a conversation
   changes personality mid-sentence. Pinning a package version per thread

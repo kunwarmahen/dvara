@@ -2,12 +2,14 @@
 
 "Tighten, never loosen" is one comparison, and the failure it prevents is
 a stranger's package shipping `mode = "yolo"` and getting it. The other
-half is what "ask" means when there is nobody to ask.
+half is what "ask" means when there is nobody to ask -- including what the
+MODEL is told about it, which used to be a sentence about a user who did
+not exist.
 """
 
 from __future__ import annotations
 
-from yantra import PermissionRequest, allow_read_only, yolo
+from yantra import DENIED, PermissionRequest, allow_read_only, denial_text, yolo
 
 from dvara.gate import Policy, stricter
 
@@ -42,3 +44,21 @@ def test_with_nobody_present_ask_means_read_only_tools_only():
     gate = Policy(mode="ask").gate("ask")
     assert gate(request(read_only=True)) is True
     assert gate(request(read_only=False)) is False
+
+
+def test_a_refusal_does_not_blame_a_user_who_was_never_there():
+    # The sentence goes to the MODEL, and it is the difference between an
+    # agent that argues with an absent human and one that finds a
+    # read-only route. Asserted through denial_text, which is what the
+    # loop actually puts in the error result.
+    denied = request(read_only=False)
+    assert Policy(mode="ask").gate("ask")(denied) is False
+    assert denial_text(denied) != DENIED
+    assert "user" not in denial_text(denied)
+    assert "Nobody is available to ask" in denial_text(denied)
+
+
+def test_an_approval_leaves_no_reason_behind():
+    allowed = request(read_only=True)
+    assert Policy(mode="ask").gate("ask")(allowed) is True
+    assert allowed.reason is None

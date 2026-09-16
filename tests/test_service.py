@@ -234,6 +234,36 @@ def test_one_provider_is_held_rather_than_one_per_turn(make_service):
     assert made == ["anthropic"]
 
 
+def test_shutting_the_service_hands_both_pools_back(make_service):
+    # The other half of holding a provider. Fifteen providers held for the
+    # life of a process is fifteen descriptors; the same fifteen after
+    # shutdown is a service that never stops owning anything.
+    service = make_service()
+    deliver(service)
+    provider = service.scripted
+    assert not provider.client.is_closed
+
+    asyncio.run(service.aclose())
+    assert provider.client.is_closed
+    assert provider.aclient.is_closed
+
+
+def test_the_sync_shutdown_says_so_by_leaving_the_async_pool_alone(
+        make_service):
+    # Pinned because it is a limitation, not an oversight: an AsyncClient
+    # can only be closed from inside a running loop, so a synchronous
+    # close that claimed to reach it would be lying. Anything holding a
+    # loop calls aclose.
+    service = make_service()
+    deliver(service)
+    provider = service.scripted
+
+    service.close()
+    assert provider.client.is_closed
+    assert not provider.aclient.is_closed
+    asyncio.run(provider.aclose())
+
+
 def test_two_messages_in_one_thread_do_not_interleave(make_service):
     service = make_service([says("one"), says("two")])
 
@@ -264,6 +294,43 @@ def test_the_owners_policy_is_what_grants_yolo(make_service):
     service = make_service(policy=Policy(mode="yolo"))
     deliver(service)
     assert service.policy.effective("yolo") == "yolo"
+
+
+def test_a_denied_tool_tells_the_model_nobody_was_asked(make_service,
+                                                        agents_root):
+    # End to end, because the sentence has to survive the whole path: the
+    # gate writes it, Yantra's loop turns it into an error result, and the
+    # model reads it on its next call. What it must NOT read is that a
+    # user refused -- there is no user in this process at all.
+    write_package(agents_root, "scribe", body=(
+        '[agent]\nname = "scribe"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["write_file"]\n'))
+    service = make_service([
+        calls("write_file", {"path": "notes.txt", "content": "hi"}),
+        says("I could not write that, so here it is instead: hi"),
+    ])
+    reply = asyncio.run(service.deliver(actor="owner", agent="scribe",
+                                        thread="t", text="write it down"))
+    assert reply.ok
+
+    told = _tool_results(service.scripted.requests[-1]["messages"])
+    assert len(told) == 1
+    assert "Nobody is available to ask" in told[0]
+    assert "denied by user" not in told[0]
+    # And the refusal was real, not a message about one.
+    work = service._workspace(session_key("owner", "scribe", "t"))
+    assert not (work / "notes.txt").exists()
+
+
+def _tool_results(messages) -> list[str]:
+    """Every tool-result text in a message list, in order."""
+    found = []
+    for message in messages:
+        for block in getattr(message, "content", []) or []:
+            if type(block).__name__ == "ToolResult":
+                found.append(block.content if isinstance(block.content, str)
+                             else str(block.content))
+    return found
 
 
 def test_a_free_local_model_costs_zero_rather_than_unknown(make_service):

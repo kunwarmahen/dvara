@@ -26,7 +26,7 @@ ceiling that shrinks.
 ## Status
 
 The first slice — roster, actors, sessions, budgets, run history and an
-HTTP surface — is covered by 101 tests. Channels do not exist yet. The
+HTTP surface — is covered by 111 tests. Channels do not exist yet. The
 API is not stable.
 
 ## The shape of it

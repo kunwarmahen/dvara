@@ -14,6 +14,15 @@ let the denial arrive as DATA, which is what Yantra's gate already does:
 a denied call becomes an error result the model can read and route
 around, never an exception that kills the turn.
 
+AND THE DENIAL SAYS WHO REFUSED, which is not politeness. Yantra's
+default denial used to read "Permission denied by user." -- addressed to
+the model, and untrue here, because there was no user. A model that
+believes a person refused it argues with the person: it apologises, it
+asks again, it explains itself to an empty room. A model told that
+nothing is attached goes and finds a read-only route instead. So the
+refusal carries the framework's own sentence -- one sentence, written
+once, in the gate that produced it.
+
 Two things this leaves open, both recorded rather than hidden:
 
 * ``read_only`` is the tool author's own declaration and nothing checks
@@ -21,11 +30,12 @@ Two things this leaves open, both recorded rather than hidden:
   files has lied to this gate, and no service can catch that. It is the
   same trust a package asks for when it ships ``tools/*.py`` at all.
 * A real "ask" -- escalating to a person over the channel they are
-  already in -- needs something Yantra does not have: ``PermissionFn`` is
-  synchronous and ``AsyncAgent`` calls it inline inside the running
-  coroutine, so a gate that waited for a human would block the event loop
-  and every other conversation with it. That is a missing seam in the
-  framework, not a puzzle to solve here with a thread and a queue.
+  already in -- is still not here. The framework seam it needed exists
+  now (``PermissionFn`` may answer with an awaitable, and ``AsyncAgent``
+  awaits it, so a gate that waits for a human suspends instead of
+  blocking every other conversation on the loop). What is missing is a
+  human to reach, which is a channel, and a deadline for their silence,
+  which is policy. Both are the next note's.
 """
 
 from __future__ import annotations
