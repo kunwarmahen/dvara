@@ -67,6 +67,15 @@ CREATE INDEX IF NOT EXISTS runs_actor_started
 """
 
 
+#: Every column, in the order ``_row_to_run`` unpacks them. Written once
+#: because two queries read rows and a third is coming: a SELECT that
+#: drifted from that unpacking would not raise, it would quietly put the
+#: reply in the model column.
+COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
+           "model, input_tokens, output_tokens, cache_read_tokens, "
+           "cache_write_tokens, cost_usd, stop_reason, detail")
+
+
 @dataclass
 class Run:
     """One turn, from a person's message to the agent's last word."""
@@ -138,6 +147,23 @@ class RunStore:
             ).fetchone()
         return float(row[0])
 
+    def get(self, run_id: str) -> Run | None:
+        """One run by id, or None. A PREFIX is enough, as long as it picks
+        out exactly one: the id a person has is the one printed at the end
+        of a reply, and asking them to retype twelve hex characters to
+        write a failure down is friction on the one path that most needs
+        none. An ambiguous prefix matches nothing rather than guessing.
+        """
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {COLUMNS} FROM runs WHERE id = ? OR id LIKE ? "
+                f"LIMIT 2",
+                (run_id, f"{run_id}%"),
+            ).fetchall()
+        if len(rows) != 1:
+            return None
+        return _row_to_run(rows[0])
+
     def recent(self, *, actor: str | None = None, agent: str | None = None,
                limit: int = 20) -> list[Run]:
         """The last ``limit`` runs, newest first."""
@@ -151,10 +177,7 @@ class RunStore:
         clause = f"WHERE {' AND '.join(where)}" if where else ""
         with self._lock:
             rows = self._db.execute(
-                f"SELECT id, actor, agent, thread, started_at, ended_at, "
-                f"message, reply, model, input_tokens, output_tokens, "
-                f"cache_read_tokens, cache_write_tokens, cost_usd, "
-                f"stop_reason, detail FROM runs {clause} "
+                f"SELECT {COLUMNS} FROM runs {clause} "
                 f"ORDER BY started_at DESC, rowid DESC LIMIT ?",
                 (*params, limit),
             ).fetchall()

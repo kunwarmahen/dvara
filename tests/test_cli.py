@@ -242,3 +242,63 @@ def test_a_wildcard_in_an_allow_stops_the_service_starting(owned, capsys,
                       'verdict = "allow"\n', encoding="utf-8")
     assert main([*owned, "--policy", str(policy), "agents"]) == 2
     assert "wildcard" in capsys.readouterr().err
+
+
+# ---- the failure loop -------------------------------------------------------
+
+def _one_run(owned, tmp_path, **overrides):
+    """A recorded run in the owner's own store, ready to draw a case from."""
+    from datetime import UTC, datetime
+
+    from dvara.runs import Run, RunStore
+    store = RunStore(tmp_path / "state" / "runs.sqlite3")
+    fields = dict(actor="owner", agent="greeter", thread="t",
+                  message="do the thing",
+                  started_at=datetime(2026, 9, 17, 9, 30, tzinfo=UTC),
+                  stop_reason="error", detail="ToolError: boom",
+                  id="a8ba6c09f2d9")
+    fields.update(overrides)
+    store.record(Run(**fields))
+    store.close()
+    return fields["id"]
+
+
+def test_case_prints_a_block_a_person_can_paste(owned, tmp_path, capsys):
+    _one_run(owned, tmp_path)
+    assert main([*owned, "case", "a8ba6c09"]) == 0
+    out = capsys.readouterr()
+    assert out.out.startswith("[[case]]")
+    # The warning goes to stderr so the block above stays pasteable.
+    assert "somebody's own words" in out.err
+
+
+def test_a_prefix_is_enough_and_a_wrong_one_is_not(owned, tmp_path, capsys):
+    _one_run(owned, tmp_path)
+    assert main([*owned, "case", "nope"]) == 1
+    assert "no run matching" in capsys.readouterr().err
+
+
+def test_case_does_not_touch_the_package_without_write(owned, tmp_path):
+    from dvara.cases import suite_file
+    _one_run(owned, tmp_path)
+    assert main([*owned, "case", "a8ba6c09"]) == 0
+    assert not suite_file(tmp_path / "agents" / "greeter").exists()
+
+
+def test_write_puts_it_in_the_packages_gate(owned, tmp_path, capsys):
+    from yantra import load_cases
+
+    from dvara.cases import suite_file
+    _one_run(owned, tmp_path)
+    assert main([*owned, "case", "a8ba6c09", "--write"]) == 0
+    package = tmp_path / "agents" / "greeter"
+    assert suite_file(package).exists()
+    assert [c.id for c in load_cases(package)] == ["trace-a8ba6c09"]
+    # And it says how to run the thing it just wrote.
+    assert "--eval --case" in capsys.readouterr().out
+
+
+def test_a_refused_run_is_an_error_with_a_reason(owned, tmp_path, capsys):
+    _one_run(owned, tmp_path, stop_reason="refused", detail=None)
+    assert main([*owned, "case", "a8ba6c09"]) == 1
+    assert "before any agent ran" in capsys.readouterr().err

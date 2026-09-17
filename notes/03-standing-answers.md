@@ -290,5 +290,6 @@ property this note opened with.
 
 ---
 
-Next: the failure loop. A red `Run` becomes a case in the package that
-produced it, and the package's own gate stops it coming back.
+Next: [note 04](04-the-failure-loop.md) — the failure loop. A bad `Run`
+becomes a case in the package that produced it, and the package's own
+gate stops it coming back.

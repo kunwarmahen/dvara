@@ -33,9 +33,12 @@ import os
 import sys
 from pathlib import Path
 
+from yantra import render_case
+
 from dvara.actors import ActorBook
 from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
-from dvara.errors import ConfigProblem
+from dvara.cases import append, case_from_run
+from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Policy
 from dvara.roster import Roster
 from dvara.rules import RuleBook
@@ -104,6 +107,18 @@ def build_parser() -> argparse.ArgumentParser:
     runs.add_argument("--agent", default=None)
     runs.add_argument("--limit", type=int, default=20)
 
+    case = subs.add_parser(
+        "case", help="turn a recorded run into an eval case for its package")
+    case.add_argument("run", help="a run id, or enough of one to be unique")
+    case.add_argument("--because", default=None,
+                      help="what was wrong with it. Required for a turn that "
+                           "ended normally -- a wrong answer looks exactly "
+                           "like a right one from out here")
+    case.add_argument("--write", action="store_true",
+                      help="append it to the package's evals/cases.toml "
+                           "instead of printing it. You are editing a folder "
+                           "you commit, so read it first")
+
     serve = subs.add_parser("serve", help="listen for channel adapters")
     serve.add_argument("--host", default="127.0.0.1",
                        help="localhost by default, deliberately: reaching the "
@@ -156,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
             return _say(service, args)
         if args.command == "runs":
             return _runs(service, args)
+        if args.command == "case":
+            return _case(service, args)
     finally:
         service.close()
     return 2
@@ -249,6 +266,38 @@ def _runs(service: Service, args) -> int:
             # store has carried this since the first commit; not printing
             # it made the ledger a list of shrugs.
             print(f"{'':<18}{run.detail}")
+    return 0
+
+
+def _case(service: Service, args) -> int:
+    """A recorded run -> a case its package's gate will run from now on.
+
+    Printed by default. ``--write`` is a flag somebody has to type,
+    because the alternative is a service that edits the folder its owner
+    reviews and commits, which is the one thing note 01 would not let a
+    running agent do (cases.py).
+    """
+    run = service.runs.get(args.run)
+    if run is None:
+        print(f"error: no run matching {args.run!r} (a prefix works, if it "
+              f"picks out exactly one)", file=sys.stderr)
+        return 1
+    try:
+        case = case_from_run(run, because=args.because)
+        if not args.write:
+            print(render_case(case), end="")
+            # To stderr, so the block above stays pasteable.
+            print(f"\n# from run {run.id} against {run.agent}. Read it "
+                  f"before you commit it: the message is somebody's own "
+                  f"words.", file=sys.stderr)
+            return 0
+        path = append(service.roster.path(run.agent), case)
+    except Refused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"{path}: added {case.id}")
+    print(f"  run it with: yantra --agent {service.roster.path(run.agent)} "
+          f"--eval --case '{case.id}'")
     return 0
 
 

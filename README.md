@@ -24,14 +24,17 @@ rules, and why a daily allowance is enforced by a per-turn ceiling that
 shrinks; [02 — a question that can wait](notes/02-a-question-that-can-wait.md)
 has escalation, and why a deadline that denies belongs here rather than
 in the framework; [03 — standing answers](notes/03-standing-answers.md)
-has the rule file, and the one mistake in it that is invisible in a diff.
+has the rule file, and the one mistake in it that is invisible in a diff;
+[04 — the failure loop](notes/04-the-failure-loop.md) turns a bad turn
+into a case in the package that produced it.
 
 ## Status
 
 Roster, actors, sessions, budgets, run history, an HTTP surface and
-escalation to a person and standing allow/deny/ask rules — covered by 206
-tests. Channels do not exist yet: the terminal is the only thing that
-asks you anything. The API is not stable.
+escalation to a person, standing allow/deny/ask rules and a failure loop
+that turns a bad turn into an eval case — covered by 231 tests. Channels
+do not exist yet: the terminal is the only thing that asks you anything.
+The API is not stable.
 
 ## The shape of it
 
@@ -87,6 +90,10 @@ dvara --root examples/agents --actors examples/actors.toml --ask \
 
 # what it has been doing
 dvara --root examples/agents --actors examples/actors.toml runs
+
+# and when one of those turns was bad, write it into the package's gate
+dvara --root examples/agents --actors examples/actors.toml \
+      case 9dcfabec --because "it invented a filename I never gave it"
 
 # listen for channel adapters
 DVARA_TOKEN=$(openssl rand -hex 24) dvara serve --port 8765
@@ -161,6 +168,38 @@ Three rules hold it up, and the third is the one worth carrying away:
 `--policy` is required if you name it and optional at
 `~/dvara/policy.toml`, so a typo in the path is an error rather than a
 file that silently does nothing.
+
+### The failure loop
+
+An author writes the failures they can imagine. The ones that matter
+arrive later, in production, and this service records every one of them
+as a `Run`. `dvara case RUN_ID` turns one into a `[[case]]` block for
+that package's own acceptance gate
+([notes/04](notes/04-the-failure-loop.md)):
+
+```
+$ dvara case 9dcfabec
+[[case]]
+id = "trace-9dcfabec"
+description = """
+This turn crashed in production: ProviderError: 404: not_found_error:
+model 'no-such-model:latest' not found
+...
+```
+
+It **prints**, and `--write` is a flag somebody types. A service that
+appended to the package it runs would be editing the folder its owner
+reviews and commits, which is the thing note 01 refused to let a running
+agent do — and a gate that grew overnight is not a gate anybody trusts.
+
+Two rules worth knowing before you reach for it:
+
+* **A refused run is never a case.** No agent ran, so the row is about
+  this machine rather than about the package.
+* **A turn that ended normally needs `--because`.** The service can see
+  that a turn *stopped* badly; only a person can see that one *answered*
+  badly, and that is the commoner failure. The sentence you type becomes
+  the case's description, which is all anybody has six months later.
 
 ### The HTTP surface
 
@@ -238,8 +277,9 @@ print(reply.text, reply.cost_usd)
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)) |
 | `asks.py` | questions waiting for a person, and the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)) |
 | `runs.py` | every turn that happened, including the ones that failed |
+| `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)) |
 | `http.py` | three endpoints and a bearer token (`[http]` extra) |
-| `cli.py` | `agents`, `say`, `runs`, `serve` |
+| `cli.py` | `agents`, `say`, `runs`, `case`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences
