@@ -33,6 +33,19 @@ way note 01 built one has no desk, so it behaves exactly as it did before
 escalation existed: nothing starts waiting on a person who was never
 wired up.
 
+**A RUNG IS PER TURN; A RULE IS PER CALL.** Everything above decides
+once, for a whole conversation, which is one bit of judgement spread over
+every tool call an agent will ever make. ``rules.py`` is the owner
+writing individual answers down in advance -- ``git status`` runs,
+``*.env`` never does -- and ``ruled`` below is how the two compose. The
+short version, and the only sentence needed to predict what happens: THE
+RUNG SAYS WHETHER THERE IS A QUESTION, A RULE SAYS WHAT THE ANSWER IS. A
+rule may tighten anything, and may only loosen a call this ladder would
+have been willing to put to a person.
+
+With no rules -- no policy file, which is every service until somebody
+writes one -- the gate below is note 02's, unchanged and by construction.
+
 One thing this still leaves open, recorded rather than hidden:
 ``read_only`` is the tool author's own declaration and nothing checks it.
 An author who writes ``read_only = True`` on a tool that deletes files has
@@ -42,11 +55,20 @@ package asks for when it ships ``tools/*.py`` at all.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from yantra import PermissionFn, PermissionRequest, allow_read_only, yolo
+from yantra import (
+    REFUSED_POLICY,
+    REFUSED_UNATTENDED,
+    PermissionFn,
+    PermissionRequest,
+    allow_read_only,
+    refuse,
+    yolo,
+)
 
 from dvara.asks import AskDesk
+from dvara.rules import RuleBook
 
 #: Strictest first. One order, so that "tighten, never loosen" is a
 #: comparison instead of a paragraph.
@@ -76,6 +98,10 @@ class Policy:
     """What the OWNER allows, independent of what any package asks for."""
 
     mode: str = "ask"
+    #: Standing answers, matched per CALL rather than per turn (rules.py).
+    #: An empty book is not a permissive one -- it is no opinion, and the
+    #: gate below then reduces to the three functions note 02 built.
+    rules: RuleBook = field(default_factory=RuleBook)
 
     def effective(self, *modes: str | None) -> str:
         return stricter(self.mode, *modes)
@@ -102,6 +128,13 @@ class Policy:
         # all. The owner and the actor get the other reading: their
         # silence means they set no ceiling of their own.
         mode = self.effective(package_mode or LADDER[0], actor_mode)
+        # NO RULES IS NOT AN EMPTY RULEBOOK'S BEHAVIOUR, IT IS NOTE 02'S.
+        # Reducing to the old three functions by construction rather than
+        # by a test is what makes "a service with no policy file behaves
+        # exactly as it did" a property instead of a promise.
+        if len(self.rules):
+            return ruled(self.rules, mode=mode, desk=desk, actor=actor,
+                         agent=agent, thread=thread)
         if mode == "yolo":
             return yolo
         if mode == "ask" and desk is not None:
@@ -123,17 +156,125 @@ def escalating(desk: AskDesk, *, actor: str, agent: str,
     suspends on a future, and the event loop goes and serves everybody
     else in the meantime.
     """
-    async def ask(request: PermissionRequest) -> bool:
-        answer = await desk.put(actor=actor, agent=agent, thread=thread,
-                                tool=request.tool_name,
-                                summary=request.summary)
-        if not answer.approved:
-            request.reason = answer.reason
-        return answer.approved
-
     def gate(request: PermissionRequest):
         if request.read_only:
             return True
-        return ask(request)
+        return put(desk, request, actor=actor, agent=agent, thread=thread)
 
     return gate
+
+
+async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
+              agent: str, thread: str) -> bool:
+    """Ask the person, and write their answer onto the request.
+
+    The one place a question is put, so the two gates below cannot come to
+    differ about what a refusal says. ``refuse`` rather than assignment:
+    it is the shape that cannot write a reason and then accidentally
+    approve, and it carries the CODE across as well -- refused, timed out
+    and undeliverable are three facts a host may want to count separately
+    without matching on English (Yantra's note 39).
+    """
+    answer = await desk.put(actor=actor, agent=agent, thread=thread,
+                            tool=request.tool_name, summary=request.summary)
+    if not answer.approved:
+        return refuse(request, answer.reason or "", code=answer.code)
+    return True
+
+
+def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
+          agent: str, thread: str) -> PermissionFn:
+    """The gate when the owner has written standing answers down.
+
+    One function rather than a wrapper around the three above, for note
+    02's reason unchanged: a decision made in two places is a decision
+    that will eventually be made differently in each. Everything the rung
+    and the rules together decide is decided here.
+
+    THE RUNG SAYS WHETHER THERE IS A QUESTION; A RULE SAYS WHAT THE
+    ANSWER IS. That single sentence is the whole composition, and the two
+    predicates below are all of it:
+
+    * ``rung_allows`` -- this call would have run with no rules at all.
+    * ``can_escalate`` -- a person may be put on the spot for this actor.
+      False under ``read_only``, which is precisely the rung that means
+      "do not wake this person", and false with no desk, because a
+      question with nowhere to go was never a question (note 02).
+
+    So ``deny`` bites at every rung including ``yolo``; ``ask`` turns a
+    call ``yolo`` would have run into a question; and ``allow`` grants
+    nothing the rung would not have been willing to ASK about. One policy
+    file, read differently for the owner and for a guest, which is the
+    correct difference rather than a wrinkle.
+    """
+    can_escalate = desk is not None and mode != "read_only"
+
+    def gate(request: PermissionRequest):
+        rung_allows = request.read_only or mode == "yolo"
+        rule = rules.decide(request.tool_name, request.arguments)
+        verdict = rule.verdict if rule is not None else None
+
+        if verdict == "deny":
+            return refuse(request, _refused_by_rule(request, rule),
+                          code=REFUSED_POLICY)
+        if verdict == "allow" and (rung_allows or can_escalate):
+            return True
+        if verdict == "allow":
+            # A standing yes to a question this rung never asks. Said
+            # plainly, because "the owner allowed it and it was refused"
+            # is otherwise the most confusing sentence in the system.
+            return refuse(request, _no_route(request, mode, desk),
+                          code=REFUSED_UNATTENDED)
+        if rung_allows and verdict != "ask":
+            return True
+        if can_escalate:
+            # Either the rung wanted to ask, or a rule tightened a call
+            # the rung would have run through. Both are the same question,
+            # and note that this path has no read_only shortcut: a rule
+            # that says to ask about a read-only tool gets asked about.
+            # "Tell me before this thing reads anything" is a thing an
+            # owner is allowed to mean.
+            return put(desk, request, actor=actor, agent=agent, thread=thread)
+        return refuse(request, _no_route(request, mode, desk),
+                      code=REFUSED_UNATTENDED)
+
+    return gate
+
+
+def _refused_by_rule(request: PermissionRequest, rule) -> str:
+    """What the model is told when a standing rule says no.
+
+    NOT A QUESTION THAT WAS ASKED AND LOST -- and the sentence has to say
+    so, or the model waits and tries again later, which is what it should
+    do about a timeout and exactly the wrong move here. The owner's own
+    ``reason`` rides along when they wrote one; it is usually the part
+    that tells the model what to do instead.
+    """
+    sentence = (f"{request.tool_name} was denied: a standing rule of this "
+                f"service refuses it. Nobody was asked, and nobody will be "
+                f"-- this is not about the present conversation, so waiting "
+                f"and retrying will not change it.")
+    return f"{sentence} {rule.reason}" if rule.reason else sentence
+
+
+def _no_route(request: PermissionRequest, mode: str,
+              desk: AskDesk | None) -> str:
+    """Why nobody is going to be asked, and the two answers are different.
+
+    Note 02 recorded this as an open papercut: a call blocked because the
+    ACTOR was tightened borrowed the sentence about nobody being there,
+    when somebody was there and simply not for this person. Here both
+    facts are in hand, so both get said. It still matters less than it
+    looks -- the model's next move is the same either way -- but the
+    sentence a person reads in a log should be true.
+    """
+    if desk is not None and mode == "read_only":
+        return (f"{request.tool_name} was denied: this conversation is not "
+                f"permitted to put questions to anyone, so nothing here can "
+                f"be approved. Somebody may well be available; they are not "
+                f"available to this conversation. Carry on with what you can "
+                f"reach, and say what you would have done.")
+    return (f"{request.tool_name} was denied: this conversation runs with "
+            f"read-only tools and there is nobody available to ask. Say what "
+            f"you would have done and why, and carry on with what you can "
+            f"reach.")

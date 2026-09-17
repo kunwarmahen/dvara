@@ -1,0 +1,42 @@
+# Standing answers, written down in advance. Optional: with no policy
+# file, every call that could change something is decided by the rung
+# alone, which is exactly how this service behaved before rules existed.
+#
+#   dvara say --actor owner --agent scribe --ask \
+#             --policy examples/policy.toml "write hello.txt"
+#
+# Two things to know before you edit this file, both of which are in
+# notes/03-standing-answers.md at length.
+#
+# THE RUNG SAYS WHETHER THERE IS A QUESTION; A RULE SAYS WHAT THE ANSWER
+# IS. A rule may tighten anything -- a `deny` bites even under --yolo --
+# and may only loosen a call that the ladder would have been willing to
+# put to a person. So the `allow` below does nothing at all for `guest`
+# in actors.toml, who is `read_only`: that rung means "never wake this
+# person", and there was no question for a standing answer to answer.
+#
+# THE STRICTEST MATCHING RULE WINS, NOT THE FIRST. Order does not matter,
+# which is what stops a rule appended at the bottom of this file quietly
+# undoing one at the top.
+
+# Never, at any rung, with no question asked. A deny is the one verdict
+# that is stronger than --yolo.
+[[rule]]
+tool    = "write_file"
+args    = { path = ["*.env", "*/.env", "*.pem", "*/.ssh/*"] }
+verdict = "deny"
+# The owner's own sentence, handed to the model. This is usually the part
+# that tells it what to do instead, which "denied" never does.
+reason  = "secrets and keys are not edited by an agent -- tell me what needs changing and I will do it myself."
+
+# A standing yes, so the same question stops being asked every morning.
+#
+# NO WILDCARDS HERE, and the loader refuses them rather than trusting
+# anybody to notice: "notes/*" looks like one directory and matches
+# "notes/../../.ssh/id_rsa". Patterns widen a refusal and never a
+# permission, so an allow takes exact strings -- as many as you like.
+# Anything that does not match is still ASKED, not refused.
+[[rule]]
+tool    = "write_file"
+args    = { path = ["notes.txt", "scratch.txt"] }
+verdict = "allow"

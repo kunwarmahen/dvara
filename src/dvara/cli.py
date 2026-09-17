@@ -38,10 +38,12 @@ from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
 from dvara.errors import ConfigProblem
 from dvara.gate import Policy
 from dvara.roster import Roster
+from dvara.rules import RuleBook
 from dvara.service import Service
 
 DEFAULT_ROOT = "~/dvara/agents"
 DEFAULT_ACTORS = "~/dvara/actors.toml"
+DEFAULT_POLICY = "~/dvara/policy.toml"
 DEFAULT_STATE = "~/dvara/state"
 
 
@@ -57,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--actors", default=os.environ.get("DVARA_ACTORS",
                                                            DEFAULT_ACTORS),
                         help="TOML file of the people this service serves")
+    parser.add_argument("--policy", default=os.environ.get("DVARA_POLICY", ""),
+                        help=f"TOML file of standing allow/deny/ask rules, "
+                             f"matched per tool call. Optional: with none, "
+                             f"every call that could change something is "
+                             f"decided by the rung alone (default "
+                             f"{DEFAULT_POLICY} if it exists)")
     parser.add_argument("--state", default=os.environ.get("DVARA_STATE",
                                                           DEFAULT_STATE),
                         help="where sessions, run history and per-conversation "
@@ -111,11 +119,18 @@ def _service(args) -> Service:
             desk = AskDesk(timeout=args.ask_timeout)
         except ValueError as exc:
             raise ConfigProblem(str(exc)) from None
+    # NAMED IS REQUIRED, DEFAULT IS OPTIONAL. An owner who typed a path
+    # and got silence would have a policy file that does nothing and no
+    # way to tell; an owner who has never written one is not missing
+    # anything.
+    named = bool(args.policy)
+    rules = RuleBook.from_toml(Path(args.policy or DEFAULT_POLICY),
+                               required=named)
     return Service(
         roster=Roster(Path(args.root)),
         actors=ActorBook.from_toml(Path(args.actors)),
         state=Path(args.state),
-        policy=Policy(mode="yolo" if args.yolo else "ask"),
+        policy=Policy(mode="yolo" if args.yolo else "ask", rules=rules),
         asks=desk,
         provider_name=args.provider,
         model=args.model,

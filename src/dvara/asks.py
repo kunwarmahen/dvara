@@ -60,6 +60,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from yantra import REFUSED_TIMEOUT, REFUSED_UNATTENDED, REFUSED_USER
+
 #: Long enough that a person can pick up their phone, short enough that a
 #: forgotten question does not pin a conversation open all afternoon. The
 #: owner sets it on ``Policy``; this is only the value nobody chose.
@@ -102,10 +104,17 @@ class Answer:
     asking for this kind of thing altogether. Three different denials
     produce three different next moves, so they are three different
     sentences.
+
+    And three different CODES, which are for whoever wired the gates up
+    rather than for the model (Yantra's note 39). A host that wants to
+    count timeouts separately from refusals should not have to match on
+    English to do it, and a sentence written for a model is going to be
+    reworded eventually.
     """
 
     approved: bool
     reason: str | None = None
+    code: str = REFUSED_USER
 
 
 #: How a question reaches a person. Given an ``Ask``, put it where they
@@ -171,7 +180,8 @@ class AskDesk:
             while True:
                 left = deadline - loop.time()
                 if left <= 0:
-                    return Answer(False, _timed_out(tool, self.timeout))
+                    return Answer(False, _timed_out(tool, self.timeout),
+                                  REFUSED_TIMEOUT)
                 watching = {future}
                 if delivery is not None and not delivery.done():
                     watching.add(delivery)
@@ -179,14 +189,16 @@ class AskDesk:
                     watching, timeout=left,
                     return_when=asyncio.FIRST_COMPLETED)
                 if not done:
-                    return Answer(False, _timed_out(tool, self.timeout))
+                    return Answer(False, _timed_out(tool, self.timeout),
+                                  REFUSED_TIMEOUT)
                 if delivery in done and delivery.exception() is not None:
                     return Answer(False,
-                                  _undeliverable(tool, delivery.exception()))
+                                  _undeliverable(tool, delivery.exception()),
+                                  REFUSED_UNATTENDED)
                 if future.done():
                     if future.result():
                         return Answer(True)
-                    return Answer(False, _refused(tool, actor))
+                    return Answer(False, _refused(tool, actor), REFUSED_USER)
                 # Delivered, and nobody has answered yet. Round again on
                 # what is left of the deadline.
         finally:

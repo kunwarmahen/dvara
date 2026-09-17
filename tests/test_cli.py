@@ -191,3 +191,54 @@ def test_anything_that_is_not_yes_is_no(owned, monkeypatch, answer, approved):
                               tool="write_file", summary="notes.txt")
 
     assert asyncio.run(go()).approved is approved
+
+
+# ---- the policy file --------------------------------------------------------
+
+def test_with_no_policy_file_the_service_has_no_rules(owned):
+    """The property the whole rule layer rests on: an owner who has never
+    written a policy file is not missing one, and the gate underneath is
+    note 02's, chosen by the same branch it always was."""
+    from dvara.cli import _service, build_parser
+    service = _service(build_parser().parse_args([*owned, "agents"]))
+    try:
+        assert len(service.policy.rules) == 0
+    finally:
+        service.close()
+
+
+def test_a_named_policy_file_that_is_not_there_is_an_owners_error(owned,
+                                                                  capsys,
+                                                                  tmp_path):
+    """Being handed silence for a typo'd path would mean a policy file
+    that does nothing and no way to tell."""
+    assert main([*owned, "--policy", str(tmp_path / "nope.toml"),
+                 "agents"]) == 2
+    assert "no policy file" in capsys.readouterr().err
+
+
+def test_a_policy_file_reaches_the_gate(owned, tmp_path):
+    from dvara.cli import _service, build_parser
+    policy = tmp_path / "policy.toml"
+    policy.write_text('[[rule]]\ntool = "bash"\nverdict = "deny"\n',
+                      encoding="utf-8")
+    args = build_parser().parse_args([*owned, "--policy", str(policy),
+                                      "agents"])
+    service = _service(args)
+    try:
+        assert len(service.policy.rules) == 1
+        assert service.policy.gate("yolo") is not None
+    finally:
+        service.close()
+
+
+def test_a_wildcard_in_an_allow_stops_the_service_starting(owned, capsys,
+                                                           tmp_path):
+    """The one mistake in this format that is invisible in a diff, caught
+    before a single turn runs."""
+    policy = tmp_path / "policy.toml"
+    policy.write_text('[[rule]]\ntool = "bash"\n'
+                      'args = { command = "git status*" }\n'
+                      'verdict = "allow"\n', encoding="utf-8")
+    assert main([*owned, "--policy", str(policy), "agents"]) == 2
+    assert "wildcard" in capsys.readouterr().err

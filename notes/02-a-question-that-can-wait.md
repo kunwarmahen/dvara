@@ -326,11 +326,14 @@ answered or has expired is a `404`.
 
 ## What is not here yet
 
-* **A tightened actor borrows the wrong sentence.** When the *actor's*
-  rung is what forbids escalation, the refusal still says nobody is
-  available to ask — and somebody was, just not for this person. The
-  model's next move is the same either way, which is the only reason this
-  is a note rather than a fix.
+* ~~**A tightened actor borrows the wrong sentence.**~~ Half closed in
+  [note 03](03-standing-answers.md): a service that has standing rules
+  decides inside its own gate, where both facts are in hand, and a
+  tightened actor is now told that this conversation may not put
+  questions to anyone rather than that nobody is there. A service with no
+  policy file still uses Yantra's own `allow_read_only` and its sentence,
+  which is the price of that gate being the framework's function rather
+  than a copy of it.
 * **A blocked keyboard survives its own deadline.** When a terminal
   question times out, the prompt is still sitting in a thread waiting on
   `stdin`, and the process will not exit until somebody presses enter.
@@ -344,6 +347,8 @@ answered or has expired is a `404`.
 
 ---
 
-Next: the channel itself. Everything above was built so that a bot is a
-*client* of this and not a special case inside it — it supplies a
-notifier and calls `answer`, exactly as the terminal does.
+Next: [note 03](03-standing-answers.md) — standing answers, so the same
+question stops being asked every morning. Then the channel itself.
+Everything above was built so that a bot is a *client* of this and not a
+special case inside it — it supplies a notifier and calls `answer`,
+exactly as the terminal does.

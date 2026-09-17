@@ -23,14 +23,15 @@ What it knows how to do is in the notes:
 rules, and why a daily allowance is enforced by a per-turn ceiling that
 shrinks; [02 — a question that can wait](notes/02-a-question-that-can-wait.md)
 has escalation, and why a deadline that denies belongs here rather than
-in the framework.
+in the framework; [03 — standing answers](notes/03-standing-answers.md)
+has the rule file, and the one mistake in it that is invisible in a diff.
 
 ## Status
 
 Roster, actors, sessions, budgets, run history, an HTTP surface and
-escalation to a person — covered by 161 tests. Channels do not exist yet:
-the terminal is the only thing that asks you anything. The API is not
-stable.
+escalation to a person and standing allow/deny/ask rules — covered by 206
+tests. Channels do not exist yet: the terminal is the only thing that
+asks you anything. The API is not stable.
 
 ## The shape of it
 
@@ -78,6 +79,12 @@ dvara --root examples/agents --actors examples/actors.toml --ask \
       --provider ollama --model qwen3.8-64k:latest \
       say --actor owner --agent scribe "write a haiku into haiku.txt"
 
+# ...and stop asking me the ones I have already answered
+dvara --root examples/agents --actors examples/actors.toml --ask \
+      --policy examples/policy.toml \
+      --provider ollama --model qwen3.8-64k:latest \
+      say --actor owner --agent scribe "write a haiku into notes.txt"
+
 # what it has been doing
 dvara --root examples/agents --actors examples/actors.toml runs
 
@@ -85,8 +92,8 @@ dvara --root examples/agents --actors examples/actors.toml runs
 DVARA_TOKEN=$(openssl rand -hex 24) dvara serve --port 8765
 ```
 
-`--root`, `--actors` and `--state` also read `$DVARA_ROOT`,
-`$DVARA_ACTORS` and `$DVARA_STATE`.
+`--root`, `--actors`, `--policy` and `--state` also read `$DVARA_ROOT`,
+`$DVARA_ACTORS`, `$DVARA_POLICY` and `$DVARA_STATE`.
 
 ### The actors file
 
@@ -114,6 +121,46 @@ An unknown key is an error, not a shrug:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, max_usd_per_day, max_usd_per_turn, permissions
 ```
+
+### The policy file
+
+Optional, and with none the service behaves exactly as it did before
+rules existed. A rung is chosen once per turn; a rule is matched per
+*call*, so the same question stops being asked every morning
+([notes/03](notes/03-standing-answers.md)):
+
+```toml
+[[rule]]
+tool    = "bash"
+args    = { command = ["git status", "git diff"] }
+verdict = "allow"
+
+[[rule]]
+tool    = "write_file"
+args    = { path = ["*.env", "*/.ssh/*"] }
+verdict = "deny"
+reason  = "secrets are not edited by an agent -- tell me and I will do it"
+```
+
+Three rules hold it up, and the third is the one worth carrying away:
+
+* **The rung says whether there is a question; a rule says what the
+  answer is.** A `deny` bites at every rung including `--yolo`; an
+  `allow` grants nothing the ladder would not have been willing to *ask*
+  about, so the same file is a standing yes for the owner and nothing at
+  all for a `read_only` guest.
+* **The strictest matching rule wins, not the first.** Order does not
+  matter, so a rule appended at the bottom cannot quietly undo one at the
+  top.
+* **Patterns widen a refusal, never a permission.** `deny` and `ask` take
+  globs; wildcards in an `allow` are refused at load time, because
+  `"git status*"` matches `git status; rm -rf ~` and `"~/notes/*"`
+  matches `~/notes/../../.ssh/id_rsa`. Write the exact strings — a near
+  miss is still *asked*, not refused.
+
+`--policy` is required if you name it and optional at
+`~/dvara/policy.toml`, so a typo in the path is an error rather than a
+file that silently does nothing.
 
 ### The HTTP surface
 
@@ -187,7 +234,8 @@ print(reply.text, reply.cost_usd)
 | `actors.py` | who is served, what they may reach, what they may spend |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `money.py` | package ∧ actor ∧ what is left of today |
-| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)) |
+| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
+| `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)) |
 | `asks.py` | questions waiting for a person, and the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)) |
 | `runs.py` | every turn that happened, including the ones that failed |
 | `http.py` | three endpoints and a bearer token (`[http]` extra) |
@@ -205,7 +253,9 @@ print(reply.text, reply.cost_usd)
    never loosen.** Three parties name a rung — the package, the owner and
    the actor — and the tightest wins, so nothing anybody writes can
    loosen what somebody else allowed. With no route to a person, that
-   means read-only tools only.
+   means read-only tools only. A standing rule may tighten that further
+   at any rung, and may only pre-answer a call the ladder would have been
+   willing to put to a person.
 4. **Nothing here is sandboxed by pretending.** Yantra's sandbox confines
    an agent's tool calls; it has nothing to say about a package's
    import-time side effects, and this service does not imply otherwise.
