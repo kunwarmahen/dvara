@@ -302,3 +302,39 @@ def test_a_refused_run_is_an_error_with_a_reason(owned, tmp_path, capsys):
     _one_run(owned, tmp_path, stop_reason="refused", detail=None)
     assert main([*owned, "case", "a8ba6c09"]) == 1
     assert "before any agent ran" in capsys.readouterr().err
+
+
+# ---- speaking as a channel identity ----------------------------------------
+
+def test_as_maps_a_channel_identity_onto_an_actor():
+    from dvara.cli import _as_channel
+    channel = _as_channel("telegram:8675309")
+    assert (channel.kind, channel.id) == ("telegram", "8675309")
+
+
+def test_as_splits_on_the_first_colon_only():
+    """A kind cannot contain one; plenty of native ids can."""
+    from dvara.cli import _as_channel
+    assert _as_channel("matrix:@me:example.org").id == "@me:example.org"
+
+
+@pytest.mark.parametrize("spec", ["telegram", "telegram:", ":8675309", ":"])
+def test_a_malformed_as_is_an_error_not_a_guess(spec):
+    from dvara.cli import _as_channel
+    from dvara.errors import ConfigProblem
+    with pytest.raises(ConfigProblem):
+        _as_channel(spec)
+
+
+def test_an_actor_and_a_channel_cannot_both_be_given(owned):
+    from dvara.cli import build_parser
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([*owned, "say", "--actor", "owner",
+                                   "--as", "telegram:1", "--agent", "greeter",
+                                   "hi"])
+
+
+def test_saying_nothing_about_who_is_talking_is_an_error(owned):
+    from dvara.cli import build_parser
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([*owned, "say", "--agent", "greeter", "hi"])

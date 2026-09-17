@@ -35,7 +35,7 @@ from pathlib import Path
 
 from yantra import render_case
 
-from dvara.actors import ActorBook
+from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run
 from dvara.errors import ConfigProblem, Refused
@@ -98,7 +98,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     say = subs.add_parser("say", help="run one turn, in process, no HTTP")
     say.add_argument("text", help="what to say to the agent")
-    say.add_argument("--actor", required=True)
+    # An actor id, OR a channel identity the actors file maps onto one.
+    # The second exists so an owner can prove a mapping works before
+    # wiring a bot to it: a bot that answers nothing tells you nothing
+    # about WHICH of the two halves is wrong.
+    who = say.add_mutually_exclusive_group(required=True)
+    who.add_argument("--actor")
+    who.add_argument("--as", dest="as_channel", metavar="KIND:ID",
+                     help="speak as a channel identity from actors.toml, "
+                          "e.g. --as telegram:8675309")
     say.add_argument("--agent", required=True)
     say.add_argument("--thread", default="cli")
 
@@ -190,6 +198,23 @@ def _agents(service: Service) -> int:
     return 0
 
 
+def _as_channel(spec: str | None) -> Channel | None:
+    """``kind:id`` off the command line, or nothing.
+
+    Split on the FIRST colon only: a channel kind is a token and cannot
+    contain one, while plenty of channels name people with strings that
+    can.
+    """
+    if spec is None:
+        return None
+    kind, sep, native = spec.partition(":")
+    if not sep or not kind.strip() or not native.strip():
+        raise ConfigProblem(
+            f"--as wants KIND:ID, naming a channel identity from your "
+            f"actors file (got {spec!r})")
+    return Channel(kind=kind.strip(), id=native.strip())
+
+
 def _ask_at_the_keyboard(desk: AskDesk):
     """Print the question, read the answer, hand it back to the desk.
 
@@ -223,9 +248,16 @@ def _say(service: Service, args) -> int:
         # question printed to a log is a question nobody answers.
         service.asks.notify = _ask_at_the_keyboard(service.asks)
 
+    try:
+        via = _as_channel(args.as_channel)
+    except ConfigProblem as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     async def go():
         try:
-            return await service.deliver(actor=args.actor, agent=args.agent,
+            return await service.deliver(actor=args.actor, via=via,
+                                         agent=args.agent,
                                          thread=args.thread, text=args.text)
         finally:
             await service.aclose()

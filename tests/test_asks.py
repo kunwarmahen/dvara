@@ -29,9 +29,10 @@ async def answered(desk: AskDesk, *, approve: bool, actor: str = "owner"):
     return ask
 
 
-def put(desk: AskDesk, *, actor: str = "owner", tool: str = "bash"):
+def put(desk: AskDesk, *, actor: str = "owner", tool: str = "bash",
+        reach: tuple[tuple[str, str], ...] = ()):
     return desk.put(actor=actor, agent="ops", thread="t1", tool=tool,
-                    summary="rm -rf /tmp/x")
+                    summary="rm -rf /tmp/x", reach=reach)
 
 
 # ---- a decision comes back either way --------------------------------------
@@ -292,3 +293,167 @@ def test_a_slow_delivery_that_arrives_still_gets_its_answer():
 
     desk.notify = slow_notify
     assert run(put(desk)).approved
+
+
+# ---- one person, one queue, however many channels ---------------------------
+
+TELEGRAM = (("telegram", "8675309"),)
+BOTH = (("telegram", "8675309"), ("signal", "+1555"))
+
+
+def test_a_question_goes_out_on_every_channel_the_person_holds():
+    seen = []
+
+    async def note(ask):
+        seen.append((ask.to, ask.id))
+
+    desk = AskDesk(timeout=0.05)
+    desk.route("telegram", note)
+    desk.route("signal", note)
+    run(put(desk, reach=BOTH))
+    # Two deliveries, two addresses, ONE question -- the id is shared,
+    # because answering on either settles the same waiting turn.
+    assert [to for to, _ in seen] == ["8675309", "+1555"]
+    assert len({ask_id for _, ask_id in seen}) == 1
+
+
+def test_an_answer_need_not_come_back_on_the_channel_that_delivered_it():
+    """The whole point of the table: ask on the laptop, approve on the phone."""
+    delivered = []
+
+    async def telegram(ask):
+        delivered.append(ask.to)
+
+    desk = AskDesk(timeout=5)
+    desk.route("telegram", telegram)
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=TELEGRAM))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        # Answered from somewhere else entirely -- an HTTP call, say --
+        # naming only the person and the question.
+        ask = desk.pending()[0]
+        desk.answer(ask.id, actor="owner", approve=True)
+        return await asking
+
+    assert run(go()).approved
+    assert delivered == ["8675309"]
+
+
+def test_a_question_is_listed_for_the_person_whatever_raised_it():
+    """One queue. A turn that came in over HTTP is still that person's."""
+    desk = AskDesk(timeout=0.05)
+
+    async def go():
+        asking = asyncio.create_task(put(desk, actor="mahen", reach=TELEGRAM))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        assert [a.actor for a in desk.pending("mahen")] == ["mahen"]
+        assert desk.pending("guest") == []
+        await asking
+
+    run(go())
+
+
+def test_a_channel_with_no_notifier_registered_delivers_nothing_and_waits():
+    """Note 02's polling service, unchanged: no push route is not a refusal."""
+    desk = AskDesk(timeout=0.05)          # no catch-all, no routes
+    answer = run(put(desk, reach=TELEGRAM))
+    assert not answer.approved
+    assert "nobody answered" in answer.reason      # silence, not undeliverable
+
+
+def test_one_channel_down_is_not_nobody_being_there():
+    reached = []
+
+    async def broken(ask):
+        raise RuntimeError("bot token expired")
+
+    async def working(ask):
+        reached.append(ask.to)
+
+    desk = AskDesk(timeout=0.05)
+    desk.route("telegram", broken)
+    desk.route("signal", working)
+    answer = run(put(desk, reach=BOTH))
+    # The question ARRIVED. Refusing on the first exception would let the
+    # least reliable channel decide for the person who did get asked.
+    assert "nobody answered" in answer.reason
+    assert reached == ["+1555"]
+
+
+def test_every_channel_down_is_nobody_being_there():
+    async def broken(ask):
+        raise RuntimeError("bot token expired")
+
+    desk = AskDesk(timeout=30)            # long: this must not wait it out
+    desk.route("telegram", broken)
+    desk.route("signal", broken)
+    answer = run(put(desk, reach=BOTH))
+    assert not answer.approved
+    assert "could not be delivered" in answer.reason
+
+
+def test_the_catch_all_still_gets_everything_with_no_address():
+    """The terminal front end, untouched by any of this."""
+    seen = []
+
+    async def notify(ask):
+        seen.append(ask)
+        desk.answer(ask.id, actor=ask.actor, approve=True)
+
+    desk = AskDesk(timeout=5, notify=notify)
+    assert run(put(desk, reach=BOTH)).approved
+    assert len(seen) == 1
+    assert seen[0].to is None
+
+
+def test_a_routed_channel_and_a_catch_all_both_fire():
+    everywhere = []
+
+    async def note(ask):
+        everywhere.append(ask.to)
+
+    desk = AskDesk(timeout=0.05, notify=note)
+    desk.route("telegram", note)
+    run(put(desk, reach=TELEGRAM))
+    assert everywhere == ["8675309", None]
+
+
+def test_a_second_registration_replaces_rather_than_doubles():
+    """A bridge that reconnects must not deliver everything twice."""
+    first, second = [], []
+
+    async def one(ask):
+        first.append(ask.to)
+
+    async def two(ask):
+        second.append(ask.to)
+
+    desk = AskDesk(timeout=0.05)
+    desk.route("telegram", one)
+    desk.route("telegram", two)
+    run(put(desk, reach=TELEGRAM))
+    assert first == []
+    assert second == ["8675309"]
+
+
+def test_an_address_is_for_the_notifier_not_for_everyone_listing():
+    """An unfiltered GET /asks must not hand out every person's chat id."""
+    desk = AskDesk(timeout=0.05)
+
+    async def note(ask):
+        assert ask.to == "8675309"        # the notifier is told
+
+    desk.route("telegram", note)
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=TELEGRAM))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        assert "to" not in desk.pending()[0].as_dict()
+        assert "8675309" not in str(desk.pending()[0].as_dict())
+        await asking
+
+    run(go())

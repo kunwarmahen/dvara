@@ -81,7 +81,7 @@ from yantra.config import guess_provider
 from yantra.errors import ConfigError
 
 from dvara import money
-from dvara.actors import Actor, ActorBook
+from dvara.actors import Actor, ActorBook, Channel
 from dvara.asks import AskDesk
 from dvara.errors import Refused
 from dvara.gate import Policy
@@ -106,6 +106,11 @@ class Reply:
     detail: str | None = None
     cost_usd: float | None = None
     usage: Usage | None = None
+    #: Who the turn ran as. Worth returning rather than assuming, because
+    #: a caller that arrived with a channel identity never named an actor
+    #: and would otherwise have to ask a second time to answer a question
+    #: this turn raised. None only when the resolution itself refused.
+    actor: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -187,26 +192,68 @@ class Service:
 
     # ---- the verb ----------------------------------------------------------
 
-    async def deliver(self, *, actor: str, agent: str, thread: str,
-                      text: str) -> Reply:
+    def _whom(self, actor: str | None, via: Channel | None,
+              thread: str) -> tuple[str, str]:
+        """Settle who is talking and under which thread, from either form.
+
+        EXACTLY ONE OF THE TWO, and both mistakes are refused rather than
+        resolved. Neither is a caller that forgot to say who it is;
+        BOTH is a caller saying it twice, and the only way to honour that
+        would be to decide which of the two wins -- at which point a
+        bridge with a stale hard-coded actor id quietly overrules the
+        roster, or quietly does not, and nobody can tell which from the
+        outside.
+        """
+        if (actor is None) == (via is None):
+            raise Refused("a turn needs exactly one of an actor or a channel "
+                          "identity to say who is talking")
+        if via is None:
+            return actor, thread
+        return self.actors.resolve(via.kind, via.id).id, f"{via.kind}:{thread}"
+
+
+    async def deliver(self, *, agent: str, thread: str, text: str,
+                      actor: str | None = None,
+                      via: Channel | None = None) -> Reply:
         """Run one turn for one person, and answer them either way.
 
         Never raises for anything a person could have caused. A refusal is
         a reply; so is a crash inside somebody's tool. The caller is a
         channel adapter, and an exception there is a message that silently
         never arrives.
+
+        TWO WAYS TO SAY WHO, AND EXACTLY ONE PER CALL. ``actor`` names
+        somebody straight off the roster, which is what the CLI does and
+        what a trusted bridge that already did its own mapping does.
+        ``via`` hands over a channel's native identity and lets the roster
+        do the mapping -- the form an adapter should prefer, because it is
+        the form in which the adapter cannot get the answer wrong.
+
+        THE CHANNEL QUALIFIES THE THREAD. Two channels resolving to one
+        person is the point of ``via``; two channels whose thread ids
+        happen to collide sharing one conversation is not, and before the
+        roster joined them it was only the differing actor ids keeping
+        them apart. So a turn that came in through a channel is keyed
+        under ``kind:thread``. It is done here rather than asked of
+        adapters because a rule that holds only when every adapter
+        remembers it is not a rule, and the cost is one prefix on the
+        path that has a channel to name -- keys made by callers naming an
+        actor directly are untouched, and so is every checkpoint already
+        written under one.
         """
         started = datetime.now(UTC)
         try:
+            actor, thread = self._whom(actor, via, thread)
             who = self.actors.may(actor, agent)
             spec = self.roster.spec(agent)
             key = session_key(actor, agent, thread)
         except Refused as exc:
             return Reply(text=str(exc), run_id=None, agent=agent,
-                         stop_reason="refused")
+                         actor=actor, stop_reason="refused")
         if not text.strip():
             return Reply(text="say something and I will answer it",
-                         run_id=None, agent=agent, stop_reason="refused")
+                         run_id=None, agent=agent, actor=actor,
+                         stop_reason="refused")
 
         async with self._lock(key):
             # Costing zero until something is spent. The distinction the
@@ -223,7 +270,7 @@ class Service:
                 run.reply, run.stop_reason = str(exc), "refused"
                 self.runs.record(run)
                 return Reply(text=str(exc), run_id=run.id, agent=agent,
-                             stop_reason="refused")
+                             actor=actor, stop_reason="refused")
             except asyncio.CancelledError:
                 # A dropped connection is not a failure of the agent, and
                 # Yantra's loop already left history resumable. Record what
@@ -238,7 +285,8 @@ class Service:
                 run.reply = "that went wrong at my end"
                 self.runs.record(run)
                 return Reply(text=run.reply, run_id=run.id, agent=agent,
-                             stop_reason="error", detail=run.detail)
+                             actor=actor, stop_reason="error",
+                             detail=run.detail)
 
     # ---- one turn, in the order that works ---------------------------------
 
@@ -263,6 +311,7 @@ class Service:
                     actor_mode=who.permissions,
                     desk=self.asks,
                     actor=who.id, agent=run.agent, thread=run.thread,
+                    reach=who.reach(),
                 ),
                 cwd=self._workspace(key),
                 provider=provider,
@@ -310,8 +359,9 @@ class Service:
             run.reply = _explain(run.stop_reason, run.detail, ceiling)
         self.runs.record(run)
         return Reply(text=run.reply, run_id=run.id, agent=run.agent,
-                     stop_reason=run.stop_reason, detail=run.detail,
-                     cost_usd=run.cost_usd, usage=run.usage)
+                     actor=run.actor, stop_reason=run.stop_reason,
+                     detail=run.detail, cost_usd=run.cost_usd,
+                     usage=run.usage)
 
     # ---- the pieces --------------------------------------------------------
 

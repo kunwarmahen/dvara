@@ -55,6 +55,7 @@ package asks for when it ships ``tools/*.py`` at all.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from yantra import (
@@ -108,7 +109,8 @@ class Policy:
 
     def gate(self, package_mode: str | None, *, actor_mode: str | None = None,
              desk: AskDesk | None = None, actor: str = "", agent: str = "",
-             thread: str = "") -> PermissionFn:
+             thread: str = "",
+             reach: Sequence[tuple[str, str]] = ()) -> PermissionFn:
         """The ``PermissionFn`` one turn runs under.
 
         Yantra's own two functions where they fit, chosen between rather
@@ -118,6 +120,12 @@ class Policy:
         ``AsyncAgent`` can take, and which is the entire reason a turn
         that waits for a person does not stop every other conversation
         in the process.
+
+        ``reach`` is where the person can be found, carried through
+        untouched: this module decides WHETHER to ask, and the desk
+        decides where the question goes. An empty one is ordinary and
+        means only that no channel notifier will fire -- a poller still
+        finds the question, because it is in the same one queue.
         """
         # A PACKAGE THAT NAMES NO MODE IS TREATED AS NAMING THE TIGHTEST,
         # which is the one place silence is read as a decision rather than
@@ -134,16 +142,17 @@ class Policy:
         # exactly as it did" a property instead of a promise.
         if len(self.rules):
             return ruled(self.rules, mode=mode, desk=desk, actor=actor,
-                         agent=agent, thread=thread)
+                         agent=agent, thread=thread, reach=reach)
         if mode == "yolo":
             return yolo
         if mode == "ask" and desk is not None:
-            return escalating(desk, actor=actor, agent=agent, thread=thread)
+            return escalating(desk, actor=actor, agent=agent, thread=thread,
+                              reach=reach)
         return allow_read_only
 
 
-def escalating(desk: AskDesk, *, actor: str, agent: str,
-               thread: str) -> PermissionFn:
+def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
+               reach: Sequence[tuple[str, str]] = ()) -> PermissionFn:
     """A gate that puts the question to a person and waits for the answer.
 
     Read-only tools are approved without asking, exactly as they are
@@ -159,13 +168,15 @@ def escalating(desk: AskDesk, *, actor: str, agent: str,
     def gate(request: PermissionRequest):
         if request.read_only:
             return True
-        return put(desk, request, actor=actor, agent=agent, thread=thread)
+        return put(desk, request, actor=actor, agent=agent, thread=thread,
+                   reach=reach)
 
     return gate
 
 
 async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
-              agent: str, thread: str) -> bool:
+              agent: str, thread: str,
+              reach: Sequence[tuple[str, str]] = ()) -> bool:
     """Ask the person, and write their answer onto the request.
 
     The one place a question is put, so the two gates below cannot come to
@@ -176,14 +187,16 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     without matching on English (Yantra's note 39).
     """
     answer = await desk.put(actor=actor, agent=agent, thread=thread,
-                            tool=request.tool_name, summary=request.summary)
+                            tool=request.tool_name, summary=request.summary,
+                            reach=reach)
     if not answer.approved:
         return refuse(request, answer.reason or "", code=answer.code)
     return True
 
 
 def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
-          agent: str, thread: str) -> PermissionFn:
+          agent: str, thread: str,
+          reach: Sequence[tuple[str, str]] = ()) -> PermissionFn:
     """The gate when the owner has written standing answers down.
 
     One function rather than a wrapper around the three above, for note
@@ -234,7 +247,8 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
             # that says to ask about a read-only tool gets asked about.
             # "Tell me before this thing reads anything" is a thing an
             # owner is allowed to mean.
-            return put(desk, request, actor=actor, agent=agent, thread=thread)
+            return put(desk, request, actor=actor, agent=agent,
+                       thread=thread, reach=reach)
         return refuse(request, _no_route(request, mode, desk),
                       code=REFUSED_UNATTENDED)
 

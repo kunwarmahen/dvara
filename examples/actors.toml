@@ -1,13 +1,34 @@
 # Who this service serves. An actor is ASSIGNED here, never asserted by
-# anything that arrives from outside: a channel adapter maps its own
-# native identity (a Telegram user id) onto one of these names, and an
-# identity with no name here is not served.
+# anything that arrives from outside: a channel adapter hands over the
+# native identity it has (a Telegram user id) and this file says whose it
+# is. An identity with no entry here is not served.
 #
-# No secrets in this file, ever. It is a thing you commit.
+# No secrets in this file, ever. It is a thing you commit. A chat id is
+# an address, not a credential.
 
 [actor.owner]
 # No `agents` key: every agent in the roster. No ceilings: the package's
 # own is the only one in force.
+
+# Where this person can be reached. AN ACTOR IS A PERSON, NOT A SEAT --
+# one entry per channel, and the allowance, the whitelist and the queue
+# of pending questions stay the person's rather than multiplying with the
+# doors. A question raised anywhere is delivered to every channel listed
+# here, and an answer may come back on any of them.
+#
+# `kind` is any lower-case token; dvara never branches on which channel
+# it names. `id` is whatever that channel calls this person -- a number
+# is fine, and is stored and compared as text. One (kind, id) pair
+# belongs to at most one actor, checked across this whole file at load.
+#
+# Uncomment and put your own Telegram user id here, then check it works
+# before wiring a bot to anything:
+#
+#     dvara say --as telegram:8675309 --agent greeter "who are you?"
+#
+# [[actor.owner.channel]]
+# kind = "telegram"
+# id   = 8675309
 
 [actor.guest]
 agents           = ["greeter", "scribe"]

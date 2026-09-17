@@ -347,6 +347,8 @@ message; an exception is a reply that silently never arrives.
   Desirable when you are fixing a prompt, alarming when a conversation
   changes personality mid-sentence. Pinning a package version per thread
   is the alternative, and it is a column plus a great deal of explaining.
-* **One actor per channel.** The same person on Telegram and over HTTP is
-  two actor ids today. One actor with several channel identities is
-  right, and is a table.
+* ~~**One actor per channel.**~~ Shipped in
+  [note 05](05-one-person-two-channels.md): one actor with several
+  channel identities, in a table, exactly as guessed here. What was not
+  guessed is which cost decides it -- the daily allowance, not the
+  tidiness.

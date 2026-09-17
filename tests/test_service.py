@@ -15,10 +15,11 @@ import asyncio
 import pytest
 from yantra import Usage
 
-from dvara.actors import ActorBook
+from dvara.actors import ActorBook, Channel
+from dvara.asks import AskDesk
 from dvara.gate import Policy
 from dvara.keys import session_key
-from tests.conftest import calls, says, write_package
+from tests.conftest import EXAMPLES, calls, says, write_package
 
 
 def deliver(service, **kwargs):
@@ -555,3 +556,139 @@ def test_an_actor_the_owner_will_not_be_woken_for_is_refused_outright(
     assert desk.pending() == []          # nobody was disturbed
     told = _tool_results(service.scripted.requests[-1]["messages"])
     assert "Nobody is available to ask" in told[0]
+
+
+# ---- one person, two channels ----------------------------------------------
+
+CHANNELLED = ActorBook.from_dict({"actor": {
+    "owner": {"channel": [{"kind": "telegram", "id": "8675309"},
+                          {"kind": "signal", "id": "+1555"}]},
+    "guest": {"agents": ["greeter"], "max_usd_per_day": 0.10},
+}})
+
+
+def test_a_channel_identity_runs_the_turn_as_the_person_it_belongs_to(
+        make_service):
+    service = make_service(actors=CHANNELLED)
+    reply = asyncio.run(service.deliver(
+        via=Channel("telegram", "8675309"), agent="greeter", thread="chat7",
+        text="hello?"))
+    assert reply.ok
+    # The caller never named an actor and gets told which one it was, so
+    # it can answer a question the turn may have raised.
+    assert reply.actor == "owner"
+    assert service.runs.recent()[0].actor == "owner"
+
+
+def test_a_native_id_nobody_assigned_is_refused_without_running_anything(
+        make_service):
+    service = make_service(actors=CHANNELLED)
+    reply = asyncio.run(service.deliver(
+        via=Channel("telegram", "999"), agent="greeter", thread="chat7",
+        text="hello?"))
+    assert reply.stop_reason == "refused"
+    assert service.scripted.requests == []
+
+
+def test_naming_neither_an_actor_nor_a_channel_is_refused(make_service):
+    service = make_service(actors=CHANNELLED)
+    reply = asyncio.run(service.deliver(agent="greeter", thread="t",
+                                        text="hello?"))
+    assert reply.stop_reason == "refused"
+    assert "exactly one" in reply.text
+
+
+def test_naming_both_an_actor_and_a_channel_is_refused(make_service):
+    """Two answers to one question, and no honest way to pick."""
+    service = make_service(actors=CHANNELLED)
+    reply = asyncio.run(service.deliver(
+        actor="owner", via=Channel("telegram", "8675309"), agent="greeter",
+        thread="t", text="hello?"))
+    assert reply.stop_reason == "refused"
+
+
+def test_two_channels_colliding_on_a_thread_id_stay_two_conversations(
+        make_service):
+    """The cost of joining the actor, paid here rather than discovered later."""
+    service = make_service([says("one"), says("two")], actors=CHANNELLED)
+    asyncio.run(service.deliver(via=Channel("telegram", "8675309"),
+                                agent="greeter", thread="42", text="first"))
+    asyncio.run(service.deliver(via=Channel("signal", "+1555"),
+                                agent="greeter", thread="42", text="second"))
+    # Same person, same agent, the same thread id from two channels. Before
+    # the roster joined them, two actor ids kept these apart by accident.
+    carried = [m.text() for m in service.scripted.requests[1]["messages"]]
+    assert carried == ["second"]
+
+
+def test_one_channel_keeps_its_own_conversation_across_turns(make_service):
+    service = make_service([says("one"), says("two")], actors=CHANNELLED)
+    for text in ("first", "second"):
+        asyncio.run(service.deliver(via=Channel("telegram", "8675309"),
+                                    agent="greeter", thread="42", text=text))
+    carried = [m.text() for m in service.scripted.requests[1]["messages"]]
+    assert carried == ["first", "one", "second"]
+
+
+def test_a_channel_turn_is_keyed_under_the_channel_it_came_in_on(make_service):
+    service = make_service(actors=CHANNELLED)
+    asyncio.run(service.deliver(via=Channel("telegram", "8675309"),
+                                agent="greeter", thread="42", text="hi"))
+    assert service.runs.recent()[0].thread == "telegram:42"
+    assert service.sessions.load_latest(
+        session_key("owner", "greeter", "telegram:42")) is not None
+
+
+def test_naming_an_actor_directly_still_keys_exactly_as_it_did(make_service):
+    """No migration: keys made the old way are untouched by any of this."""
+    service = make_service(actors=CHANNELLED)
+    deliver(service, thread="t1")
+    assert service.runs.recent()[0].thread == "t1"
+    assert service.sessions.load_latest(
+        session_key("owner", "greeter", "t1")) is not None
+
+
+def test_a_days_allowance_is_the_persons_not_the_channels(make_service,
+                                                          priced_model):
+    """The argument for the table. One number written, one number spent."""
+    actors = ActorBook.from_dict({"actor": {"guest": {
+        "max_usd_per_day": 0.10,
+        "channel": [{"kind": "telegram", "id": "1"},
+                    {"kind": "signal", "id": "2"}],
+    }}})
+    service = make_service([says("spendy", usage=Usage(1000, 1000, 0, 0))],
+                           actors=actors, model=priced_model)
+    first = asyncio.run(service.deliver(via=Channel("telegram", "1"),
+                                        agent="greeter", thread="a",
+                                        text="hello?"))
+    assert first.cost_usd and first.cost_usd > 0.10
+    # The second turn arrives on the OTHER channel, and finds the same
+    # spent allowance rather than a fresh one.
+    second = asyncio.run(service.deliver(via=Channel("signal", "2"),
+                                         agent="greeter", thread="b",
+                                         text="hello?"))
+    assert second.stop_reason == "refused"
+    assert "daily allowance" in second.text
+
+
+def test_a_question_raised_on_one_channel_reaches_the_others(make_service,
+                                                            priced_model):
+    """A turn that came in over HTTP still finds the person in a chat app."""
+    delivered = []
+
+    async def telegram(ask):
+        delivered.append(ask.to)
+        service.asks.answer(ask.id, actor=ask.actor, approve=True)
+
+    desk = AskDesk(timeout=5)
+    desk.route("telegram", telegram)
+    desk.route("signal", telegram)
+    service = make_service(
+        [calls("write_file", {"path": "note.txt", "content": "x"}),
+         says("done")],
+        actors=CHANNELLED, asks=desk, policy=Policy(mode="ask"),
+        root=EXAMPLES / "agents", model=priced_model)
+    # Named directly, as a trusted HTTP bridge would -- no channel in sight.
+    reply = deliver(service, actor="owner", agent="scribe")
+    assert reply.ok
+    assert delivered == ["8675309", "+1555"]

@@ -248,8 +248,9 @@ section.
   `--write` offered to run the gate immediately. It would also need a
   provider and a key at the moment somebody is doing bookkeeping.
 * **Locks are still never evicted**, unchanged from notes 01–03.
-* **One actor per channel**, unchanged, and still the open question that
-  gets more expensive the longer it waits.
+* ~~**One actor per channel**~~ -- settled in
+  [note 05](05-one-person-two-channels.md), which was the last thing
+  standing between escalation and somewhere real to escalate to.
 
 ---
 

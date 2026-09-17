@@ -33,7 +33,10 @@ durability, it is a lie with a timestamp on it.
 raises -- the bot is down, the token expired -- there is nobody waiting
 at the other end and the deadline would just be two silent minutes. The
 call is refused at once, and the model is told the difference: nobody
-could be reached is not the same fact as nobody answered.
+could be reached is not the same fact as nobody answered. With a person
+reachable SEVERAL ways this becomes "every delivery failed": one channel
+down while another is up is a question that arrived, and the wait goes
+on.
 
 **SILENCE DENIES.** A deadline that approved would make an absent owner
 the most permissive setting in the system, which is exactly backwards.
@@ -49,6 +52,39 @@ not raise; it simply never wakes the loop, so the turn waits out its
 deadline and is refused for a silence that was actually an approval. The
 desk remembers which loop each question is waiting on, so an answer from
 anywhere lands.
+
+## One person, one queue, however many channels
+
+``route(kind, notifier)`` is the fifth decision, and it arrived with the
+channel table in ``actors.py``. A desk used to hold ONE notifier, which
+was exactly right while a service had one way in and quietly wrong the
+moment it had two: a question raised by a turn that came over HTTP had
+nowhere to go but the HTTP poller, even with the person sitting in a chat
+app the service could have reached.
+
+So delivery is routed by the CHANNEL and the question is addressed to the
+PERSON, and those are deliberately different things:
+
+* A question is PUT to an actor and delivered to every channel that actor
+  is reachable on for which a notifier is registered. Ask on the laptop,
+  approve from the phone.
+* An answer names the actor and the id, exactly as before. It does not
+  name a channel, and it does not have to arrive back on the channel that
+  delivered it -- which is the entire point. THE QUEUE IS THE PERSON'S,
+  NOT THE CHANNEL'S.
+* ``notify`` survives untouched, as the CATCH-ALL. A front end that is
+  the only place a question could possibly go -- the terminal, whose
+  notifier both asks and collects -- registers no kind and gets
+  everything. A desk with neither a catch-all nor a route delivers
+  nothing and waits, which is the polling service note 02 built and is
+  why "nothing was delivered" is not by itself a refusal.
+
+The address a question is delivered to rides on the ``Ask`` itself, as
+``to``, one copy per channel. THAT FIELD IS NOT ON THE WIRE. ``as_dict``
+is what ``GET /asks`` returns and an unfiltered listing there would hand
+every adapter every person's chat id -- a poller already knows where it
+is polling from, so the address is delivery's business and nobody
+else's.
 """
 
 from __future__ import annotations
@@ -56,8 +92,8 @@ from __future__ import annotations
 import asyncio
 import secrets
 from contextlib import suppress
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 from yantra import REFUSED_TIMEOUT, REFUSED_UNATTENDED, REFUSED_USER
@@ -85,9 +121,20 @@ class Ask:
     tool: str
     summary: str
     asked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    #: Where this copy is being delivered, in the receiving channel's own
+    #: terms, or None for the catch-all notifier that has only one place
+    #: to put it. One question becomes one copy per channel; the id is
+    #: shared, because it is the same question and the first answer on
+    #: any of them settles it.
+    to: str | None = None
 
     def as_dict(self) -> dict:
-        """The wire shape. One place, so a channel and the HTTP surface agree."""
+        """The wire shape. One place, so a channel and the HTTP surface agree.
+
+        ``to`` is omitted on purpose -- see the module docstring. An
+        address is for the notifier being handed the question, not for
+        everyone who can list what is pending.
+        """
         return {"id": self.id, "actor": self.actor, "agent": self.agent,
                 "thread": self.thread, "tool": self.tool,
                 "summary": self.summary,
@@ -128,10 +175,10 @@ Notifier = Callable[[Ask], Awaitable[None]]
 class AskDesk:
     """The questions in flight, and the one place an answer may land.
 
-    One desk per service. It is deliberately not per-actor: a channel
-    adapter serving six people polls one desk and routes each question to
-    its own person, which is the arrangement that keeps the routing bug in
-    the adapter rather than in the service.
+    One desk per service. It is deliberately not per-actor and not
+    per-channel: one queue holds every question this process is waiting
+    on, a question is filtered out of it by the PERSON it was put to, and
+    any channel that person holds may answer any of them.
     """
 
     def __init__(self, *, timeout: float = DEFAULT_TIMEOUT,
@@ -142,15 +189,33 @@ class AskDesk:
                 "before it asks; say so with Policy(mode='read_only') "
                 "instead, where it is legible")
         self.timeout = float(timeout)
+        #: The catch-all: everything, with no address, for a front end
+        #: that is the only place a question could go.
         self.notify = notify
+        self._routes: dict[str, Notifier] = {}
         self._waiting: dict[
             str, tuple[Ask, asyncio.Future[bool], asyncio.AbstractEventLoop]
         ] = {}
 
+    def route(self, kind: str, notify: Notifier) -> None:
+        """Deliver questions for ``kind`` channels through ``notify``.
+
+        One notifier per kind, and re-registering replaces: an adapter
+        that reconnects should not end up delivering everything twice,
+        and a list of notifiers per kind is a feature nobody has needed.
+
+        The notifier is handed a copy of the ``Ask`` with ``to`` set to
+        that person's address on this channel, so one Telegram bridge
+        serving six people needs no roster of its own -- the address it
+        must send to arrives with the question.
+        """
+        self._routes[kind] = notify
+
     # ---- the asking side ---------------------------------------------------
 
     async def put(self, *, actor: str, agent: str, thread: str, tool: str,
-                  summary: str) -> Answer:
+                  summary: str,
+                  reach: Sequence[tuple[str, str]] = ()) -> Answer:
         """Ask, wait, and come back with a decision either way.
 
         Never raises for anything a person or a channel could have caused:
@@ -160,21 +225,25 @@ class AskDesk:
         caller hung up did not just get told "no", and history must not
         record one.
 
-        THE DEADLINE COVERS THE QUESTION, NOT JUST THE WAITING. Delivery
-        runs as a task alongside the wait rather than in front of it,
-        which matters for the notifier that does both jobs at once: the
-        terminal prompt asks AND collects, and if this awaited delivery
-        first, the clock would not start until somebody had already
-        typed. A deadline that only applies to the front ends that do not
-        need it is not a deadline.
+        ``reach`` is that person's ``(kind, address)`` pairs, straight off
+        their roster entry. Plain tuples rather than the ``Actor`` they
+        came from, because this module must not import ``actors`` -- that
+        module imports ``gate``, which imports this one.
+
+        THE DEADLINE COVERS THE QUESTION, NOT JUST THE WAITING. Deliveries
+        run as tasks alongside the wait rather than in front of it, which
+        matters for the notifier that does both jobs at once: the terminal
+        prompt asks AND collects, and if this awaited delivery first, the
+        clock would not start until somebody had already typed. A deadline
+        that only applies to the front ends that do not need it is not a
+        deadline.
         """
         ask = Ask(id=secrets.token_urlsafe(16), actor=actor, agent=agent,
                   thread=thread, tool=tool, summary=summary)
         loop = asyncio.get_running_loop()
         future: asyncio.Future[bool] = loop.create_future()
         self._waiting[ask.id] = (ask, future, loop)
-        delivery = (None if self.notify is None
-                    else asyncio.ensure_future(self.notify(ask)))
+        deliveries = self._deliver(ask, reach)
         deadline = loop.time() + self.timeout
         try:
             while True:
@@ -182,19 +251,24 @@ class AskDesk:
                 if left <= 0:
                     return Answer(False, _timed_out(tool, self.timeout),
                                   REFUSED_TIMEOUT)
-                watching = {future}
-                if delivery is not None and not delivery.done():
-                    watching.add(delivery)
+                watching = {future} | {d for d in deliveries if not d.done()}
                 done, _ = await asyncio.wait(
                     watching, timeout=left,
                     return_when=asyncio.FIRST_COMPLETED)
                 if not done:
                     return Answer(False, _timed_out(tool, self.timeout),
                                   REFUSED_TIMEOUT)
-                if delivery in done and delivery.exception() is not None:
-                    return Answer(False,
-                                  _undeliverable(tool, delivery.exception()),
-                                  REFUSED_UNATTENDED)
+                # EVERY route failing is the fact that matters, not any
+                # one of them. One bridge down while another is up is a
+                # question that reached the person; refusing on the first
+                # exception would make the least reliable channel the one
+                # that decides. Only when nothing got through is there
+                # nobody at the other end.
+                if deliveries and all(d.done() for d in deliveries):
+                    failures = [d.exception() for d in deliveries]
+                    if all(exc is not None for exc in failures):
+                        return Answer(False, _undeliverable(tool, failures[0]),
+                                      REFUSED_UNATTENDED)
                 if future.done():
                     if future.result():
                         return Answer(True)
@@ -206,10 +280,32 @@ class AskDesk:
             # -- the question is over. A desk that kept them would hand a
             # channel a list of questions nobody is waiting on.
             self._waiting.pop(ask.id, None)
-            if delivery is not None and not delivery.done():
-                delivery.cancel()
-                with suppress(asyncio.CancelledError, Exception):
-                    await delivery
+            for delivery in deliveries:
+                if not delivery.done():
+                    delivery.cancel()
+                    with suppress(asyncio.CancelledError, Exception):
+                        await delivery
+
+    def _deliver(self, ask: Ask, reach: Sequence[tuple[str, str]]
+                 ) -> list[asyncio.Future]:
+        """Start one delivery per place this question can go.
+
+        NOTHING TO DELIVER TO IS NOT A REFUSAL. A desk with no catch-all
+        and no route for any channel this person holds is the polling
+        service note 02 built -- ``GET /asks`` is how the question gets
+        found, and denying because no push route existed would break the
+        one front end that never had one. Silence still ends at the
+        deadline; it just is not shortened here.
+        """
+        started = []
+        for kind, address in reach:
+            notify = self._routes.get(kind)
+            if notify is not None:
+                started.append(asyncio.ensure_future(
+                    notify(replace(ask, to=address))))
+        if self.notify is not None:
+            started.append(asyncio.ensure_future(self.notify(ask)))
+        return started
 
     # ---- the answering side ------------------------------------------------
 

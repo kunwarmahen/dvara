@@ -27,20 +27,27 @@ in the framework; [03 — standing answers](notes/03-standing-answers.md)
 has the rule file, and the one mistake in it that is invisible in a diff;
 [04 — the failure loop](notes/04-the-failure-loop.md) turns a bad turn
 into a case in the package that produced it.
+[05 — one person, two channels](notes/05-one-person-two-channels.md) makes
+an actor a person rather than a seat.
 
 ## Status
 
 Roster, actors, sessions, budgets, run history, an HTTP surface and
-escalation to a person, standing allow/deny/ask rules and a failure loop
-that turns a bad turn into an eval case — covered by 231 tests. Channels
-do not exist yet: the terminal is the only thing that asks you anything.
-The API is not stable.
+escalation to a person, standing allow/deny/ask rules, a failure loop
+that turns a bad turn into an eval case, and one actor reachable on
+several channels — covered by 298 tests. No channel adapter ships yet:
+the terminal is still the only thing that asks you anything, but a bot
+is now a client of what exists rather than a thing to be designed
+around. The API is not stable.
 
 ## The shape of it
 
 Three nouns, one key. **Who** is talking (an actor), **which** agent they
 are talking to, and **which conversation** this is (a thread). Every
 session, every ceiling and every recorded run is keyed by that triple.
+An actor is a **person**, not a seat: one actor may be reachable on
+several channels, and the allowance, the whitelist and the queue of
+pending questions are the person's.
 
 Two rules run through every module, and both are enforced where they are
 stated rather than promised:
@@ -126,8 +133,40 @@ An unknown key is an error, not a shrug:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, max_usd_per_day, max_usd_per_turn, permissions
+known: agents, channel, max_usd_per_day, max_usd_per_turn, permissions
 ```
+
+**Where a person can be reached.** A channel adapter does not carry its
+own table of who is who; it hands over the identity it has and the
+roster maps it.
+
+```toml
+[[actor.owner.channel]]
+kind = "telegram"
+id   = 8675309       # numbers are fine; stored and compared as text
+```
+
+One person, one allowance, one queue of questions, several doors — and a
+question raised anywhere is delivered to every channel that person holds.
+`kind` is any lower-case token; dvara never branches on which channel it
+names. A `(kind, id)` pair belongs to at most one actor, checked across
+the whole file at load:
+
+```
+error: ~/dvara/actors.toml: telegram id '8675309' is claimed by both
+[actor.owner] and [actor.guest]; one channel identity is one person, and
+there is no right way to guess which
+```
+
+Check a mapping without standing up a bot:
+
+```bash
+dvara say --as telegram:8675309 --agent greeter "who are you?"
+```
+
+A turn that arrives through a channel is keyed under `kind:thread`, so
+two channels whose thread ids collide stay two conversations. Naming an
+actor directly keys exactly as it always did.
 
 ### The policy file
 
@@ -204,7 +243,7 @@ Two rules worth knowing before you reach for it:
 ### The HTTP surface
 
 ```
-POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, cost_usd, ...}
+POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, ...}
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
@@ -213,9 +252,23 @@ POST /asks/{id}    {actor, approve}              -> {answered, approved}
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person**: a caller is a channel adapter
-inside your trust boundary, and it is the adapter's job to map its
-channel's identity onto an actor. A service with no token refuses to
-start, and binds to localhost unless told otherwise.
+inside your trust boundary. A service with no token refuses to start, and
+binds to localhost unless told otherwise.
+
+**Two ways to say who, and an adapter should prefer the second.** `actor`
+is an assertion by a trusted caller. `channel` hands over the identity
+the adapter actually has and lets the roster map it — a bridge that
+carries no table of its own cannot carry a stale one. Exactly one form
+per request; both is a 400.
+
+```
+POST /message      {"channel": {"kind": "telegram", "id": 8675309}, ...}
+GET  /asks?channel=telegram&channel_id=8675309
+POST /asks/{id}    {"channel": {...}, "approve": true}
+```
+
+`/message` answers with the `actor` it ran as, which is what a bridge
+needs to answer a question that turn raised.
 
 ## Asking a person
 
@@ -231,6 +284,15 @@ from dvara import AskDesk, Service
 
 service = Service(roster=..., actors=..., state=...,
                   asks=AskDesk(timeout=120, notify=send_it_to_them))
+```
+
+A desk may instead route by channel, and then a question put to a person
+goes to every channel they are listed on — answer it from any of them,
+or over HTTP:
+
+```python
+desk = AskDesk(timeout=120)
+desk.route("telegram", send_to_telegram)   # ask.to is their address
 ```
 
 With a desk, `mode = "ask"` means ask: the turn suspends — it does not
@@ -270,15 +332,15 @@ print(reply.text, reply.cost_usd)
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
-| `actors.py` | who is served, what they may reach, what they may spend |
+| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `money.py` | package ∧ actor ∧ what is left of today |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)) |
-| `asks.py` | questions waiting for a person, and the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)) |
+| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), and which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)) |
 | `runs.py` | every turn that happened, including the ones that failed |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)) |
-| `http.py` | three endpoints and a bearer token (`[http]` extra) |
+| `http.py` | five endpoints and a bearer token (`[http]` extra) |
 | `cli.py` | `agents`, `say`, `runs`, `case`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
@@ -288,7 +350,9 @@ print(reply.text, reply.cost_usd)
    a package path that can come from a message is remote code execution.
    Names resolve inside one owner-controlled root, symlinks included.
 2. **Actors are assigned, never asserted.** An identity that is not in
-   the owner's file is not served.
+   the owner's file is not served — including a channel's own identity,
+   which the roster maps rather than the adapter, so the file the owner
+   reviews is the whole answer to who is served.
 3. **A package's permission mode is a floor the service may tighten and
    never loosen.** Three parties name a rung — the package, the owner and
    the actor — and the tightest wins, so nothing anybody writes can

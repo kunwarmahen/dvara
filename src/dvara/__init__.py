@@ -31,7 +31,7 @@ are enforced rather than promised:
   framework is not supposed to know about.
 """
 
-from dvara.actors import Actor, ActorBook
+from dvara.actors import Actor, ActorBook, Channel
 from dvara.asks import Answer, Ask, AskDesk, NotYours
 from dvara.errors import ConfigProblem, DvaraError, Refused
 from dvara.gate import Policy
@@ -48,6 +48,7 @@ __all__ = [
     "Ask",
     "AskDesk",
     "Ceiling",
+    "Channel",
     "ConfigProblem",
     "DvaraError",
     "NotYours",

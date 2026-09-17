@@ -30,10 +30,54 @@ grants them nothing. What it is actually for is the other direction --
 up to approve a shell command, on a service where the owner themselves is
 asked. Absent means the tightest rung, which is what a person who was
 never considered should get.
+
+## One person, several channels
+
+    [[actor.mahen.channel]]
+    kind = "telegram"
+    id   = 8675309
+
+A PERSON IS ONE ACTOR, ON HOWEVER MANY CHANNELS. Before this table
+existed the mapping from a channel's native identity onto an actor lived
+in the adapter, and the honest consequence was that the same person
+reachable two ways was two actors -- which is three separate things, not
+one: two queues of pending questions, two agent whitelists to keep in
+step, and TWO DAILY ALLOWANCES out of one number the owner wrote once.
+The last of those is the argument. A ceiling that doubles when somebody
+installs a bot is not a ceiling.
+
+So the mapping moves here, where the rest of the assignment already is.
+The file the owner reviews is now the whole answer to "who does this
+service serve, and where can I reach them", rather than half of it with
+the other half in a bot's environment.
+
+**dvara learns that channels exist; it never learns which ones.** ``kind``
+is an opaque token this module checks the SHAPE of and nothing else -- no
+list of known channels, no branch anywhere on the string "telegram". A
+second channel is an adapter and three lines of TOML, not a patch to this
+file. ``id`` is likewise opaque: whatever that channel calls the person,
+in whatever way makes the adapter's own lookup work. (It is written as a
+number above because Telegram writes user ids as numbers everywhere it
+documents them, and an owner copying one in should not have to know that
+this file wanted a string. Integers are accepted and stored as text; the
+comparison is always textual.)
+
+A ``(kind, id)`` pair BELONGS TO AT MOST ONE ACTOR, checked at load
+across the whole file. Two actors claiming one Telegram id has no correct
+resolution -- first-wins would hand one person another person's history
+because of the order two tables happen to appear in -- so it is an error
+naming both, the same shape of failure ``keys.py`` escapes its components
+to prevent.
+
+The table reads in both directions, which is why it is one table and not
+two. Inbound, an adapter turns its native id into an actor and asserts
+nothing. Outbound, a question put to that actor is delivered to every
+channel they are reachable on -- see ``AskDesk.route``.
 """
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,7 +90,40 @@ from dvara.gate import LADDER
 #: failure a ceiling exists to prevent (the same rule Yantra's package
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
-                        "permissions"})
+                        "permissions", "channel"})
+
+#: Keys one ``[[actor.NAME.channel]]`` entry may carry. Both required:
+#: a channel with no kind cannot be routed and one with no id names
+#: nobody, and either mistake is silent at the moment it matters.
+CHANNEL_KEYS = frozenset({"kind", "id"})
+
+#: What a channel kind may look like. The same token rule Yantra applies
+#: to refusal codes, for the same reason: this string ends up a dict key,
+#: a log field and a column, and one with a space or a slash in it is
+#: quoted forever afterwards by everybody who touches it.
+_KIND = re.compile(r"[a-z][a-z0-9_]*\Z")
+
+
+@dataclass(frozen=True)
+class Channel:
+    """Where one person is reachable, in one channel's own terms.
+
+    Two jobs in one pair, which is the reason it is one record rather
+    than an inbound map and an outbound map that can disagree. INBOUND,
+    an adapter hands ``(kind, id)`` over and gets back the actor the
+    owner assigned -- so the adapter asserts nothing and a native id
+    absent from the file is simply not served. OUTBOUND, ``id`` is the
+    address a question is delivered to on that channel.
+
+    Both directions want the same string in every channel worth having,
+    because a channel that cannot send you a message at the identity it
+    received one from is not a channel a person can be asked on. (In
+    Telegram's private chats the user id and the chat id are the same
+    number, which is the case this was drawn from.)
+    """
+
+    kind: str
+    id: str
 
 
 @dataclass(frozen=True)
@@ -62,16 +139,47 @@ class Actor:
     #: by minimum with the package's mode and the owner's policy, so it
     #: can only ever make a turn stricter.
     permissions: str | None = None
+    #: Every channel this person is reachable on. Empty is ordinary: an
+    #: actor named straight off the roster by the CLI or a trusted HTTP
+    #: caller needs no channel identity at all.
+    channels: tuple[Channel, ...] = ()
 
     def may_use(self, agent: str) -> bool:
         return self.agents is None or agent in self.agents
+
+    def reach(self) -> tuple[tuple[str, str], ...]:
+        """``(kind, address)`` pairs, for a desk deciding where to ask.
+
+        Plain tuples rather than ``Channel`` objects because the desk
+        must not import this module -- ``actors`` imports ``gate``
+        imports ``asks``, and a desk that knew what an actor was would
+        close that ring. What it needs is an address and a word for which
+        notifier can deliver to it, and that is two strings.
+        """
+        return tuple((c.kind, c.id) for c in self.channels)
 
 
 class ActorBook:
     """The owner's roster of people, loaded from one TOML file."""
 
-    def __init__(self, actors: dict[str, Actor]) -> None:
+    def __init__(self, actors: dict[str, Actor],
+                 *, where: Path | str = "<memory>") -> None:
         self._actors = dict(actors)
+        # The table read backwards, built once. A channel adapter asks
+        # this question on every inbound message, and a scan over every
+        # actor's channels per message is a linear search nobody needs.
+        self._by_channel: dict[tuple[str, str], str] = {}
+        for actor in self._actors.values():
+            for channel in actor.channels:
+                claimed = self._by_channel.setdefault(
+                    (channel.kind, channel.id), actor.id)
+                if claimed != actor.id:
+                    raise ConfigProblem(
+                        f"{where}: {channel.kind} id {channel.id!r} is "
+                        f"claimed by "
+                        f"both [actor.{claimed}] and [actor.{actor.id}]; "
+                        f"one channel identity is one person, and there "
+                        f"is no right way to guess which")
 
     def __len__(self) -> int:
         return len(self._actors)
@@ -89,6 +197,24 @@ class ActorBook:
             return self._actors[actor_id]
         except KeyError:
             raise Refused("you are not on this service's list of people") from None
+
+    def resolve(self, kind: str, native_id: str | int) -> Actor:
+        """The actor an adapter's own identity belongs to, or a refusal.
+
+        THE ADAPTER BRINGS A NATIVE ID AND GETS BACK A NAME; IT NEVER
+        BRINGS A NAME. That is the whole of "assigned, never asserted"
+        expressed as a function signature -- there is no argument here
+        through which a message could nominate who it is.
+
+        The refusal is the same sentence a stranger gets for an unknown
+        actor id, and deliberately so: a person probing a bot with
+        somebody else's user id learns nothing about who is on the list.
+        """
+        try:
+            return self._actors[self._by_channel[(kind, str(native_id))]]
+        except KeyError:
+            raise Refused(
+                "you are not on this service's list of people") from None
 
     def may(self, actor_id: str, agent: str) -> Actor:
         """The actor, having checked they may reach ``agent``."""
@@ -134,8 +260,12 @@ class ActorBook:
                 max_usd_per_turn=_money(body, "max_usd_per_turn", name, where),
                 max_usd_per_day=_money(body, "max_usd_per_day", name, where),
                 permissions=_mode(body.get("permissions"), name, where),
+                channels=_channels(body.get("channel"), name, where),
             )
-        return cls(actors)
+        # Checked in __init__ rather than here, because the reverse index
+        # is what makes the claim, and an ActorBook built any other way
+        # has to be as trustworthy as one parsed from a file.
+        return cls(actors, where=where)
 
 
 def _agents(value, name: str, where) -> tuple[str, ...] | None:
@@ -150,6 +280,60 @@ def _agents(value, name: str, where) -> tuple[str, ...] | None:
             f"allow every agent in the roster"
         )
     return tuple(value)
+
+
+def _channels(value, name: str, where) -> tuple[Channel, ...]:
+    """The person's addresses, or a loud complaint about one of them.
+
+    Strict about SHAPE and silent about MEANING. Every check here would
+    hold for a channel invented next year, because none of them knows
+    what any channel is called -- the moment this function grows a list
+    of known kinds is the moment adding a channel means editing dvara.
+    """
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(isinstance(v, dict) for v in value):
+        raise ConfigProblem(
+            f"{where}: [actor.{name}] channel must be written as "
+            f"[[actor.{name}.channel]] tables, one per place this person "
+            f"can be reached")
+    channels = []
+    for entry in value:
+        unknown = sorted(set(entry) - CHANNEL_KEYS)
+        if unknown:
+            raise ConfigProblem(
+                f"{where}: [[actor.{name}.channel]] has unknown key(s) "
+                f"{', '.join(unknown)}; known: "
+                f"{', '.join(sorted(CHANNEL_KEYS))}")
+        kind = entry.get("kind")
+        if not isinstance(kind, str) or not _KIND.match(kind):
+            raise ConfigProblem(
+                f"{where}: [[actor.{name}.channel]] kind must be a short "
+                f"lower-case token naming the channel -- letters, digits "
+                f"and underscores (got {kind!r})")
+        native = entry.get("id")
+        # An integer is the expected mistake rather than a mistake at
+        # all: Telegram prints user ids as bare numbers in everything it
+        # publishes, and an owner pasting one in should not have to know
+        # this file wanted quotes. Stored as text, compared as text, so
+        # 8675309 and "8675309" are the same person either way.
+        if isinstance(native, bool) or not isinstance(native, str | int):
+            raise ConfigProblem(
+                f"{where}: [[actor.{name}.channel]] id must be the string "
+                f"or number {kind} knows this person by (got {native!r})")
+        native = str(native).strip()
+        if not native:
+            raise ConfigProblem(
+                f"{where}: [[actor.{name}.channel]] id is empty; a channel "
+                f"entry with no id reaches nobody and matches nobody")
+        channels.append(Channel(kind=kind, id=native))
+    for i, channel in enumerate(channels):
+        if channel in channels[:i]:
+            raise ConfigProblem(
+                f"{where}: [actor.{name}] lists {channel.kind} id "
+                f"{channel.id!r} twice; a question would be delivered to "
+                f"them once per line")
+    return tuple(channels)
 
 
 def _mode(value, name: str, where) -> str | None:

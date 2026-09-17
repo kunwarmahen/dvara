@@ -341,9 +341,10 @@ answered or has expired is a `404`.
   would need a cancellable read to fix properly.
 * **Locks are still never evicted**, unchanged from note 01, and now
   holding for longer at a time.
-* **One actor per channel.** The same person on Telegram and over HTTP is
-  still two actor ids, and now they are two ids with two separate
-  queues of questions.
+* ~~**One actor per channel.**~~ Closed by
+  [note 05](05-one-person-two-channels.md). The two queues are one
+  queue: a question is put to a PERSON, delivered to every channel they
+  hold, and answerable from any of them.
 
 ---
 

@@ -202,3 +202,113 @@ def test_a_service_that_does_not_escalate_has_no_questions(client):
                         headers=auth())
     assert reply.status_code == 404
     assert "does not escalate" in reply.json()["detail"]
+
+
+# ---- naming a person the way an adapter knows them ---------------------------
+
+@pytest.fixture
+def channelled(make_service):
+    """A service whose owner is reachable on a channel."""
+    from dvara.actors import ActorBook
+    from tests.conftest import says
+
+    service = make_service([says("Hello.")] * 4, actors=ActorBook.from_dict(
+        {"actor": {"owner": {"channel": [{"kind": "telegram",
+                                          "id": "8675309"}]},
+                   "guest": {}}}))
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        client.service = service
+        yield client
+
+
+def test_a_message_may_name_a_channel_identity_instead_of_an_actor(channelled):
+    reply = channelled.post("/message", headers=auth(), json={
+        "channel": {"kind": "telegram", "id": 8675309},
+        "agent": "greeter", "thread": "chat7", "text": "hi",
+    }).json()
+    assert reply["ok"]
+    # The bridge never named an actor, and is told which one it was, so it
+    # can answer a question this turn might have raised.
+    assert reply["actor"] == "owner"
+
+
+def test_an_unmapped_identity_is_refused_as_a_reply_not_a_crash(channelled):
+    reply = channelled.post("/message", headers=auth(), json={
+        "channel": {"kind": "telegram", "id": "999"},
+        "agent": "greeter", "thread": "chat7", "text": "hi",
+    })
+    assert reply.status_code == 200
+    assert reply.json()["stop_reason"] == "refused"
+    assert reply.json()["actor"] is None
+
+
+@pytest.mark.parametrize("channel", [
+    "telegram", {}, {"kind": "telegram"}, {"id": "1"},
+    {"kind": "", "id": "1"}, {"kind": "telegram", "id": ""},
+    {"kind": "telegram", "id": True},
+])
+def test_a_malformed_channel_is_a_400(channelled, channel):
+    body = {"channel": channel, "agent": "greeter", "thread": "t", "text": "hi"}
+    assert channelled.post("/message", headers=auth(),
+                           json=body).status_code == 400
+
+
+def test_naming_both_an_actor_and_a_channel_is_a_400(channelled):
+    assert channelled.post("/message", headers=auth(), json={
+        "actor": "owner", "channel": {"kind": "telegram", "id": "8675309"},
+        "agent": "greeter", "thread": "t", "text": "hi",
+    }).status_code == 400
+
+
+def test_a_bridge_can_list_and_answer_without_knowing_any_actor_id(asking):
+    """The reason this is on all three endpoints: a dumb bridge stays dumb."""
+    from dvara.actors import ActorBook
+
+    asking.service.actors = ActorBook.from_dict(
+        {"actor": {"owner": {"channel": [{"kind": "telegram", "id": "42"}]}}})
+    listed = asking.get("/asks", headers=auth(),
+                        params={"channel": "telegram", "channel_id": "42"})
+    assert [a["actor"] for a in listed.json()["asks"]] == ["owner"]
+
+    ask = listed.json()["asks"][0]
+    reply = asking.post(f"/asks/{ask['id']}", headers=auth(),
+                        json={"channel": {"kind": "telegram", "id": 42},
+                              "approve": True})
+    assert reply.status_code == 200
+    asking.turn.join(timeout=5)
+    assert asking.done and asking.done[0].ok
+
+
+def test_answering_as_a_channel_identity_that_is_not_the_asker_is_refused(
+        asking):
+    from dvara.actors import ActorBook
+
+    asking.service.actors = ActorBook.from_dict(
+        {"actor": {"owner": {},
+                   "guest": {"channel": [{"kind": "telegram", "id": "9"}]}}})
+    ask = asking.get("/asks", headers=auth()).json()["asks"][0]
+    reply = asking.post(f"/asks/{ask['id']}", headers=auth(),
+                        json={"channel": {"kind": "telegram", "id": "9"},
+                              "approve": True})
+    assert reply.status_code == 403
+    assert asking.desk.pending(), "and the question is still standing"
+
+
+def test_listing_by_an_unmapped_identity_is_a_404(asking):
+    reply = asking.get("/asks", headers=auth(),
+                       params={"channel": "telegram", "channel_id": "nobody"})
+    assert reply.status_code == 404
+
+
+def test_half_a_channel_identity_is_a_400(asking):
+    assert asking.get("/asks", headers=auth(),
+                      params={"channel": "telegram"}).status_code == 400
+    assert asking.get("/asks", headers=auth(),
+                      params={"channel_id": "42"}).status_code == 400
+
+
+def test_naming_a_person_twice_when_listing_is_a_400(asking):
+    reply = asking.get("/asks", headers=auth(),
+                       params={"actor": "owner", "channel": "telegram",
+                               "channel_id": "42"})
+    assert reply.status_code == 400

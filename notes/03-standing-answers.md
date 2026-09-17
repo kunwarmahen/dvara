@@ -285,8 +285,9 @@ property this note opened with.
   workspace that only exists once the turn has started — but it means an
   allow rule is matching the model's spelling rather than the file.
 * **Locks are still never evicted**, unchanged from notes 01 and 02.
-* **One actor per channel**, unchanged. Still the open question that gets
-  more expensive the longer it waits.
+* ~~**One actor per channel**~~ -- settled in
+  [note 05](05-one-person-two-channels.md), and it was indeed more
+  expensive than it looked: two actor ids is also two daily allowances.
 
 ---
 
