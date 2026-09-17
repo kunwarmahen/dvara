@@ -312,3 +312,23 @@ def test_naming_a_person_twice_when_listing_is_a_400(asking):
                        params={"actor": "owner", "channel": "telegram",
                                "channel_id": "42"})
     assert reply.status_code == 400
+
+
+def test_the_reply_carries_the_rendered_line_beside_the_raw_number(
+        make_service, priced_model):
+    """A channel prints prose; anything that draws a meter wants the float."""
+    from dvara.actors import ActorBook
+    from tests.conftest import says
+    from yantra import Usage
+
+    service = make_service([says("Hello.", usage=Usage(1, 1, 0, 0))],
+                           actors=ActorBook.from_dict(
+                               {"actor": {"owner": {"receipt": "cost"}}}),
+                           model=priced_model)
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        body = client.post("/message", headers=auth(), json={
+            "actor": "owner", "agent": "greeter", "thread": "t", "text": "hi",
+        }).json()
+    assert body["receipt"] == "$0.0020"
+    assert body["cost_usd"] == pytest.approx(0.002)
+    assert body["text"] == "Hello."

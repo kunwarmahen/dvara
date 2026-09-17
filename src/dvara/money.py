@@ -21,6 +21,24 @@ with itself, and the first place it would disagree is sub-agents.
 The other half of the job is remembering WHOSE number won. "Over budget"
 tells a person nothing they wanted to know; "your daily allowance had
 $0.12 left" tells them what happened and when it comes back.
+
+``receipt`` at the end is the same instinct applied to the turns that did
+NOT stop: one short line under an answer, for the people whose roster
+entry asked for one. Two things decide what it says.
+
+**A SERVICE THAT BILLS NOTHING SAYS NOTHING ABOUT MONEY.** Under a local
+model every turn costs $0.0000 and no allowance can ever move, so a
+receipt would be a meter that is not metering -- a line under every
+answer, forever, teaching its reader something they already know. Yantra
+draws that state as an empty bar labelled "free" (its note 43) and this
+does not, which is a real divergence and not an oversight: a bar is
+ambient and costs nothing to keep on screen, where a chat footer is a
+line appended to every message anybody ever receives.
+
+**UNPRICED IS SAID, NOT ROUNDED.** A hosted model with no list price is
+the one case where silence would be dangerous, because an owner asking
+for a receipt is asking to watch a bill. $0.00 would be a guess wearing a
+number's clothes.
 """
 
 from __future__ import annotations
@@ -88,3 +106,35 @@ def remaining_today(limit: float | None, spent: float) -> float | None:
     if limit is None:
         return None
     return max(0.0, limit - spent)
+
+
+# ---- one line under an answer ----------------------------------------------
+
+
+def receipt(kind: str | None, *, cost_usd: float | None, free: bool,
+            remaining: float | None = None) -> str | None:
+    """The line that follows one answer, or None for no line at all.
+
+    ``kind`` is the actor's own ``receipt`` key; None is the default and
+    the quiet one. ``free`` is whether this turn's provider bills at all
+    -- see the module docstring on why that silences both kinds rather
+    than only the first.
+
+    ``remaining`` is what is left of the allowance AFTER this turn, which
+    is deliberately not the number ``compose`` was given at the start of
+    it. The figure a person acts on is what they have now, and it is
+    worth one more query to have it be the same figure the NEXT turn will
+    be judged against -- a receipt that could disagree with the gate is
+    worse than no receipt.
+    """
+    if kind is None or free:
+        return None
+    if kind == "cost":
+        if cost_usd is None:
+            return "unpriced"
+        return f"${cost_usd:.4f}"
+    if kind == "remaining":
+        if remaining is None:
+            return None
+        return f"${remaining:.4f} left today"
+    return None

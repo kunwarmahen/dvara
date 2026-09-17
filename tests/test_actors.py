@@ -221,3 +221,32 @@ def test_channels_survive_a_real_toml_file(tmp_path):
         "id   = 8675309\n",
         encoding="utf-8")
     assert ActorBook.from_toml(path).resolve("telegram", 8675309).id == "mahen"
+
+
+# ---- what follows the answer ------------------------------------------------
+
+def test_no_receipt_key_is_the_quiet_default():
+    assert book(owner={}).get("owner").receipt is None
+
+
+def test_the_owner_may_ask_for_what_a_turn_cost():
+    assert book(owner={"receipt": "cost"}).get("owner").receipt == "cost"
+
+
+def test_a_person_on_an_allowance_may_ask_for_what_is_left():
+    guest = book(guest={"max_usd_per_day": 0.10,
+                        "receipt": "remaining"}).get("guest")
+    assert guest.receipt == "remaining"
+
+
+def test_asking_what_is_left_of_an_allowance_nobody_set_is_an_error():
+    """A key that silently does nothing is worse than one that complains."""
+    with pytest.raises(ConfigProblem) as caught:
+        book(guest={"receipt": "remaining"})
+    assert "max_usd_per_day" in str(caught.value)
+
+
+@pytest.mark.parametrize("value", ["Cost", "yes", True, 1, "", "spent"])
+def test_a_receipt_that_is_not_one_of_the_two_is_an_error(value):
+    with pytest.raises(ConfigProblem):
+        book(owner={"receipt": value})

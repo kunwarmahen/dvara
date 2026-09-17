@@ -73,6 +73,27 @@ The table reads in both directions, which is why it is one table and not
 two. Inbound, an adapter turns its native id into an actor and asserts
 nothing. Outbound, a question put to that actor is delivered to every
 channel they are reachable on -- see ``AskDesk.route``.
+
+## What follows the answer
+
+    receipt = "cost"        # $0.0031
+    receipt = "remaining"   # $0.08 left today
+
+TWO READERS WANT TWO DIFFERENT NUMBERS, WHICH IS WHY THIS IS NOT A FLAG.
+The owner is watching a bill and wants what the turn COST. A person on an
+allowance is deciding whether to ask the follow-up now, and the figure
+they act on is what is LEFT -- "$0.43 spent" is a number they would then
+have to do arithmetic on, which is Yantra's note 43 arriving here through
+a different door. A single boolean can offer one of those two and never
+the other, and the one it would offer is the one a guest cannot use.
+
+Absent is the default and means silence. Most people in a chat did not
+ask to be shown a meter, and a footer under every answer is a line
+everybody reads forever.
+
+``"remaining"`` on somebody with no ``max_usd_per_day`` is a contradiction
+rather than a quiet no-op: there is no allowance to have anything left
+of, and the owner who wrote it meant something they have not said.
 """
 
 from __future__ import annotations
@@ -90,7 +111,12 @@ from dvara.gate import LADDER
 #: failure a ceiling exists to prevent (the same rule Yantra's package
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
-                        "permissions", "channel"})
+                        "permissions", "channel", "receipt"})
+
+#: What may follow an answer, under it, for this person. Absent is the
+#: third option and the default, because most people in a chat did not
+#: ask to be shown a meter.
+RECEIPTS = ("cost", "remaining")
 
 #: Keys one ``[[actor.NAME.channel]]`` entry may carry. Both required:
 #: a channel with no kind cannot be routed and one with no id names
@@ -143,6 +169,10 @@ class Actor:
     #: actor named straight off the roster by the CLI or a trusted HTTP
     #: caller needs no channel identity at all.
     channels: tuple[Channel, ...] = ()
+    #: What follows this person's answers: "cost", "remaining", or None
+    #: for nothing at all. See the module docstring on why it is not a
+    #: boolean.
+    receipt: str | None = None
 
     def may_use(self, agent: str) -> bool:
         return self.agents is None or agent in self.agents
@@ -261,6 +291,7 @@ class ActorBook:
                 max_usd_per_day=_money(body, "max_usd_per_day", name, where),
                 permissions=_mode(body.get("permissions"), name, where),
                 channels=_channels(body.get("channel"), name, where),
+                receipt=_receipt(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -280,6 +311,32 @@ def _agents(value, name: str, where) -> tuple[str, ...] | None:
             f"allow every agent in the roster"
         )
     return tuple(value)
+
+
+def _receipt(body: dict, name: str, where) -> str | None:
+    """What follows this person's answers, or a loud complaint.
+
+    The cross-check is the point of doing this here rather than in a
+    one-line coercion: ``"remaining"`` names a fraction of an allowance,
+    and an actor with no ``max_usd_per_day`` has no allowance for
+    anything to remain of. Rendering nothing would be a key that silently
+    does not work; rendering the turn's cost instead would be answering a
+    question nobody asked.
+    """
+    value = body.get("receipt")
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in RECEIPTS:
+        raise ConfigProblem(
+            f"{where}: [actor.{name}] receipt must be one of "
+            f"{', '.join(RECEIPTS)} (got {value!r}); omit the key for "
+            f"nothing under the answer, which is the default")
+    if value == "remaining" and body.get("max_usd_per_day") is None:
+        raise ConfigProblem(
+            f"{where}: [actor.{name}] asks for what is left of a daily "
+            f"allowance and has no max_usd_per_day to have anything left "
+            f"of; set one, or use receipt = \"cost\"")
+    return value
 
 
 def _channels(value, name: str, where) -> tuple[Channel, ...]:

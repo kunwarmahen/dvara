@@ -189,6 +189,12 @@ def create_app(service: Service, *, token: str) -> Any:
             "stop_reason": reply.stop_reason,
             "detail": reply.detail,
             "cost_usd": reply.cost_usd,
+            # A rendered line, beside the raw number rather than instead
+            # of it. A channel can only print prose; anything that draws
+            # a meter wants the float. Yantra's note 43 settled that
+            # shape -- parsing the sentence back into the number is how
+            # the two drift apart.
+            "receipt": reply.receipt,
         }
 
     @app.get("/asks")

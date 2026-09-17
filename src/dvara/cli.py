@@ -264,6 +264,12 @@ def _say(service: Service, args) -> int:
 
     reply = asyncio.run(go())
     print(reply.text)
+    if reply.receipt:
+        # Where a chat would put it, so `say` shows an owner what their
+        # guest will actually see -- the same reason --as exists. The
+        # banner below is the operator's view of the same turn and says
+        # more; this is the person's.
+        print(reply.receipt)
     if reply.detail and not reply.ok:
         # The owner is standing right here. A channel gets the polite
         # sentence; the person who can FIX it gets the reason, because a

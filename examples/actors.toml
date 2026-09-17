@@ -35,6 +35,19 @@ agents           = ["greeter", "scribe"]
 permissions      = "read_only"   # served, but never woken up to approve
 max_usd_per_turn = 0.02          # lower than the package's own $0.05
 max_usd_per_day  = 0.10          # and only so many of those in a day
+receipt          = "remaining"   # "$0.08 left today" under each answer
+
+# `receipt` is what follows this person's answers, and it is two words
+# rather than a yes/no because two readers want two different numbers.
+# An owner watching a bill wants "cost" -- what the turn cost. A person
+# on an allowance is deciding whether to ask the follow-up, and the only
+# figure they can act on is what is LEFT. Omit the key for nothing at
+# all, which is the default and what most people in a chat want.
+#
+# "remaining" needs a max_usd_per_day to be left OF, and says so at load
+# if there is none. Under a provider that bills nothing -- Ollama -- both
+# kinds render nothing, because a meter that cannot move is a line under
+# every answer forever, metering nothing.
 
 # `permissions` is a rung on the ladder in gate.py and it can only ever
 # TIGHTEN: the mode a turn runs under is the minimum of the package's,

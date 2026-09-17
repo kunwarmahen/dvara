@@ -692,3 +692,80 @@ def test_a_question_raised_on_one_channel_reaches_the_others(make_service,
     reply = deliver(service, actor="owner", agent="scribe")
     assert reply.ok
     assert delivered == ["8675309", "+1555"]
+
+
+# ---- one line under the answer ----------------------------------------------
+
+def test_no_receipt_asked_for_leaves_the_answer_alone(make_service):
+    reply = deliver(make_service())
+    assert reply.receipt is None
+
+
+def test_the_receipt_is_beside_the_answer_and_never_inside_it(make_service,
+                                                              priced_model):
+    """`run.reply` is the archive of what the agent SAID."""
+    actors = ActorBook.from_dict({"actor": {"owner": {"receipt": "cost"}}})
+    service = make_service([says("Hello.", usage=Usage(1, 1, 0, 0))],
+                           actors=actors, model=priced_model)
+    reply = deliver(service)
+    assert reply.receipt == "$0.0020"
+    assert reply.text == "Hello."
+    assert "$" not in service.runs.recent()[0].reply
+
+
+def test_a_person_on_an_allowance_is_shown_what_is_left_after_this_turn(
+        make_service, priced_model):
+    actors = ActorBook.from_dict({"actor": {"guest": {
+        "max_usd_per_day": 1.00, "receipt": "remaining"}}})
+    service = make_service([says("one", usage=Usage(1, 1, 0, 0)),
+                            says("two", usage=Usage(1, 1, 0, 0))],
+                           actors=actors, model=priced_model)
+    first = deliver(service, actor="guest", thread="a")
+    second = deliver(service, actor="guest", thread="b")
+    # $0.002 a turn out of a dollar, and the figure MOVES -- a receipt
+    # showing what was left before the answer would be stale on arrival.
+    assert first.receipt == "$0.9980 left today"
+    assert second.receipt == "$0.9960 left today"
+
+
+def test_the_receipt_is_the_number_the_next_turn_is_gated_on(make_service,
+                                                             priced_model):
+    """A meter a person reads that disagrees with the meter that stops
+    them is worse than no meter at all."""
+    actors = ActorBook.from_dict({"actor": {"guest": {
+        "max_usd_per_day": 0.005, "receipt": "remaining"}}})
+    service = make_service([says("one", usage=Usage(1, 1, 0, 0))],
+                           actors=actors, model=priced_model)
+    shown = deliver(service, actor="guest", thread="a").receipt
+    assert shown == "$0.0030 left today"
+    # What the ledger will hand the gate on the next turn, independently.
+    from dvara import money
+    left = money.remaining_today(
+        0.005, service.runs.spent_since("guest", money.day_start()))
+    assert f"${left:.4f} left today" == shown
+
+
+def test_a_local_model_says_nothing_about_money(make_service):
+    """Half this project's readers run Ollama. $0.0000 forever is noise."""
+    actors = ActorBook.from_dict({"actor": {"owner": {"receipt": "cost"}}})
+    service = make_service([says("Hello.", usage=Usage(100, 20, 0, 0))],
+                           actors=actors, provider_name="ollama")
+    reply = deliver(service)
+    assert reply.cost_usd == 0.0
+    assert reply.receipt is None
+
+
+def test_an_unpriced_turn_says_unpriced_rather_than_nothing(make_service):
+    actors = ActorBook.from_dict({"actor": {"owner": {"receipt": "cost"}}})
+    service = make_service([says("Hello.", usage=Usage(100, 20, 0, 0))],
+                           actors=actors)        # anthropic, no list price
+    reply = deliver(service)
+    assert reply.cost_usd is None
+    assert reply.receipt == "unpriced"
+
+
+def test_a_refused_turn_carries_no_receipt(make_service):
+    """Nothing ran, nothing was spent, and there is nothing to report."""
+    actors = ActorBook.from_dict({"actor": {"owner": {"receipt": "cost"}}})
+    service = make_service(actors=actors)
+    assert deliver(service, agent="nope").receipt is None

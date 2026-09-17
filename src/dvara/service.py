@@ -111,6 +111,16 @@ class Reply:
     #: and would otherwise have to ask a second time to answer a question
     #: this turn raised. None only when the resolution itself refused.
     actor: str | None = None
+    #: One short line to put under the answer, or None for none -- what
+    #: this person's roster entry asked to be shown (money.receipt).
+    #:
+    #: NOT PART OF ``text``, on purpose. ``run.reply`` is the archive of
+    #: what the agent SAID, and a footer appended to it is a sentence the
+    #: agent did not say, read back months later by whoever is asking why
+    #: a turn answered badly. Keeping it separate also leaves the channel
+    #: to decide how a footer looks in its own medium, rather than this
+    #: service picking a separator for every channel there will ever be.
+    receipt: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -361,7 +371,8 @@ class Service:
         return Reply(text=run.reply, run_id=run.id, agent=run.agent,
                      actor=run.actor, stop_reason=run.stop_reason,
                      detail=run.detail, cost_usd=run.cost_usd,
-                     usage=run.usage)
+                     usage=run.usage,
+                     receipt=self._receipt(who, run, provider_name))
 
     # ---- the pieces --------------------------------------------------------
 
@@ -374,6 +385,28 @@ class Service:
             actor_turn=who.max_usd_per_turn,
             remaining_today=money.remaining_today(who.max_usd_per_day, spent),
         )
+
+    def _receipt(self, who: Actor, run: Run, provider_name: str) -> str | None:
+        """The line under the answer, asked for AFTER the run is recorded.
+
+        Order matters and is the whole of this method's difficulty. The
+        allowance figure a person wants is what is left NOW, which is to
+        say after the turn they just paid for -- and reading it back out
+        of the ledger, rather than subtracting in memory from the number
+        ``_ceiling`` started with, is what makes it the same figure the
+        next turn will be gated on. An unpriced turn contributes nothing
+        to either, so the two cannot drift.
+        """
+        if who.receipt is None:
+            return None
+        remaining = None
+        if who.receipt == "remaining":
+            remaining = money.remaining_today(
+                who.max_usd_per_day,
+                self.runs.spent_since(who.id, money.day_start()))
+        return money.receipt(who.receipt, cost_usd=run.cost_usd,
+                             free=bills_nothing(provider_name),
+                             remaining=remaining)
 
     def _provider(self, name: str) -> Provider:
         """One connection pool per provider, for the life of the service."""

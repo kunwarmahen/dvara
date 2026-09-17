@@ -29,13 +29,16 @@ has the rule file, and the one mistake in it that is invisible in a diff;
 into a case in the package that produced it.
 [05 — one person, two channels](notes/05-one-person-two-channels.md) makes
 an actor a person rather than a seat.
+[06 — a number you can act on](notes/06-a-number-you-can-act-on.md) decides
+what follows an answer, and for whom.
 
 ## Status
 
 Roster, actors, sessions, budgets, run history, an HTTP surface and
 escalation to a person, standing allow/deny/ask rules, a failure loop
-that turns a bad turn into an eval case, and one actor reachable on
-several channels — covered by 298 tests. No channel adapter ships yet:
+that turns a bad turn into an eval case, one actor reachable on several
+channels, and a line under the answer for the people who asked for one —
+covered by 323 tests. No channel adapter ships yet:
 the terminal is still the only thing that asks you anything, but a bot
 is now a client of what exists rather than a thing to be designed
 around. The API is not stable.
@@ -133,8 +136,19 @@ An unknown key is an error, not a shrug:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, channel, max_usd_per_day, max_usd_per_turn, permissions
+known: agents, channel, max_usd_per_day, max_usd_per_turn, permissions,
+receipt
 ```
+
+**What follows their answers.** `receipt = "cost"` puts what the turn cost
+under it; `receipt = "remaining"` puts what is left of their allowance.
+Absent — the default — puts nothing.
+
+Two keys rather than one boolean because two readers want two different
+numbers: an owner is watching a bill, and a person on an allowance is
+deciding whether to ask the follow-up. `"remaining"` without a
+`max_usd_per_day` is refused at load. Under a provider that bills nothing
+both render nothing, because a meter that cannot move is noise.
 
 **Where a person can be reached.** A channel adapter does not carry its
 own table of who is who; it hands over the identity it has and the
@@ -243,7 +257,7 @@ Two rules worth knowing before you reach for it:
 ### The HTTP surface
 
 ```
-POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, ...}
+POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, receipt, ...}
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
@@ -334,7 +348,7 @@ print(reply.text, reply.cost_usd)
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
-| `money.py` | package ∧ actor ∧ what is left of today |
+| `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), and which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)) |
