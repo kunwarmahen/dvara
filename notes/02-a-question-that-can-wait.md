@@ -334,11 +334,11 @@ answered or has expired is a `404`.
   policy file still uses Yantra's own `allow_read_only` and its sentence,
   which is the price of that gate being the framework's function rather
   than a copy of it.
-* **A blocked keyboard survives its own deadline.** When a terminal
-  question times out, the prompt is still sitting in a thread waiting on
-  `stdin`, and the process will not exit until somebody presses enter.
-  Harmless where it happens — a person is standing right there — and it
-  would need a cancellable read to fix properly.
+* ~~**A blocked keyboard survives its own deadline.**~~ Fixed in
+  [note 09](09-a-process-you-walk-away-from.md), and with the cancellable
+  read this bullet asked for rather than a bigger hammer on the thread:
+  the descriptor goes to the event loop, so giving up on the question
+  leaves nothing behind at all.
 * **Locks are still never evicted**, unchanged from note 01, and now
   holding for longer at a time.
 * ~~**One actor per channel.**~~ Closed by
@@ -349,7 +349,7 @@ answered or has expired is a `404`.
 ---
 
 Next: [note 03](03-standing-answers.md) — standing answers, so the same
-question stops being asked every morning. Then the channel itself.
-Everything above was built so that a bot is a *client* of this and not a
-special case inside it — it supplies a notifier and calls `answer`,
-exactly as the terminal does.
+question stops being asked every morning. The channel itself arrived in
+[note 07](07-four-thousand-and-ninety-six.md), as a *client* of all this
+rather than a special case inside it: it supplies a notifier and calls
+`answer`, exactly as the terminal does.

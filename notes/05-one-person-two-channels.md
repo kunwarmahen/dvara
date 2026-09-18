@@ -303,10 +303,11 @@ channels name people with strings that can (`matrix:@me:example.org`).
 
 ## What is not here yet
 
-* **A channel identity cannot be added without restarting.** `ActorBook`
-  is read once at startup and the reverse index is built with it. Fine
-  for a file one person edits; a real papercut the first time a guest is
-  added at a party.
+* ~~**A channel identity cannot be added without restarting.**~~ Shipped
+  in [note 09](09-a-process-you-walk-away-from.md), once note 07 made it
+  a real papercut rather than a theoretical one: the file is reread when
+  it changes, and a file that has stopped parsing keeps the last good
+  roster rather than locking its owner out.
 * ~~**Nothing records which channel a question was delivered to**~~ --
   half shipped in [note 08](08-what-the-turn-actually-did.md), and the
   half that shipped is the better one: a `Run` records where an answer

@@ -38,12 +38,21 @@ Consequences, accepted on purpose:
   is how it never gets added.
 * Comparison is constant-time. A token compared with ``==`` leaks its
   length and its prefix to anyone patient.
+
+ONE PROCESS MAY DO BOTH JOBS. ``create_app(..., alongside=...)`` starts a
+coroutine on the server's own event loop and cancels it on shutdown --
+which is how ``dvara serve --telegram`` runs a bot and an HTTP surface
+together. It is not a convenience: two processes over one state directory
+is refused (``claim.py``), because the per-session lock and the queue of
+pending questions live in memory, so this is the only way to have both.
 """
 
 from __future__ import annotations
 
+import asyncio
 import secrets
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -114,7 +123,8 @@ def _resolve(service: Service, kind: str | None, native: str | None) -> str:
         raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
-def create_app(service: Service, *, token: str) -> Any:
+def create_app(service: Service, *, token: str,
+               alongside: Callable[[], Awaitable[None]] | None = None) -> Any:
     """A FastAPI app in front of one ``Service``.
 
     FastAPI is imported at MODULE level rather than in here, which looks
@@ -135,11 +145,24 @@ def create_app(service: Service, *, token: str) -> Any:
 
     @asynccontextmanager
     async def lifespan(_app):
-        # Sockets back on the way out. A lifespan rather than the
-        # on_event decorator: the older hook is deprecated, and a
-        # DeprecationWarning in a service is a warning nobody sees.
-        yield
-        await service.aclose()
+        # ``alongside`` is how a channel adapter runs IN THIS PROCESS
+        # rather than beside it -- a Telegram long poll, today. It goes on
+        # the server's own loop on purpose: one process means one ask
+        # desk and one set of per-session locks, which is the whole of
+        # why two of these may not share a state directory (claim.py).
+        job = (asyncio.ensure_future(alongside())
+               if alongside is not None else None)
+        try:
+            yield
+        finally:
+            # Sockets back on the way out. A lifespan rather than the
+            # on_event decorator: the older hook is deprecated, and a
+            # DeprecationWarning in a service is a warning nobody sees.
+            if job is not None:
+                job.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await job
+            await service.aclose()
 
     app = FastAPI(title="dvara", docs_url=None, redoc_url=None,
                   lifespan=lifespan)

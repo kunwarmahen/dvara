@@ -67,6 +67,7 @@ it is done here and not by a second pass over anything.
 from __future__ import annotations
 
 import asyncio
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -92,7 +93,7 @@ from yantra.errors import ConfigError
 from dvara import money
 from dvara.actors import Actor, ActorBook, Channel
 from dvara.asks import AskDesk, Escalations
-from dvara.errors import Refused
+from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Policy
 from dvara.keys import session_key, workspace_parts
 from dvara.roster import Roster
@@ -145,6 +146,7 @@ class Service:
                  provider_name: str | None = None,
                  model: str | None = None,
                  provider_factory: Callable[[str], Provider] | None = None,
+                 log=None,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -163,6 +165,15 @@ class Service:
         # package authored against a cloud model without editing it.
         self.provider_name = provider_name
         self.model = model
+        #: Where the one thing this service has to tell a HUMAN goes. It
+        #: has exactly one use -- an owner's file that has stopped
+        #: parsing -- and that message has nowhere else to be: the person
+        #: who can fix it is not in the conversation, and the person who
+        #: IS in the conversation must not be handed somebody else's
+        #: config error. Resolved at the moment of writing rather than
+        #: bound now, so a host that redirects stderr later is obeyed.
+        self.log = log
+        self._complained: str | None = None
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
@@ -208,6 +219,56 @@ class Service:
             await provider.aclose()
         self._providers.clear()
         self.runs.close()
+
+    # ---- the owner's files, read again -------------------------------------
+
+    def _note(self, line: str) -> None:
+        """One line for the owner, once per distinct problem.
+
+        Deduplicated because this is called per TURN: a file that has
+        stopped parsing has stopped parsing for every turn after it, and
+        a service that printed the same paragraph a hundred times an hour
+        is a service whose log nobody reads. The state clears when the
+        problem changes or goes away, so the NEXT breakage is loud again.
+        """
+        if line != self._complained:
+            self._complained = line
+            print(line, file=self.log or sys.stderr)
+
+    def refresh(self) -> None:
+        """Pick up an edited actors or policy file, without a restart.
+
+        A BAD FILE KEEPS THE LAST GOOD ONE. That is the whole policy, and
+        it is the reason this lives here rather than in either parser. An
+        owner adding a guest at midnight who leaves a quote off is one
+        typo away from a service that refuses everybody -- including
+        themselves, including the person who would fix it -- so a reread
+        that raises is a complaint on the way past and nothing else. The
+        roster in force stays the one that was in force a second ago.
+
+        The opposite reading is defensible at STARTUP and is what happens
+        there: a broken file is exit 2 and nothing serves, because nobody
+        is depending on the process yet. The difference between those two
+        answers is whether there is already something to lose.
+
+        Cheap enough to do per turn: two ``stat`` calls against a model
+        round trip.
+        """
+        try:
+            if self.actors.changed():
+                self.actors = self.actors.reread()
+                self._note(f"reloaded {self.actors.source} "
+                           f"({len(self.actors)} actor(s))")
+        except ConfigProblem as exc:
+            self._note(f"{exc}\n  -- keeping the roster already loaded; "
+                       f"nothing changed for anybody talking right now")
+        try:
+            if self.policy.rules.changed():
+                rules = self.policy.rules.reread()
+                self.policy = replace(self.policy, rules=rules)
+                self._note(f"reloaded {rules.source} ({len(rules)} rule(s))")
+        except ConfigProblem as exc:
+            self._note(f"{exc}\n  -- keeping the rules already loaded")
 
     # ---- the verb ----------------------------------------------------------
 
@@ -261,6 +322,7 @@ class Service:
         written under one.
         """
         started = datetime.now(UTC)
+        self.refresh()
         try:
             actor, thread = self._whom(actor, via, thread)
             who = self.actors.may(actor, agent)

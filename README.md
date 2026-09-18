@@ -35,7 +35,9 @@ what follows an answer, and for whom;
 is the Telegram bot, and the three things a chat app decides for you;
 [08 — what the turn actually did](notes/08-what-the-turn-actually-did.md)
 puts the trajectory on a run, so a generated case can assert more than
-"it finished".
+"it finished";
+[09 — a process you walk away from](notes/09-a-process-you-walk-away-from.md)
+is the difference between a service and a program you run.
 
 ## Status
 
@@ -44,9 +46,9 @@ escalation to a person, standing allow/deny/ask rules, a failure loop
 that turns a bad turn into an eval case, one actor reachable on several
 channels, a line under the answer for the people who asked for one, and a
 Telegram bot that answers messages and puts a tool call in front of you
-with two buttons on it, and a run record that remembers which tools a turn
-called and which of them were refused — covered by 400 tests. The API is
-not stable.
+with two buttons on it, a run record that remembers which tools a turn
+called and which of them were refused, and a roster you can edit without
+restarting anything — covered by 422 tests. The API is not stable.
 
 ## The shape of it
 
@@ -118,8 +120,10 @@ TELEGRAM_TOKEN=... dvara --root examples/agents --actors examples/actors.toml \
       --ask --provider ollama --model qwen3.8-64k:latest \
       telegram --agent scribe
 
-# listen for channel adapters that are somewhere else
+# listen for channel adapters that are somewhere else -- optionally with
+# a bot in the same process, which is the only way to have both
 DVARA_TOKEN=$(openssl rand -hex 24) dvara serve --port 8765
+DVARA_TOKEN=... TELEGRAM_TOKEN=... dvara serve --telegram researcher
 ```
 
 `--root`, `--actors`, `--policy` and `--state` also read `$DVARA_ROOT`,
@@ -344,6 +348,61 @@ telegram: 5551212 messaged and is not in the actors file
 (add [[actor.NAME.channel]] kind="telegram" id=5551212)
 ```
 
+### Leaving it running
+
+**One dvara per state directory.** A second one is refused, and says who
+is already in there ([notes/09](notes/09-a-process-you-walk-away-from.md)):
+
+```
+error: another dvara is already using ~/dvara/state (pid 3641987 running
+dvara serve). A service is a PROCESS, not a directory: the lock that
+serializes two messages in one conversation, and the questions waiting
+for you to answer them, both live in memory and cannot be shared. Stop
+that one, give this one its own --state, or run both jobs in one process
+(dvara serve --telegram AGENT).
+```
+
+The SQLite contention two processes cause is only the symptom. The
+disease is that the lock serializing two messages in one conversation,
+and the queue of questions waiting for a person, are in memory — so two
+processes would both rehydrate one checkpoint, both save, and lose a turn
+without anything raising.
+
+So a bot *and* an HTTP surface means one process:
+
+```bash
+DVARA_TOKEN=… TELEGRAM_TOKEN=… dvara serve --telegram researcher
+```
+
+Commands that run a turn (`say`, `serve`, `telegram`) take the claim.
+Commands that only read (`runs`, `case`, `agents`) do not — looking at
+your ledger while the bot answers somebody is ordinary. And `Service`
+itself claims nothing, so embedding it in your own process is unaffected.
+
+**Edit the actors and policy files while it runs.** Both are reread when
+they change, so adding a guest is one edit and no restart:
+
+```toml
+[actor.guest]
+agents          = ["greeter"]
+max_usd_per_day = 0.05
+```
+
+**A bad file keeps the last good one.** A typo at midnight must not
+refuse everybody — including the person who would fix it — so a file that
+has stopped parsing is a complaint on the owner's terminal and nothing
+else:
+
+```
+~/dvara/actors.toml: Expected ']' at the end of a table declaration (at
+line 3, column 13)
+  -- keeping the roster already loaded; nothing changed for anybody
+     talking right now
+```
+
+At *startup* the opposite holds and a broken file is exit 2: nothing is
+serving yet, so there is nothing to lose.
+
 ### The HTTP surface
 
 ```
@@ -442,7 +501,7 @@ print(reply.text, reply.cost_usd)
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
-| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)) |
+| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
@@ -452,6 +511,7 @@ print(reply.text, reply.cost_usd)
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | five endpoints and a bearer token (`[http]` extra) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)) |
+| `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `cli.py` | `agents`, `say`, `runs`, `case`, `telegram`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 

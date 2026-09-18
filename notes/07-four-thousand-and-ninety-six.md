@@ -384,10 +384,14 @@ reading.
   `Run` answers "where were you when you approved this?" as of
   [note 08](08-what-the-turn-actually-did.md), and a press on one of
   these buttons writes `telegram` into it.
-* **`dvara serve` and `dvara telegram` are two processes over one state
-  directory.** Two SQLite writers, which works until it does not. Running
-  both is not yet a supported thing to do, and nothing stops you.
-* **A channel identity still cannot be added without a restart**,
-  unchanged from note 05 — and it is a worse papercut now that there is
-  a bot for a guest to message.
+* ~~**`dvara serve` and `dvara telegram` are two processes over one state
+  directory.**~~ Settled in
+  [note 09](09-a-process-you-walk-away-from.md), and not the way this
+  bullet assumed: the SQLite contention was the symptom, and the disease
+  was a split ask desk and a split set of conversation locks. Two
+  processes are refused; `dvara serve --telegram AGENT` runs both jobs in
+  one.
+* ~~**A channel identity still cannot be added without a restart**~~ --
+  shipped in [note 09](09-a-process-you-walk-away-from.md), which this
+  note is the reason for.
 * **Locks are still never evicted**, unchanged from notes 01–06.

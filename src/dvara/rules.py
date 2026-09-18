@@ -124,8 +124,34 @@ class Rule:
 class RuleBook:
     """The owner's standing answers, in one file, in no particular order."""
 
-    def __init__(self, rules: list[Rule] | None = None) -> None:
+    def __init__(self, rules: list[Rule] | None = None, *,
+                 source: Path | None = None, required: bool = False) -> None:
         self._rules = list(rules or ())
+        #: The file this was read from and its stamp, so a running service
+        #: can notice the owner adding a standing answer without being
+        #: restarted. ``required`` rides along because a reread has to be
+        #: as strict as the load was: a NAMED file that has since been
+        #: deleted is still the mistake it would have been at startup.
+        self.source = source
+        self.required = required
+        self.stamp = _stamp(source)
+
+    def changed(self) -> bool:
+        """Whether the file this came from has been touched since.
+
+        True as well for a named file that has APPEARED since startup: an
+        owner who runs with ``~/dvara/policy.toml`` absent and then writes
+        one has written it to be used. Both directions are just "the
+        stamp is different", which is why this is one comparison and not a
+        case analysis.
+        """
+        return self.source is not None and _stamp(self.source) != self.stamp
+
+    def reread(self) -> RuleBook:
+        """The file as it is now, or a ``ConfigProblem``. Just the parse."""
+        if self.source is None:
+            return self
+        return RuleBook.from_toml(self.source, required=self.required)
 
     def __len__(self) -> int:
         return len(self._rules)
@@ -165,13 +191,18 @@ class RuleBook:
         except FileNotFoundError:
             if required:
                 raise ConfigProblem(f"no policy file at {path}") from None
-            return cls()
+            # An empty book that still remembers where it looked, so a
+            # policy file written later is picked up rather than ignored
+            # until the next restart.
+            return cls(source=path, required=required)
         except tomllib.TOMLDecodeError as exc:
             raise ConfigProblem(f"{path}: {exc}") from None
-        return cls.from_dict(raw, where=path)
+        return cls.from_dict(raw, where=path, source=path, required=required)
 
     @classmethod
-    def from_dict(cls, raw: dict, *, where: Path | str = "<memory>") -> RuleBook:
+    def from_dict(cls, raw: dict, *, where: Path | str = "<memory>",
+                  source: Path | None = None,
+                  required: bool = False) -> RuleBook:
         entries = raw.get("rule", [])
         if isinstance(entries, dict):        # a single [rule] table
             entries = [entries]
@@ -183,7 +214,24 @@ class RuleBook:
                 f"{where}: unknown table(s) {', '.join(unknown_tables)} -- "
                 f"this file holds [[rule]] entries and nothing else")
         return cls([_rule(entry, index, where)
-                    for index, entry in enumerate(entries)])
+                    for index, entry in enumerate(entries)],
+                   source=source, required=required)
+
+
+def _stamp(path: Path | None) -> tuple | None:
+    """A file's (mtime, size), or None when there is nothing to stamp.
+
+    A file that is not there stamps as None, and so does the absence of a
+    path -- so an OPTIONAL policy file that has never existed reads as
+    unchanged forever, and one that appears reads as changed exactly once.
+    """
+    if path is None:
+        return None
+    try:
+        info = path.expanduser().stat()
+    except OSError:
+        return None
+    return (info.st_mtime_ns, info.st_size)
 
 
 def _rule(entry: Any, index: int, where) -> Rule:

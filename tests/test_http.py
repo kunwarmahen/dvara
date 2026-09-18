@@ -332,3 +332,47 @@ def test_the_reply_carries_the_rendered_line_beside_the_raw_number(
     assert body["receipt"] == "$0.0020"
     assert body["cost_usd"] == pytest.approx(0.002)
     assert body["text"] == "Hello."
+
+
+# ---- one process, both jobs -------------------------------------------------
+
+
+def test_a_job_runs_alongside_the_server_and_stops_with_it(make_service):
+    """`dvara serve --telegram` in miniature.
+
+    Two dvaras may not share a state directory (claim.py), so a bot and
+    an HTTP surface at once is not a convenience here -- it is the only
+    arrangement in which they can both exist. What has to hold is that
+    the job starts on the SERVER's loop (one ask desk, one set of
+    conversation locks) and is cancelled when the server stops, rather
+    than outliving it as an orphan nobody can reach.
+    """
+    import asyncio
+
+    from tests.conftest import says
+
+    started, stopped = asyncio.Event(), []
+
+    async def job():
+        try:
+            started.set()
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            stopped.append(True)
+            raise
+
+    service = make_service([says("hi")])
+    with TestClient(create_app(service, token=TOKEN,
+                               alongside=job)) as client:
+        bearer = {"Authorization": f"Bearer {TOKEN}"}
+        assert client.get("/health", headers=bearer).status_code == 200
+        assert started.is_set()
+    assert stopped == [True]
+
+
+def test_no_job_is_the_ordinary_case(make_service):
+    """A served process with no bot behaves exactly as it always did."""
+    service = make_service()
+    bearer = {"Authorization": f"Bearer {TOKEN}"}
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        assert client.get("/health", headers=bearer).status_code == 200

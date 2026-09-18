@@ -94,6 +94,21 @@ everybody reads forever.
 ``"remaining"`` on somebody with no ``max_usd_per_day`` is a contradiction
 rather than a quiet no-op: there is no allowance to have anything left
 of, and the owner who wrote it meant something they have not said.
+
+## Read again when it changes
+
+A book remembers the file it came from and that file's stamp, so a
+service can notice an edit without being restarted. It was a papercut
+while the only way in was a terminal; it became a real one the day a
+guest could be handed a bot's @handle at a party and the answer was
+"hold on, I have to restart the service".
+
+WHAT IS HERE IS THE PARSE, AND NOTHING ELSE. ``reread`` returns a new
+book or raises, and does not decide what to do about a file that has
+stopped parsing -- that is policy, it belongs to the host, and
+``service.py`` answers it by keeping the last good roster and saying so.
+A parser that swallowed the error would be a parser that silently decided
+a thing nobody asked it to decide.
 """
 
 from __future__ import annotations
@@ -193,8 +208,15 @@ class ActorBook:
     """The owner's roster of people, loaded from one TOML file."""
 
     def __init__(self, actors: dict[str, Actor],
-                 *, where: Path | str = "<memory>") -> None:
+                 *, where: Path | str = "<memory>",
+                 source: Path | None = None) -> None:
         self._actors = dict(actors)
+        #: The file this came from, when it came from one, and that file's
+        #: stamp at the moment it was read. Both None for a book built in
+        #: memory -- which is the CLI's tests and an embedder, and neither
+        #: of those has a file to notice a change in.
+        self.source = source
+        self.stamp = _stamp(source)
         # The table read backwards, built once. A channel adapter asks
         # this question on every inbound message, and a scan over every
         # actor's channels per message is a linear search nobody needs.
@@ -263,10 +285,11 @@ class ActorBook:
             raise ConfigProblem(f"no actors file at {path}") from None
         except tomllib.TOMLDecodeError as exc:
             raise ConfigProblem(f"{path}: {exc}") from None
-        return cls.from_dict(raw, where=path)
+        return cls.from_dict(raw, where=path, source=path)
 
     @classmethod
-    def from_dict(cls, raw: dict, *, where: Path | str = "<memory>") -> ActorBook:
+    def from_dict(cls, raw: dict, *, where: Path | str = "<memory>",
+                  source: Path | None = None) -> ActorBook:
         table = raw.get("actor")
         if not isinstance(table, dict) or not table:
             raise ConfigProblem(
@@ -296,7 +319,55 @@ class ActorBook:
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
         # has to be as trustworthy as one parsed from a file.
-        return cls(actors, where=where)
+        return cls(actors, where=where, source=source)
+
+    # ---- reading it again --------------------------------------------------
+
+    def changed(self) -> bool:
+        """Whether the file this was read from has been touched since.
+
+        Mtime AND size, because a file edited twice inside one filesystem
+        timestamp tick is a real thing on a coarse clock and an owner
+        adding a guest at a party will not forgive it. Neither is a
+        content hash, which is the honest version of this and costs a read
+        of the whole file on every turn to catch a case -- an edit that
+        changes nothing -- where the reload is a no-op anyway.
+        """
+        return self.source is not None and _stamp(self.source) != self.stamp
+
+    def reread(self) -> ActorBook:
+        """The file as it is now, or a ``ConfigProblem`` saying why not.
+
+        Deliberately just the parse. Whether a service that cannot read
+        its new roster should stop or should carry on with the last good
+        one is a POLICY question, and policy belongs to whoever owns the
+        conversation rather than to the parser (service.py decides, and
+        decides to carry on).
+        """
+        if self.source is None:
+            return self
+        return ActorBook.from_toml(self.source)
+
+
+def _stamp(path: Path | None) -> tuple | None:
+    """A file's (mtime, size), or None when there is nothing to stamp.
+
+    A file that has been DELETED stamps as None, which is different from
+    the tuple it had a moment ago -- so it reads as a change, the reread
+    raises, and the host says so and keeps the roster it has. That is the
+    wanted behaviour and not an accident: some editors save by truncating
+    and rewriting, so a file that is briefly empty or briefly gone is a
+    thing an owner does by accident, and the one response that is correct
+    for both the accident and the deliberate deletion is to carry on with
+    what is already loaded and tell somebody.
+    """
+    if path is None:
+        return None
+    try:
+        info = path.expanduser().stat()
+    except OSError:
+        return None
+    return (info.st_mtime_ns, info.st_size)
 
 
 def _agents(value, name: str, where) -> tuple[str, ...] | None:

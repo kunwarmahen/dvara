@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -46,6 +47,7 @@ from yantra import render_case
 from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run, unasserted
+from dvara.claim import Claim
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Policy
 from dvara.roster import Roster
@@ -161,7 +163,23 @@ def build_parser() -> argparse.ArgumentParser:
                        help="localhost by default, deliberately: reaching the "
                             "network is a decision, not a default")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument(
+        "--telegram", metavar="AGENT", default=None,
+        help="also run a Telegram bot for AGENT, in THIS process. Two "
+             "dvaras cannot share a --state directory, so this is how you "
+             "have a bot and an HTTP surface at once -- one ask desk, one "
+             "set of conversation locks, one ledger")
+    serve.add_argument("--catch-up", action="store_true",
+                       help="with --telegram: answer the messages that "
+                            "arrived while this was down")
     return parser
+
+
+#: Commands that RUN A TURN, and therefore claim the state directory.
+#: The read-only ones are absent on purpose -- see claim.py: looking at
+#: your own ledger while the bot answers somebody is the most ordinary
+#: thing an owner does.
+CLAIMS = ("say", "serve", "telegram")
 
 
 def _service(args) -> Service:
@@ -191,7 +209,16 @@ def _service(args) -> Service:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # THE COMMAND CLAIMS, NOT THE SERVICE. A `Service` an embedder built
+    # inside their own process is not a second dvara (claim.py), and the
+    # local below is what HOLDS the claim: it has to stay referenced for
+    # as long as the command runs, because closing the file releases the
+    # lock and CPython closes it the moment nothing points at it.
+    claim = None
     try:
+        if args.command in CLAIMS:
+            claim = Claim(Path(args.state))
+            claim.take(f"dvara {args.command}")
         if args.command == "serve":
             return _serve(args)
         service = _service(args)
@@ -200,6 +227,9 @@ def main(argv: list[str] | None = None) -> int:
         # a channel -- this is the one human who can fix it.
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    finally:
+        if args.command == "serve" and claim is not None:
+            claim.release()
 
     try:
         if args.command == "agents":
@@ -214,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
             return _telegram(service, args)
     finally:
         service.close()
+        if claim is not None:
+            claim.release()
     return 2
 
 
@@ -246,13 +278,65 @@ def _as_channel(spec: str | None) -> Channel | None:
     return Channel(kind=kind.strip(), id=native.strip())
 
 
+async def _typed_line() -> str:
+    """One line from stdin, ABANDONABLE when the question times out.
+
+    ``asyncio.to_thread(input, ...)`` was the old answer and it had a cost
+    recorded since note 02: a question that times out leaves a thread
+    parked inside ``input()``, the default executor's threads are not
+    daemons, and the interpreter joins them on the way out -- so the
+    process sits there wanting a keypress nobody now has any reason to
+    give it. The fix is not a bigger hammer on the thread; it is not
+    using one.
+
+    ``add_reader`` hands the descriptor to the event loop, which is what
+    an event loop is for. Cancellation removes the reader and returns,
+    leaving nothing behind at all. The tty is still in canonical mode, so
+    it does the line editing and this gets a whole line on Enter, exactly
+    as ``input`` did.
+
+    Falls back to the thread wherever stdin cannot be watched -- a closed
+    descriptor, a platform without ``add_reader`` -- because a front end
+    that is the ONLY place a question could go must not stop asking.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        fileno = sys.stdin.fileno()
+    except (OSError, ValueError):
+        return await asyncio.to_thread(_blocking_line)
+    answered: asyncio.Future[str] = loop.create_future()
+
+    def readable() -> None:
+        loop.remove_reader(fileno)
+        if not answered.done():
+            answered.set_result(_blocking_line())
+
+    try:
+        loop.add_reader(fileno, readable)
+    except (NotImplementedError, OSError, ValueError):
+        return await asyncio.to_thread(_blocking_line)
+    try:
+        return await answered
+    finally:
+        with contextlib.suppress(Exception):
+            loop.remove_reader(fileno)
+
+
+def _blocking_line() -> str:
+    """One line, or "" at end of input. A closed pipe is not consent."""
+    try:
+        return sys.stdin.readline()
+    except (EOFError, OSError, ValueError):
+        return ""
+
+
 def _ask_at_the_keyboard(desk: AskDesk):
     """Print the question, read the answer, hand it back to the desk.
 
-    ``to_thread`` rather than a bare ``input``: the turn that asked is
-    suspended on this coroutine's event loop, and a blocking read here
-    would stop every other task in the process -- which is precisely the
-    failure the awaitable gate exists to avoid, reintroduced one layer up.
+    Never a blocking read on this loop: the turn that asked is suspended
+    on it, and stopping it here would be exactly the failure the awaitable
+    gate exists to avoid, reintroduced one layer up. And never a read that
+    outlives the question -- see ``_typed_line``.
 
     ANYTHING THAT IS NOT YES IS NO. A stray newline, a closed pipe, a
     person who typed "maybe" -- none of those are consent, and the
@@ -261,10 +345,8 @@ def _ask_at_the_keyboard(desk: AskDesk):
     async def notify(ask: Ask) -> None:
         print(f"\n{ask.agent} wants to run {ask.tool}:", file=sys.stderr)
         print(f"  {ask.summary}", file=sys.stderr)
-        try:
-            typed = await asyncio.to_thread(input, "approve? [y/N] ")
-        except EOFError:
-            typed = ""
+        print("approve? [y/N] ", end="", file=sys.stderr, flush=True)
+        typed = await _typed_line()
         # "terminal" is not a channel kind and never appears in
         # actors.toml -- it is where the answer came from, which is the
         # question the Run is recording. A person who approved something
@@ -387,6 +469,26 @@ def _case(service: Service, args) -> int:
     return 0
 
 
+def _bot(service: Service, args) -> TelegramBot:
+    """One bot, from the environment and the flags, for either command.
+
+    THE TOKEN IS NOT A FLAG. A bot token is a credential, and a
+    credential on a command line is in the shell history and in every
+    `ps` on the box. Missing is a ``ConfigProblem`` rather than a printed
+    line, so `serve --telegram` and `telegram` refuse it identically.
+    """
+    token = os.environ.get("TELEGRAM_TOKEN", "")
+    if not token:
+        raise ConfigProblem(
+            "$TELEGRAM_TOKEN is not set. BotFather gives you one per bot; "
+            "it belongs in the environment, never on a command line")
+    return TelegramBot(service, token=token,
+                       agent=getattr(args, "telegram", None) or args.agent,
+                       catch_up=args.catch_up,
+                       poll_seconds=getattr(args, "poll_seconds",
+                                            POLL_SECONDS))
+
+
 def _telegram(service: Service, args) -> int:
     """Long-poll Telegram, in this process, as a client of this service.
 
@@ -403,16 +505,8 @@ def _telegram(service: Service, args) -> int:
     credential on a command line is in the shell history and in every
     `ps` on the box.
     """
-    token = os.environ.get("TELEGRAM_TOKEN", "")
-    if not token:
-        print("error: $TELEGRAM_TOKEN is not set. BotFather gives you one "
-              "per bot; it belongs in the environment, never on a command "
-              "line", file=sys.stderr)
-        return 2
     try:
-        bot = TelegramBot(service, token=token, agent=args.agent,
-                          catch_up=args.catch_up,
-                          poll_seconds=args.poll_seconds)
+        bot = _bot(service, args)
     except (ConfigProblem, Refused) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -439,12 +533,22 @@ def _telegram(service: Service, args) -> int:
 
 
 def _serve(args) -> int:
+    """The HTTP surface, and optionally a bot on the same event loop.
+
+    ONE PROCESS, BOTH JOBS. `dvara serve` and `dvara telegram` may not
+    share a state directory -- the lock that serializes two messages in
+    one conversation and the queue of questions waiting for a person both
+    live in memory (claim.py) -- so `--telegram` is not a shortcut, it is
+    the only way to have a bot and an HTTP surface at once.
+    """
     token = os.environ.get("DVARA_TOKEN", "")
     try:
         service = _service(args)
+        bot = _bot(service, args) if args.telegram else None
         from dvara.http import create_app
-        app = create_app(service, token=token)
-    except ConfigProblem as exc:
+        app = create_app(service, token=token,
+                         alongside=bot.run if bot is not None else None)
+    except (ConfigProblem, Refused) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except ImportError:
@@ -454,7 +558,9 @@ def _serve(args) -> int:
 
     import uvicorn
 
+    also = f" · telegram → {args.telegram}" if bot is not None else ""
     print(f"dvara · {len(service.roster.names())} agent(s) · "
-          f"{len(service.actors)} actor(s) · http://{args.host}:{args.port}")
+          f"{len(service.actors)} actor(s) · "
+          f"http://{args.host}:{args.port}{also}")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0

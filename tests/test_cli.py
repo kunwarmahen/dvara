@@ -9,6 +9,7 @@ owner's tracebacks or hides a broken config behind a polite sentence.
 
 from __future__ import annotations
 
+import io
 import json
 
 import pytest
@@ -139,17 +140,23 @@ def test_a_deadline_of_nothing_is_the_owners_mistake_not_a_traceback(owned,
     assert "denies before it asks" in capsys.readouterr().err
 
 
+def typing(monkeypatch, answer: str) -> None:
+    """Somebody at the keyboard, as a line of input rather than a stub.
+
+    The read is ``sys.stdin``'s now and not ``input()``'s, because a
+    question that times out must not leave a thread parked in a blocking
+    read (cli._typed_line). Feeding the real object is also the more
+    honest test: what the front end does with the stream is part of what
+    is under test.
+    """
+    monkeypatch.setattr("sys.stdin", io.StringIO(f"{answer}\n"))
+
+
 def test_say_prints_the_question_and_takes_the_answer(owned, monkeypatch,
                                                       capsys):
     # The keyboard is the channel. Both halves come from this front end:
     # the question is printed here, and the answer is a keystroke.
-    typed = []
-
-    def fake_input(prompt=""):
-        typed.append(prompt)
-        return "y"
-
-    monkeypatch.setattr("builtins.input", fake_input)
+    typing(monkeypatch, "y")
 
     import asyncio
 
@@ -168,7 +175,10 @@ def test_say_prints_the_question_and_takes_the_answer(owned, monkeypatch,
     err = capsys.readouterr().err
     assert "scribe wants to run write_file" in err
     assert "notes.txt <- 2 bytes" in err
-    assert typed == ["approve? [y/N] "]
+    # The prompt goes to stderr with the question, not to stdout: the
+    # answer on stdout is the agent's, and a prompt in the middle of it is
+    # a line somebody piping this has to strip.
+    assert "approve? [y/N]" in err
 
 
 @pytest.mark.parametrize("answer,approved",
@@ -176,7 +186,7 @@ def test_say_prints_the_question_and_takes_the_answer(owned, monkeypatch,
                           ("", False), ("n", False), ("maybe", False)])
 def test_anything_that_is_not_yes_is_no(owned, monkeypatch, answer, approved):
     # A stray newline is not consent, and neither is "maybe".
-    monkeypatch.setattr("builtins.input", lambda prompt="": answer)
+    typing(monkeypatch, answer)
 
     import asyncio
 
