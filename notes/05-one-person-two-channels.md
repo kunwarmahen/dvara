@@ -292,7 +292,9 @@ channels name people with strings that can (`matrix:@me:example.org`).
 * **Withdrawing a delivered question.** Answer it on your phone and the
   Telegram message is still sitting there. Retracting across N channels
   needs a per-delivery handle the notifier hands back, and every adapter
-  then has to implement editing.
+  then has to implement editing. ([Note
+  07](07-four-thousand-and-ninety-six.md) gives this its first real
+  instance: the bot edits the copy that was pressed, and only that one.)
 * **Secrets in `actors.toml`.** A chat id is an address, not a
   credential. The file holds no tokens, exactly as before, and it is
   still a thing you commit.

@@ -15,14 +15,22 @@ how the receipts in the notes were produced.
     dvara say --actor mahen --agent researcher "what changed today?"
     dvara runs --actor mahen
     dvara serve --host 127.0.0.1 --port 8765
+    dvara telegram --agent researcher
 
-``--ask`` is where the terminal becomes a channel. The escalating gate
+``--ask`` is where a front end becomes a channel. The escalating gate
 needs somewhere to put a question and somewhere an answer can land, and
 which of those two a front end supplies is the only thing that differs
 between them: at a keyboard the question is printed and the answer is a
-keystroke, so ``say`` supplies both halves; a served process supplies
-neither, because the answer is going to arrive over HTTP from an adapter
-that is talking to somebody elsewhere.
+keystroke, so ``say`` supplies both halves; ``telegram`` sends the
+question with two buttons on it and the press comes back through the poll
+it never stopped running; a served process supplies neither, because the
+answer is going to arrive over HTTP from an adapter that is talking to
+somebody elsewhere.
+
+``telegram`` and ``serve`` are the two ways a person who is not at this
+keyboard gets in, and they are not alternatives. The bot runs the service
+IN THIS PROCESS and reaches the desk directly; the HTTP surface is for an
+adapter that is somewhere else.
 """
 
 from __future__ import annotations
@@ -43,6 +51,7 @@ from dvara.gate import Policy
 from dvara.roster import Roster
 from dvara.rules import RuleBook
 from dvara.service import Service
+from dvara.telegram import POLL_SECONDS, TelegramBot
 
 DEFAULT_ROOT = "~/dvara/agents"
 DEFAULT_ACTORS = "~/dvara/actors.toml"
@@ -85,8 +94,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ask", action="store_true",
                         help="escalate to a person instead of refusing. With "
                              "`say` the question is printed here and you "
-                             "answer it; with `serve` it waits at GET /asks "
-                             "for whoever is talking to that person")
+                             "answer it; with `telegram` it arrives in their "
+                             "chat with two buttons on it; with `serve` it "
+                             "waits at GET /asks for whoever is talking to "
+                             "that person")
     parser.add_argument("--ask-timeout", type=float, default=DEFAULT_TIMEOUT,
                         metavar="SECONDS",
                         help=f"how long a question waits before it is refused "
@@ -126,6 +137,24 @@ def build_parser() -> argparse.ArgumentParser:
                       help="append it to the package's evals/cases.toml "
                            "instead of printing it. You are editing a folder "
                            "you commit, so read it first")
+
+    telegram = subs.add_parser(
+        "telegram", help="answer messages as a Telegram bot")
+    telegram.add_argument(
+        "--agent", required=True,
+        help="the ONE agent this bot is. A bot token is an identity with a "
+             "name and an @handle; a second agent is a second token and a "
+             "second process, not a prefix on every message")
+    telegram.add_argument(
+        "--catch-up", action="store_true",
+        help="answer the messages that arrived while this was down. Off by "
+             "default: a day-old question answered now is a wrong answer, "
+             "and a backlog of ten spends ten turns of somebody's allowance "
+             "in one breath")
+    telegram.add_argument(
+        "--poll-seconds", type=int, default=POLL_SECONDS, metavar="SECONDS",
+        help=f"how long each long poll holds the connection open "
+             f"(default {POLL_SECONDS})")
 
     serve = subs.add_parser("serve", help="listen for channel adapters")
     serve.add_argument("--host", default="127.0.0.1",
@@ -181,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
             return _runs(service, args)
         if args.command == "case":
             return _case(service, args)
+        if args.command == "telegram":
+            return _telegram(service, args)
     finally:
         service.close()
     return 2
@@ -336,6 +367,57 @@ def _case(service: Service, args) -> int:
     print(f"{path}: added {case.id}")
     print(f"  run it with: yantra --agent {service.roster.path(run.agent)} "
           f"--eval --case '{case.id}'")
+    return 0
+
+
+def _telegram(service: Service, args) -> int:
+    """Long-poll Telegram, in this process, as a client of this service.
+
+    IN PROCESS, NOT OVER HTTP, and that is the whole reason this is a
+    subcommand rather than a script in a README. A bot that talked to
+    ``dvara serve`` would have to find a pending question by polling
+    ``GET /asks``, so a "may I run this?" would sit for up to one poll
+    interval while its own deadline ran down. Here it registers a route
+    on the desk and the question is pushed the instant it is raised. The
+    HTTP surface remains exactly what it was: the way in for an adapter
+    that is NOT in this process.
+
+    THE TOKEN IS NOT A FLAG. A bot token is a credential, and a
+    credential on a command line is in the shell history and in every
+    `ps` on the box.
+    """
+    token = os.environ.get("TELEGRAM_TOKEN", "")
+    if not token:
+        print("error: $TELEGRAM_TOKEN is not set. BotFather gives you one "
+              "per bot; it belongs in the environment, never on a command "
+              "line", file=sys.stderr)
+        return 2
+    try:
+        bot = TelegramBot(service, token=token, agent=args.agent,
+                          catch_up=args.catch_up,
+                          poll_seconds=args.poll_seconds)
+    except (ConfigProblem, Refused) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    async def go():
+        try:
+            await bot.run()
+        finally:
+            await service.aclose()
+
+    try:
+        asyncio.run(go())
+    except KeyboardInterrupt:
+        # Ctrl-C is how a bot is stopped, so it is an exit and not a
+        # traceback. `run` has already cancelled the turns in flight and
+        # each of them recorded itself on the way out.
+        return 0
+    except ConfigProblem as exc:
+        # A bad token, or a second poller on the same one. Loud, and
+        # never answered into a chat: this is the owner's to fix.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 

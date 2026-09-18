@@ -338,3 +338,44 @@ def test_saying_nothing_about_who_is_talking_is_an_error(owned):
     from dvara.cli import build_parser
     with pytest.raises(SystemExit):
         build_parser().parse_args([*owned, "say", "--agent", "greeter", "hi"])
+
+
+# ---- the bot -------------------------------------------------------------
+
+
+def test_telegram_without_a_token_says_which_variable_is_missing(owned,
+                                                                 capsys):
+    """A missing credential is the owner's, and is never a polite sentence.
+
+    The check is before anything else on purpose: a bot that got as far
+    as resolving a package before complaining about a token has already
+    run somebody's Python to find out something it could have known from
+    the environment.
+    """
+    assert main([*owned, "telegram", "--agent", "greeter"]) == 2
+    assert "TELEGRAM_TOKEN" in capsys.readouterr().err
+
+
+def test_a_token_on_the_command_line_is_not_a_thing_you_can_do(owned):
+    """There is no --token, and that is the feature.
+
+    A bot token is a credential, and a credential on a command line is in
+    the shell history and readable in every `ps` on the box.
+    """
+    with pytest.raises(SystemExit):
+        main([*owned, "telegram", "--agent", "greeter", "--token", "x:y"])
+
+
+def test_a_bad_token_is_refused_before_a_single_poll(owned, capsys,
+                                                     monkeypatch):
+    monkeypatch.setenv("TELEGRAM_TOKEN", "not-a-token")
+    assert main([*owned, "telegram", "--agent", "greeter"]) == 2
+    assert "BotFather" in capsys.readouterr().err
+
+
+def test_an_agent_that_is_not_there_is_named_before_the_bot_starts(owned,
+                                                                   capsys,
+                                                                   monkeypatch):
+    monkeypatch.setenv("TELEGRAM_TOKEN", "8675309:AAnot-a-real-token")
+    assert main([*owned, "telegram", "--agent", "ghost"]) == 2
+    assert "ghost" in capsys.readouterr().err

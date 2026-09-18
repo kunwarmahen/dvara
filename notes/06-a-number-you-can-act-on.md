@@ -76,7 +76,11 @@ said can be examined later.
 **And a separator is not this service's to choose.** Telegram wants
 italics on a new line; a terminal wants a plain line; something else
 wants a second message entirely. Picking one here picks it for every
-channel there will ever be.
+channel there will ever be. (The argument held and the example did not:
+[note 07](07-four-thousand-and-ninety-six.md) sends Telegram plain text,
+because a parse mode makes the model's own punctuation a syntax error.
+Which is the point — the channel decided, and it decided something this
+note guessed wrong.)
 
 The rendered line rides *beside* the raw number rather than instead of
 it, which is Yantra's note 43 again — the browser gets fields and draws a

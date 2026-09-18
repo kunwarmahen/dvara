@@ -40,6 +40,7 @@ from dvara.money import Ceiling, compose, day_start, next_reset
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore
 from dvara.service import Reply, Service
+from dvara.telegram import TelegramBot
 
 __all__ = [
     "Actor",
@@ -59,6 +60,7 @@ __all__ = [
     "Run",
     "RunStore",
     "Service",
+    "TelegramBot",
     "compose",
     "day_start",
     "next_reset",

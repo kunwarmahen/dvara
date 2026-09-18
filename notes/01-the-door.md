@@ -307,9 +307,12 @@ message; an exception is a reply that silently never arrives.
 
 ## What is deliberately not here
 
-* **No channel.** A bot is still the next note. `dvara say` drives the
-  service in-process, with no HTTP and no bot token, which is how every
-  receipt above was produced.
+* ~~**No channel.**~~ Shipped in
+  [note 07](07-four-thousand-and-ninety-six.md), last of the three this
+  note deferred and the smallest of them, because the five in between
+  had already decided everything but the medium. `dvara say` still
+  drives the service in-process with no HTTP and no bot token, which is
+  how every receipt above was produced.
 * ~~**No escalation.**~~ Shipped in
   [note 02](02-a-question-that-can-wait.md), and ahead of the channel it
   was planned behind: "ask" means ask wherever there is a route for a

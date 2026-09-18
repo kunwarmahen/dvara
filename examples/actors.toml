@@ -26,6 +26,10 @@
 #
 #     dvara say --as telegram:8675309 --agent greeter "who are you?"
 #
+# With the entry in place, `dvara telegram --agent greeter` answers you
+# and nobody else: an id that is not in this file gets silence, and the
+# line naming it goes to the terminal where the owner can act on it.
+#
 # [[actor.owner.channel]]
 # kind = "telegram"
 # id   = 8675309

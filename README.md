@@ -30,18 +30,18 @@ into a case in the package that produced it.
 [05 — one person, two channels](notes/05-one-person-two-channels.md) makes
 an actor a person rather than a seat.
 [06 — a number you can act on](notes/06-a-number-you-can-act-on.md) decides
-what follows an answer, and for whom.
+what follows an answer, and for whom;
+[07 — four thousand and ninety-six](notes/07-four-thousand-and-ninety-six.md)
+is the Telegram bot, and the three things a chat app decides for you.
 
 ## Status
 
 Roster, actors, sessions, budgets, run history, an HTTP surface and
 escalation to a person, standing allow/deny/ask rules, a failure loop
 that turns a bad turn into an eval case, one actor reachable on several
-channels, and a line under the answer for the people who asked for one —
-covered by 323 tests. No channel adapter ships yet:
-the terminal is still the only thing that asks you anything, but a bot
-is now a client of what exists rather than a thing to be designed
-around. The API is not stable.
+channels, a line under the answer for the people who asked for one, and a
+Telegram bot that answers messages and puts a tool call in front of you
+with two buttons on it — covered by 369 tests. The API is not stable.
 
 ## The shape of it
 
@@ -105,7 +105,13 @@ dvara --root examples/agents --actors examples/actors.toml runs
 dvara --root examples/agents --actors examples/actors.toml \
       case 9dcfabec --because "it invented a filename I never gave it"
 
-# listen for channel adapters
+# answer messages as a Telegram bot, asking you before anything that
+# could change something -- the question arrives with two buttons on it
+TELEGRAM_TOKEN=... dvara --root examples/agents --actors examples/actors.toml \
+      --ask --provider ollama --model qwen3.8-64k:latest \
+      telegram --agent scribe
+
+# listen for channel adapters that are somewhere else
 DVARA_TOKEN=$(openssl rand -hex 24) dvara serve --port 8765
 ```
 
@@ -254,6 +260,53 @@ Two rules worth knowing before you reach for it:
   badly, and that is the commoner failure. The sentence you type becomes
   the case's description, which is all anybody has six months later.
 
+### The Telegram bot
+
+One bot, one agent, however many people the roster allows
+([notes/07](notes/07-four-thousand-and-ninety-six.md)):
+
+```bash
+export TELEGRAM_TOKEN=...          # BotFather gives you one per bot
+dvara telegram --agent researcher
+```
+
+There is no `--token`, on purpose: a credential on a command line is in
+your shell history and readable in every `ps` on the box. **A bot token
+is an identity** — a name, a picture, an @handle somebody types — so a
+second agent is a second token and a second process rather than a prefix
+on every message. `/start` is answered here, from what the package says
+about itself, and it is the only command there is.
+
+The bot runs the service **in its own process** and reaches the ask desk
+directly, which is why a question can be pushed the moment it is raised.
+`dvara serve` is the other thing entirely: the way in for an adapter that
+is somewhere else.
+
+Three things the medium decides for you:
+
+* **A reply is split at 4096, never truncated**, and the cap is counted
+  in UTF-16 code units rather than characters — so a 3000-character
+  answer with emoji in it is 4200 units and would otherwise be rejected
+  whole. Cuts land on a blank line, then a newline, then a space.
+* **Nothing is sent with a `parse_mode`.** Markdown mode makes the
+  model's own punctuation a syntax error: one unmatched `*` and the whole
+  answer comes back as a 400.
+* **An approval is a button, not a message.** A turn holds its
+  conversation's lock while it waits, so "yes" typed into the chat queues
+  behind the very turn it was meant to release.
+
+A backlog is passed over at startup — a day-old "what changed today?"
+answered now is a wrong answer, and ten held messages spend ten turns of
+somebody's allowance at once. `--catch-up` answers them instead.
+
+Somebody who is not in `actors.toml` gets **silence**, and you get the
+line that says how to add them:
+
+```
+telegram: 5551212 messaged and is not in the actors file
+(add [[actor.NAME.channel]] kind="telegram" id=5551212)
+```
+
 ### The HTTP surface
 
 ```
@@ -322,7 +375,13 @@ for three different next moves: **they said no** (do not re-run it),
 **Answers do not arrive as messages.** A turn holds its conversation's
 lock while it waits, so typing "yes" into the chat queues up behind the
 very turn it was meant to release. Answers come through the desk, or
-through `POST /asks/{id}`.
+through `POST /asks/{id}` — or, in a chat, as a button press, which is a
+`callback_query` and not a message.
+
+`dvara telegram --ask` is the whole of this wired up: the question is
+delivered to the person's own chat with two buttons on it, the press
+lands on `AskDesk.answer`, and the message is edited to say what was
+decided so it cannot be pressed twice.
 
 ## Embedding it
 
@@ -355,7 +414,8 @@ print(reply.text, reply.cost_usd)
 | `runs.py` | every turn that happened, including the ones that failed |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)) |
 | `http.py` | five endpoints and a bearer token (`[http]` extra) |
-| `cli.py` | `agents`, `say`, `runs`, `case`, `serve` |
+| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)) |
+| `cli.py` | `agents`, `say`, `runs`, `case`, `telegram`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences
