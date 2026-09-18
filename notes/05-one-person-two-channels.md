@@ -307,9 +307,13 @@ channels name people with strings that can (`matrix:@me:example.org`).
   is read once at startup and the reverse index is built with it. Fine
   for a file one person edits; a real papercut the first time a guest is
   added at a party.
-* **Nothing records which channel a question was delivered to**, so a
-  `Run` cannot answer "where were you when you approved this?". Same
-  schema change as the trajectory work note 03 deferred.
+* ~~**Nothing records which channel a question was delivered to**~~ --
+  half shipped in [note 08](08-what-the-turn-actually-did.md), and the
+  half that shipped is the better one: a `Run` records where an answer
+  came BACK from rather than where the question went out to. Per TURN
+  rather than per call, because concurrent gating and no id on
+  `PermissionRequest` mean an approval cannot be pinned to the call it
+  approved.
 * **A notifier that hangs holds a delivery task for the whole deadline.**
   It is cancelled in the `finally`, so nothing leaks past the turn, but
   a slow channel cannot be given a shorter clock than a fast one.

@@ -54,6 +54,14 @@ decision about a call that is already in flight.
 No streaming in v1. One message, one reply: channels are turn-shaped, and
 a bot that streams is a bot that edits the same message forty times and
 gets rate-limited for it.
+
+**A TURN IS WATCHED, NOT JUST AWAITED.** The event loop here reads two
+kinds of event, not one. ``TurnEnd`` is the answer; every ``ToolExecuted``
+along the way is HOW the turn got there, and it goes onto the Run --
+which is what lets a failure become a case that asserts a trajectory
+rather than a case that asserts a turn finished (``cases.py``). It costs
+one branch in a loop that was already running, which is the whole reason
+it is done here and not by a second pass over anything.
 """
 
 from __future__ import annotations
@@ -66,6 +74,7 @@ from pathlib import Path
 
 from yantra import (
     AgentSpec,
+    ToolExecuted,
     Provider,
     bills_nothing,
     SessionStore,
@@ -82,12 +91,12 @@ from yantra.errors import ConfigError
 
 from dvara import money
 from dvara.actors import Actor, ActorBook, Channel
-from dvara.asks import AskDesk
+from dvara.asks import AskDesk, Escalations
 from dvara.errors import Refused
 from dvara.gate import Policy
 from dvara.keys import session_key, workspace_parts
 from dvara.roster import Roster
-from dvara.runs import Run, RunStore
+from dvara.runs import Run, RunStore, ToolStep
 
 
 def _default_provider(name: str) -> Provider:
@@ -306,6 +315,10 @@ class Service:
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
 
+        # Written by the gate as answers land, read when the Run is
+        # assembled. It has to exist before the gate is built, which is
+        # why it is here rather than beside the loop that fills the rest.
+        escalations = Escalations()
         ceiling = self._ceiling(spec=spec, who=who)
         if ceiling.amount is not None and ceiling.amount <= 0:
             raise Refused(
@@ -322,6 +335,7 @@ class Service:
                     desk=self.asks,
                     actor=who.id, agent=run.agent, thread=run.thread,
                     reach=who.reach(),
+                    escalations=escalations,
                 ),
                 cwd=self._workspace(key),
                 provider=provider,
@@ -343,6 +357,14 @@ class Service:
             async for event in agent.run_streaming(run.message):
                 if isinstance(event, TurnEnd):
                     end = event
+                elif isinstance(event, ToolExecuted):
+                    # A REFUSED CALL IS STILL ONE OF THESE, which is
+                    # Yantra's own decision and the reason this is one
+                    # branch rather than two: the loop turns a denial into
+                    # an error result rather than an exception, so a
+                    # refusal, a crash and a success all arrive here and
+                    # ``refusal`` is what tells them apart.
+                    run.tools.append(ToolStep(event.call.name, event.refusal))
         finally:
             # Save even when the turn died. Yantra guarantees history is
             # resumable at this point -- outstanding tool calls have
@@ -359,6 +381,7 @@ class Service:
             run.usage = _delta(before_total, agent.total_usage)
             run.cost_usd = _cost(before_models, agent.usage_by_model,
                                  provider_name=provider_name)
+            run.answered_from = list(escalations.channels)
             run.ended_at = datetime.now(UTC)
 
         run.stop_reason = end.reason if end else "error"

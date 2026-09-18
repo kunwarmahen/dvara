@@ -14,6 +14,24 @@ than the fourth:
   coming back.
 * **An audit.** Who asked what, of which agent, and what it cost.
 
+A row also remembers HOW the turn went, not only that it ended: the tools
+it called, in order, and which of them the gate turned away. That is the
+half note 04 was missing -- a case generated from a Run could assert that
+a turn COMPLETES and nothing else, which is the weakest assertion in the
+format and not the one anybody wanted.
+
+NAMES, NOT ARGUMENTS. A tool name is a fact about the shape of a turn; a
+tool's arguments are the turn's content, and the difference decides three
+things at once. The case assertions take names (``required_tools``,
+``forbidden_tools``), so arguments buy the feature that motivated this
+exactly nothing. A row that grows with an argument is a row that can hold
+a file, a key, or the contents of somebody's afternoon. And ``dvara
+case`` prints a Run into a file an owner commits -- note 04 already
+worried about the MESSAGE being somebody's own words, and arguments would
+put a second and much larger body of text in the same place that nobody
+typed. Whoever wants arguments wants a transcript, which is a different
+feature with a different retention story.
+
 A RUN IS RECORDED EVEN WHEN THE TURN RAISED. The rows that matter most
 are the ones nobody wanted, and a store that only remembers successes is
 a store that is silent exactly when it is needed.
@@ -31,6 +49,7 @@ save a dependency edge would make dvara's migrations Yantra's problem.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import uuid
@@ -57,7 +76,11 @@ CREATE TABLE IF NOT EXISTS runs (
     cache_write_tokens  INTEGER NOT NULL DEFAULT 0,
     cost_usd     REAL,            -- NULL: real tokens, no list price
     stop_reason  TEXT NOT NULL,
-    detail       TEXT
+    detail       TEXT,
+    -- How the turn went, as JSON, and both are nullable because every row
+    -- written before this column existed has neither.
+    tools        TEXT,            -- [["read_file", null], ["bash", "policy"]]
+    answered_from TEXT            -- ["telegram"]
 );
 -- The daily-allowance query, which runs before EVERY turn: one actor,
 -- one time window. Without this index it is a table scan that grows for
@@ -73,7 +96,40 @@ CREATE INDEX IF NOT EXISTS runs_actor_started
 #: reply in the model column.
 COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
-           "cache_write_tokens, cost_usd, stop_reason, detail")
+           "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
+           "answered_from")
+
+#: Columns added after the first row was ever written, and the type each
+#: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
+#: ~/dvara/state already, and a migration that drops and recreates a table
+#: to add a column is a migration that loses the audit it exists to keep.
+#: ``ALTER TABLE ADD COLUMN`` with no default is cheap and leaves the old
+#: rows honest -- they have no trajectory, and NULL is what that means.
+ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"))
+
+
+@dataclass(frozen=True)
+class ToolStep:
+    """One tool call the loop reported, and whether it got to happen.
+
+    ``refusal`` is the gate's own code (``policy``, ``user``, ``timeout``,
+    ``unattended``) or None when the call ran -- Yantra's token rather
+    than the sentence beside it, because a sentence written for a model is
+    going to be reworded and a column that has to be grepped for English
+    is a column nobody queries twice.
+
+    A REFUSED CALL IS STILL A STEP. It is usually the most interesting one
+    in the row: it is the moment the service did its job, and it is what
+    an owner is looking for when they ask what an agent has been trying to
+    do.
+    """
+
+    name: str
+    refusal: str | None = None
+
+    @property
+    def ran(self) -> bool:
+        return self.refusal is None
 
 
 @dataclass
@@ -92,11 +148,37 @@ class Run:
     cost_usd: float | None = None
     stop_reason: str = "error"
     detail: str | None = None
+    #: Every tool call the loop reported, in the order it reported them.
+    #: Empty means a turn that called nothing; a row written before this
+    #: column existed is empty too, and the two are not distinguishable
+    #: on purpose -- inventing a third state for "we were not recording
+    #: yet" would put a fact about this software into a row about an
+    #: agent.
+    tools: list[ToolStep] = field(default_factory=list)
+    #: The doors this turn's questions were answered through. Empty when
+    #: nothing was escalated, which is almost every turn.
+    answered_from: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
     def ok(self) -> bool:
         return self.stop_reason == "end_turn"
+
+    @property
+    def ran_tools(self) -> list[str]:
+        """Distinct names of the calls that actually happened, in order.
+
+        What a regression case requires of the fixed agent (cases.py), and
+        distinct because ``required_tools`` is a set question -- "did it
+        use this?" -- and three identical entries would say nothing the
+        first one did not.
+        """
+        return _distinct(step.name for step in self.tools if step.ran)
+
+    @property
+    def refused_tools(self) -> list[str]:
+        """Distinct names of the calls the gate turned away, in order."""
+        return _distinct(step.name for step in self.tools if not step.ran)
 
 
 class RunStore:
@@ -111,7 +193,31 @@ class RunStore:
         self._lock = threading.Lock()
         self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._db.executescript(SCHEMA)
+        self._migrate()
         self._db.commit()
+
+    def _migrate(self) -> None:
+        """Bring a store written by an older version up to this schema.
+
+        ``CREATE TABLE IF NOT EXISTS`` does nothing to a table that
+        already exists, so a column added today is missing from every
+        store created yesterday -- and the first INSERT would fail with
+        "table runs has no column named tools", on somebody's running
+        service, with no obvious cause. Adding what is absent is three
+        lines and it runs once per process.
+
+        ADD, NEVER REBUILD. The alternative -- create the new shape, copy,
+        drop, rename -- is how an audit trail gets lost to a power cut
+        halfway through. A column with no default costs nothing and leaves
+        the existing rows saying exactly what is true of them: nothing was
+        recorded, because nothing was recording.
+        """
+        have = {row[1] for row in
+                self._db.execute("PRAGMA table_info(runs)").fetchall()}
+        for column, kind in ADDED:
+            if column not in have:
+                self._db.execute(
+                    f"ALTER TABLE runs ADD COLUMN {column} {kind}")
 
     def close(self) -> None:
         with self._lock:
@@ -125,14 +231,16 @@ class RunStore:
                 "INSERT INTO runs (id, actor, agent, thread, started_at, "
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
-                "cost_usd, stop_reason, detail) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "cost_usd, stop_reason, detail, tools, answered_from) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
                  run.usage.input_tokens, run.usage.output_tokens,
                  run.usage.cache_read_tokens, run.usage.cache_write_tokens,
-                 run.cost_usd, run.stop_reason, run.detail),
+                 run.cost_usd, run.stop_reason, run.detail,
+                 _dump([[step.name, step.refusal] for step in run.tools]),
+                 _dump(list(run.answered_from))),
             )
             self._db.commit()
         return run.id
@@ -206,4 +314,44 @@ def _row_to_run(row: tuple) -> Run:
         usage=Usage(input_tokens=row[9], output_tokens=row[10],
                     cache_read_tokens=row[11], cache_write_tokens=row[12]),
         cost_usd=row[13], stop_reason=row[14], detail=row[15],
+        tools=[ToolStep(name, refusal) for name, refusal in _load(row[16])],
+        answered_from=list(_load(row[17])),
     )
+
+
+def _distinct(names) -> list[str]:
+    """Names in first-seen order, which is what a reader expects of a path."""
+    seen: list[str] = []
+    for name in names:
+        if name not in seen:
+            seen.append(name)
+    return seen
+
+
+def _dump(value: list) -> str | None:
+    """JSON, or NULL for nothing at all.
+
+    An empty list and a missing column both mean "no tools here", and
+    writing ``"[]"`` for the first would spend a byte per row to record a
+    distinction nothing downstream can use. NULL for both.
+    """
+    return json.dumps(value) if value else None
+
+
+def _load(raw: str | None) -> list:
+    """The list back, and never an exception into a query.
+
+    A row written by hand, a file half-restored from a backup, a column
+    somebody edited in a SQLite browser: all of those are reasons this can
+    hold something that is not JSON, and none of them is a reason for
+    ``dvara runs`` to stop working. A trajectory nobody can parse is a
+    trajectory that is not there, which is a state every caller already
+    handles.
+    """
+    if not raw:
+        return []
+    try:
+        loaded = json.loads(raw)
+    except ValueError:
+        return []
+    return loaded if isinstance(loaded, list) else []

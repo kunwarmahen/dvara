@@ -380,9 +380,10 @@ reading.
 * **A crash loses the message that was in flight.** Argued for above, and
   still a loss. A person who gets no reply has no way to tell it from a
   slow turn except by waiting.
-* **Nothing records which channel a question went out on**, unchanged
-  from note 05, so a `Run` still cannot answer "where were you when you
-  approved this?".
+* ~~**Nothing records which channel a question went out on**~~ -- a
+  `Run` answers "where were you when you approved this?" as of
+  [note 08](08-what-the-turn-actually-did.md), and a press on one of
+  these buttons writes `telegram` into it.
 * **`dvara serve` and `dvara telegram` are two processes over one state
   directory.** Two SQLite writers, which works until it does not. Running
   both is not yet a supported thing to do, and nothing stops you.

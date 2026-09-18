@@ -68,7 +68,7 @@ from yantra import (
     yolo,
 )
 
-from dvara.asks import AskDesk
+from dvara.asks import AskDesk, Escalations
 from dvara.rules import RuleBook
 
 #: Strictest first. One order, so that "tighten, never loosen" is a
@@ -110,7 +110,8 @@ class Policy:
     def gate(self, package_mode: str | None, *, actor_mode: str | None = None,
              desk: AskDesk | None = None, actor: str = "", agent: str = "",
              thread: str = "",
-             reach: Sequence[tuple[str, str]] = ()) -> PermissionFn:
+             reach: Sequence[tuple[str, str]] = (),
+             escalations: Escalations | None = None) -> PermissionFn:
         """The ``PermissionFn`` one turn runs under.
 
         Yantra's own two functions where they fit, chosen between rather
@@ -126,6 +127,12 @@ class Policy:
         decides where the question goes. An empty one is ordinary and
         means only that no channel notifier will fire -- a poller still
         finds the question, because it is in the same one queue.
+
+        ``escalations`` is the other direction and is pure record: where
+        the answers came BACK from, collected for the Run this turn will
+        leave behind. None is ordinary -- an embedder that keeps no
+        history wants none of it -- and nothing here branches on whether
+        it is there.
         """
         # A PACKAGE THAT NAMES NO MODE IS TREATED AS NAMING THE TIGHTEST,
         # which is the one place silence is read as a decision rather than
@@ -142,17 +149,19 @@ class Policy:
         # exactly as it did" a property instead of a promise.
         if len(self.rules):
             return ruled(self.rules, mode=mode, desk=desk, actor=actor,
-                         agent=agent, thread=thread, reach=reach)
+                         agent=agent, thread=thread, reach=reach,
+                         escalations=escalations)
         if mode == "yolo":
             return yolo
         if mode == "ask" and desk is not None:
             return escalating(desk, actor=actor, agent=agent, thread=thread,
-                              reach=reach)
+                              reach=reach, escalations=escalations)
         return allow_read_only
 
 
 def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
-               reach: Sequence[tuple[str, str]] = ()) -> PermissionFn:
+               reach: Sequence[tuple[str, str]] = (),
+               escalations: Escalations | None = None) -> PermissionFn:
     """A gate that puts the question to a person and waits for the answer.
 
     Read-only tools are approved without asking, exactly as they are
@@ -169,14 +178,15 @@ def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
         if request.read_only:
             return True
         return put(desk, request, actor=actor, agent=agent, thread=thread,
-                   reach=reach)
+                   reach=reach, escalations=escalations)
 
     return gate
 
 
 async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
               agent: str, thread: str,
-              reach: Sequence[tuple[str, str]] = ()) -> bool:
+              reach: Sequence[tuple[str, str]] = (),
+              escalations: Escalations | None = None) -> bool:
     """Ask the person, and write their answer onto the request.
 
     The one place a question is put, so the two gates below cannot come to
@@ -189,6 +199,10 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     answer = await desk.put(actor=actor, agent=agent, thread=thread,
                             tool=request.tool_name, summary=request.summary,
                             reach=reach)
+    if escalations is not None:
+        # Recorded for a refusal too. "They said no, from their phone" is
+        # a fact an owner reading a Run wants as much as the yes.
+        escalations.answered(answer.via)
     if not answer.approved:
         return refuse(request, answer.reason or "", code=answer.code)
     return True
@@ -196,7 +210,8 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
 
 def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
           agent: str, thread: str,
-          reach: Sequence[tuple[str, str]] = ()) -> PermissionFn:
+          reach: Sequence[tuple[str, str]] = (),
+          escalations: Escalations | None = None) -> PermissionFn:
     """The gate when the owner has written standing answers down.
 
     One function rather than a wrapper around the three above, for note
@@ -248,7 +263,8 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
             # "Tell me before this thing reads anything" is a thing an
             # owner is allowed to mean.
             return put(desk, request, actor=actor, agent=agent,
-                       thread=thread, reach=reach)
+                       thread=thread, reach=reach,
+                       escalations=escalations)
         return refuse(request, _no_route(request, mode, desk),
                       code=REFUSED_UNATTENDED)
 

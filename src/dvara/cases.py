@@ -47,6 +47,35 @@ package is a thing you hand to somebody; the people this service serves
 are not part of it. That still leaves the owner committing somebody's
 words into a repository, which no code here can decide for them, so the
 command says so out loud before they do.
+
+## A trajectory is a description; a prohibition is a judgement
+
+The fifth decision, and it arrived with the trajectory on a Run. A case
+can now assert HOW a turn goes and not merely that it finishes, which was
+the weakest assertion the format has and the only one this command could
+make. Two fields were available and only one of them is this command's to
+fill.
+
+``required_tools`` is filled, from the calls that RAN. That is the fossil
+rule as Yantra states it: replay the failure, and the fix must still do
+the work. A turn that read a file and wrote one, badly, is still a turn
+that has to read a file and write one -- an agent that "fixes" it by
+doing neither has not fixed it, and without this the case would call that
+a pass.
+
+``forbidden_tools`` is NOT filled, including from the calls the gate
+turned away, and the refusal is the point rather than an omission. What a
+turn DID is a description, and the service watched it happen. What a turn
+must never do again is a judgement, and it is exactly the judgement note
+04 already said the service cannot make: a call the gate refused might
+have been the bug, or might have been the agent correctly asking for
+something it should have been given. So the refused calls are PRINTED
+beside the block, where the owner reads them and writes the line if that
+is what they meant.
+
+Which works because of the first decision: the block is printed, not
+written. An assertion a person disagrees with is a line they delete in a
+file they were already going to read.
 """
 
 from __future__ import annotations
@@ -112,7 +141,35 @@ def case_from_run(run: Run, *, because: str | None = None) -> EvalCase:
     return case_from_trace(
         run.id, _describe(run, because), run.message.strip(),
         tokens_used=spent,
+        # Empty for a turn that called nothing, and empty for a row
+        # written before a Run recorded trajectories at all. Both are a
+        # case with no trajectory assertion, which is what this command
+        # produced for every run until now.
+        required_tools=run.ran_tools,
     )
+
+
+def unasserted(run: Run) -> str | None:
+    """The sentence about what this command deliberately did not assert.
+
+    For stderr, beside the block rather than in it: the calls the gate
+    refused are the likeliest thing the owner wants a ``forbidden_tools``
+    line for, and the likeliest thing they would never think to look up.
+    None when there is nothing to say, because an advisory that appears
+    every time is an advisory nobody reads.
+    """
+    refused = run.refused_tools
+    if not refused:
+        return None
+    return (f"This turn also had {', '.join(refused)} refused by the gate, "
+            f"which is NOT asserted above: whether the fixed agent should "
+            f"stop trying is your call, not the service's. Add "
+            f"forbidden_tools = {_toml_list(refused)} if it is.")
+
+
+def _toml_list(names: list[str]) -> str:
+    inner = ", ".join(f'"{name}"' for name in names)
+    return f"[{inner}]"
 
 
 def _describe(run: Run, because: str | None) -> str:

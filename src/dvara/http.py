@@ -238,6 +238,12 @@ def create_app(service: Service, *, token: str) -> Any:
         check(authorization)
         body = await request.json()
         actor, via = _whom(body)
+        # Where the answer came from, for the Run. A caller that named a
+        # channel is standing in that channel's doorway and says so; one
+        # that asserted an actor id is a bridge whose own name this
+        # service does not know, and "http" is the honest answer rather
+        # than a guess at which app the person was holding.
+        door = via.kind if via is not None else "http"
         if via is not None:
             actor = _resolve(service, via.kind, via.id)
         if not isinstance(body.get("approve"), bool):
@@ -248,7 +254,7 @@ def create_app(service: Service, *, token: str) -> Any:
                                 detail="this service does not escalate")
         try:
             landed = service.asks.answer(ask_id, actor=actor,
-                                         approve=body["approve"])
+                                         approve=body["approve"], via=door)
         except NotYours:
             # Distinguished from 404 deliberately. Both sides of this line
             # are inside the owner's trust boundary, and a routing bug in

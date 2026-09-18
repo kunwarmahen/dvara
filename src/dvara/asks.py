@@ -162,6 +162,16 @@ class Answer:
     approved: bool
     reason: str | None = None
     code: str = REFUSED_USER
+    #: Where the person answered from -- a channel kind, "terminal", or
+    #: whatever the front end that took the answer calls itself. None when
+    #: nobody answered (a timeout, an undeliverable question) or when the
+    #: front end did not say.
+    #:
+    #: NOT A SECOND IDENTITY. The actor is still the whole of who decided;
+    #: this is only the door they happened to be standing in, recorded
+    #: because "where were you when you approved this?" is a question an
+    #: owner asks of a Run six months later and nothing could answer.
+    via: str | None = None
 
 
 #: How a question reaches a person. Given an ``Ask``, put it where they
@@ -170,6 +180,37 @@ class Answer:
 #: module docstring of ``service.py`` on why answering by SENDING A
 #: MESSAGE cannot work.
 Notifier = Callable[[Ask], Awaitable[None]]
+
+
+@dataclass
+class Escalations:
+    """Where one turn's questions were answered, collected as they land.
+
+    Handed to ``Policy.gate`` and written by ``put``, because that is the
+    one function through which every question in this service passes. A
+    mutable collector rather than a return value: a ``PermissionFn``
+    answers True or False and has nowhere to put a second fact, and
+    threading one back out through the agent loop would be a Yantra
+    change made for a caller Yantra is not supposed to know about.
+
+    IT IS A PROPERTY OF THE TURN, NOT OF A CALL. Two escalated calls in
+    one iteration are gated CONCURRENTLY and their answers may arrive in
+    either order, while the loop reports them in submission order -- so
+    pairing an approval with the call it approved needs an id on
+    ``PermissionRequest`` that does not exist. Recording the set of doors
+    this turn's answers came through is the fact that can be got exactly,
+    and "you approved this from Telegram" is the question an owner
+    actually asks.
+    """
+
+    #: Channel kinds, first use first, no duplicates. Ordered rather than
+    #: a set so that a Run reads the same way twice.
+    channels: list[str] = field(default_factory=list)
+
+    def answered(self, via: str | None) -> None:
+        """Note one answer's door. Silence and repeats are both no-ops."""
+        if via and via not in self.channels:
+            self.channels.append(via)
 
 
 class AskDesk:
@@ -193,8 +234,13 @@ class AskDesk:
         #: that is the only place a question could go.
         self.notify = notify
         self._routes: dict[str, Notifier] = {}
+        #: The future resolves with (approved, via) rather than a bare
+        #: bool, because the two facts are settled by the same person in
+        #: the same act and a second channel for the second one would be
+        #: a second thing that can be late or lost.
         self._waiting: dict[
-            str, tuple[Ask, asyncio.Future[bool], asyncio.AbstractEventLoop]
+            str, tuple[Ask, asyncio.Future[tuple[bool, str | None]],
+                       asyncio.AbstractEventLoop]
         ] = {}
 
     def route(self, kind: str, notify: Notifier) -> None:
@@ -241,7 +287,7 @@ class AskDesk:
         ask = Ask(id=secrets.token_urlsafe(16), actor=actor, agent=agent,
                   thread=thread, tool=tool, summary=summary)
         loop = asyncio.get_running_loop()
-        future: asyncio.Future[bool] = loop.create_future()
+        future: asyncio.Future[tuple[bool, str | None]] = loop.create_future()
         self._waiting[ask.id] = (ask, future, loop)
         deliveries = self._deliver(ask, reach)
         deadline = loop.time() + self.timeout
@@ -270,9 +316,11 @@ class AskDesk:
                         return Answer(False, _undeliverable(tool, failures[0]),
                                       REFUSED_UNATTENDED)
                 if future.done():
-                    if future.result():
-                        return Answer(True)
-                    return Answer(False, _refused(tool, actor), REFUSED_USER)
+                    approved, via = future.result()
+                    if approved:
+                        return Answer(True, via=via)
+                    return Answer(False, _refused(tool, actor), REFUSED_USER,
+                                  via=via)
                 # Delivered, and nobody has answered yet. Round again on
                 # what is left of the deadline.
         finally:
@@ -319,7 +367,8 @@ class AskDesk:
         found = self._waiting.get(ask_id)
         return found[0] if found else None
 
-    def answer(self, ask_id: str, *, actor: str, approve: bool) -> bool:
+    def answer(self, ask_id: str, *, actor: str, approve: bool,
+               via: str | None = None) -> bool:
         """Land one decision. False when there was nothing to land on.
 
         WRONG ACTOR IS NOT AN ANSWER. The id alone would be enough for
@@ -327,6 +376,14 @@ class AskDesk:
         a roster; requiring both is what makes a question answerable only
         by the person it was put to. A mismatch resolves nothing -- the
         real person can still answer, and the turn keeps waiting.
+
+        ``via`` is where this answer came from, and it is the ANSWERING
+        front end's word rather than the delivering one's: a question that
+        went out to three channels was answered on exactly one, and only
+        the thing that took the press knows which. It is optional because
+        it is a record and never a check -- a front end that does not say
+        still gets its answer landed, which keeps an old caller working
+        and keeps this from becoming a second identity to get wrong.
         """
         found = self._waiting.get(ask_id)
         if found is None:
@@ -340,14 +397,14 @@ class AskDesk:
             # second one did something.
             return False
         if _running_loop() is loop:
-            future.set_result(bool(approve))
+            future.set_result((bool(approve), via))
         else:
             # From anywhere else -- another thread, another loop -- the
             # answer has to be handed to the loop that is waiting on it.
             # Scheduled rather than set, so this returns "posted", not
             # "already delivered"; the difference is one tick of an event
             # loop that is not ours to run.
-            loop.call_soon_threadsafe(_resolve, future, bool(approve))
+            loop.call_soon_threadsafe(_resolve, future, bool(approve), via)
         return True
 
 
@@ -358,10 +415,11 @@ def _running_loop() -> asyncio.AbstractEventLoop | None:
         return None
 
 
-def _resolve(future: asyncio.Future[bool], approve: bool) -> None:
+def _resolve(future: asyncio.Future[tuple[bool, str | None]], approve: bool,
+             via: str | None) -> None:
     """Set the result, unless the deadline got there first."""
     if not future.done():
-        future.set_result(approve)
+        future.set_result((approve, via))
 
 
 class NotYours(Exception):

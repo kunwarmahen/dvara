@@ -272,7 +272,9 @@ property this note opened with.
   which standing yes actually saved them a question, or which deny has
   never fired since the day it was written, has no way to find out. The
   `Run` record is the obvious home and this note deliberately did not add
-  a column to it.
+  a column to it. ([Note 08](08-what-the-turn-actually-did.md) added the
+  rows — every refused call, with the code that refused it — so this is
+  now a query nobody has written rather than a fact nobody has.)
 * **A deny cannot constrain a list-valued argument.** Patterns match
   strings, and a non-string argument never matches — so a tool that takes
   a *list* of paths cannot be constrained here at all. Safe in the

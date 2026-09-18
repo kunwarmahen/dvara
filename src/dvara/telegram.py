@@ -621,6 +621,12 @@ class TelegramBot:
         to, and not whose chat it is sitting in. ``AskDesk.answer``
         insists on both the id and the actor, so a question forwarded to
         somebody else is a press that resolves nothing.
+
+        ``via="telegram"`` is the literal kind this adapter is, hardcoded
+        because this is the one module in the repo that IS Telegram. The
+        service still never branches on the string; it writes it onto the
+        Run so that "where were you when you approved this?" has an
+        answer.
         """
         query_id = query.get("id", "")
         native = query.get("from", {}).get("id")
@@ -637,7 +643,7 @@ class TelegramBot:
         approve = verdict == "y"
         try:
             landed = self.service.asks.answer(ask_id, actor=actor,
-                                              approve=approve)
+                                              approve=approve, via="telegram")
         except NotYours as exc:
             # The id was forwarded, or an adapter is routing badly. Said
             # to the presser rather than swallowed: a button that does

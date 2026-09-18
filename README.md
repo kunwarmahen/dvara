@@ -32,7 +32,10 @@ an actor a person rather than a seat.
 [06 — a number you can act on](notes/06-a-number-you-can-act-on.md) decides
 what follows an answer, and for whom;
 [07 — four thousand and ninety-six](notes/07-four-thousand-and-ninety-six.md)
-is the Telegram bot, and the three things a chat app decides for you.
+is the Telegram bot, and the three things a chat app decides for you;
+[08 — what the turn actually did](notes/08-what-the-turn-actually-did.md)
+puts the trajectory on a run, so a generated case can assert more than
+"it finished".
 
 ## Status
 
@@ -41,7 +44,9 @@ escalation to a person, standing allow/deny/ask rules, a failure loop
 that turns a bad turn into an eval case, one actor reachable on several
 channels, a line under the answer for the people who asked for one, and a
 Telegram bot that answers messages and puts a tool call in front of you
-with two buttons on it — covered by 369 tests. The API is not stable.
+with two buttons on it, and a run record that remembers which tools a turn
+called and which of them were refused — covered by 400 tests. The API is
+not stable.
 
 ## The shape of it
 
@@ -98,8 +103,10 @@ dvara --root examples/agents --actors examples/actors.toml --ask \
       --provider ollama --model qwen3.8-64k:latest \
       say --actor owner --agent scribe "write a haiku into notes.txt"
 
-# what it has been doing
+# what it has been doing -- and what each turn actually did
 dvara --root examples/agents --actors examples/actors.toml runs
+#   2026-09-18 01:19  owner/scribe  end_turn   $0.0007  'write a haiku…'
+#                     write_file -> write_file(refused)  [answered from terminal]
 
 # and when one of those turns was bad, write it into the package's gate
 dvara --root examples/agents --actors examples/actors.toml \
@@ -260,6 +267,36 @@ Two rules worth knowing before you reach for it:
   badly, and that is the commoner failure. The sentence you type becomes
   the case's description, which is all anybody has six months later.
 
+**The case asserts how the turn went, not just that it finished.** A
+`Run` records every tool call and which of them the gate refused
+([notes/08](notes/08-what-the-turn-actually-did.md)), so `required_tools`
+is filled from the calls that actually ran — an agent that "fixes" a bad
+turn by doing nothing no longer passes:
+
+```
+  FAIL  trace-4e183287  24.8s · 2245 tok · 2 it · no tools
+        required tool not used: write_file
+```
+
+`forbidden_tools` is **not** generated, and the refused calls are printed
+beside the block instead:
+
+```
+# This turn also had write_file refused by the gate, which is NOT asserted
+# above: whether the fixed agent should stop trying is your call, not the
+# service's. Add forbidden_tools = ["write_file"] if it is.
+```
+
+A trajectory is a description and the service watched it happen; a
+prohibition is a judgement, and a call the gate refused might have been
+the bug or might have been the agent correctly asking for something it
+should have been given.
+
+**Names, never arguments.** `write_file` is recorded; the path it was
+given is not. The assertions take names, a row that grows with an
+argument is a row that can hold a file, and this command prints into a
+file you commit.
+
 ### The Telegram bot
 
 One bot, one agent, however many people the roster allows
@@ -411,8 +448,8 @@ print(reply.text, reply.cost_usd)
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), and which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)) |
-| `runs.py` | every turn that happened, including the ones that failed |
-| `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)) |
+| `runs.py` | every turn that happened, what it cost, and which tools it called ([notes/08](notes/08-what-the-turn-actually-did.md)) |
+| `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | five endpoints and a bearer token (`[http]` extra) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)) |
 | `cli.py` | `agents`, `say`, `runs`, `case`, `telegram`, `serve` |

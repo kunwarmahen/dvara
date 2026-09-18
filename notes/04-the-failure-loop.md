@@ -233,11 +233,14 @@ section.
   than a wrong one — the claim "this message should complete" is still
   true — but nothing here can tell the two apart, and `--because` is the
   only instrument for saying so.
-* **No trajectory, so no assertion about HOW.** The `Run` table holds
-  outcomes, not tool calls. Yantra's `case_from_trace` has taken
-  `required_tools` since note 10 and nothing here can fill it. Recording
-  tool NAMES is cheap; recording their ARGUMENTS is a privacy question
-  that outcomes do not raise, and the two arrive as one schema change.
+* ~~**No trajectory, so no assertion about HOW.**~~ Shipped in
+  [note 08](08-what-the-turn-actually-did.md). A `Run` records the tool
+  calls now, and `required_tools` is filled from the ones that RAN. The
+  privacy question this bullet anticipated was answered by refusing it:
+  NAMES, NOT ARGUMENTS, because the assertions take names and a row that
+  grows with an argument is a row that can hold a file. `forbidden_tools`
+  is still not generated, and that turned out to be a decision worth its
+  own section rather than an omission.
 * **Nothing notices a run that keeps happening.** The same failure three
   times in a week is a much stronger signal than the same failure once,
   and there is no query for it — `dvara runs` prints a list and a person
@@ -246,7 +249,9 @@ section.
   regression case that passes the first time you run it is a case that
   is not testing what you think, and the loop would be tighter if
   `--write` offered to run the gate immediately. It would also need a
-  provider and a key at the moment somebody is doing bookkeeping.
+  provider and a key at the moment somebody is doing bookkeeping. (Less
+  likely to pass trivially since note 08 — a case that asserts a
+  trajectory has something to fail on — but still nothing checks.)
 * **Locks are still never evicted**, unchanged from notes 01–03.
 * ~~**One actor per channel**~~ -- settled in
   [note 05](05-one-person-two-channels.md), which was the last thing
@@ -254,6 +259,7 @@ section.
 
 ---
 
-Next: the channel. Everything since note 02 has been built so that a bot
-is a *client* of this service rather than a special case inside it — it
-supplies a notifier and calls `answer`, exactly as the terminal does.
+The channel came next, in [note 07](07-four-thousand-and-ninety-six.md),
+and the loop this note opened was finished in
+[note 08](08-what-the-turn-actually-did.md) — where a generated case
+stopped asserting only that a turn completes.

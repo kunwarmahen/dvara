@@ -45,7 +45,7 @@ from yantra import render_case
 
 from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
-from dvara.cases import append, case_from_run
+from dvara.cases import append, case_from_run, unasserted
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Policy
 from dvara.roster import Roster
@@ -265,7 +265,11 @@ def _ask_at_the_keyboard(desk: AskDesk):
             typed = await asyncio.to_thread(input, "approve? [y/N] ")
         except EOFError:
             typed = ""
-        desk.answer(ask.id, actor=ask.actor,
+        # "terminal" is not a channel kind and never appears in
+        # actors.toml -- it is where the answer came from, which is the
+        # question the Run is recording. A person who approved something
+        # at the keyboard was at the keyboard.
+        desk.answer(ask.id, actor=ask.actor, via="terminal",
                     approve=typed.strip().lower() in ("y", "yes"))
 
     return notify
@@ -330,6 +334,16 @@ def _runs(service: Service, args) -> int:
         stamp = run.started_at.strftime("%Y-%m-%d %H:%M")
         print(f"{stamp}  {run.actor}/{run.agent}  {run.stop_reason:<14} "
               f"{cost:>9}  {run.message[:48]!r}")
+        if run.tools:
+            # The shape of the turn, on one line, with the refused calls
+            # marked. This is the line an owner scans for "what has it
+            # been TRYING to do", which the verdict above never said.
+            path = " -> ".join(
+                step.name if step.ran else f"{step.name}(refused)"
+                for step in run.tools)
+            where = (f"  [answered from {', '.join(run.answered_from)}]"
+                     if run.answered_from else "")
+            print(f"{'':<18}{path}{where}")
         if run.detail and not run.ok:
             # Why it went wrong, where the owner is already looking. The
             # store has carried this since the first commit; not printing
@@ -359,6 +373,9 @@ def _case(service: Service, args) -> int:
             print(f"\n# from run {run.id} against {run.agent}. Read it "
                   f"before you commit it: the message is somebody's own "
                   f"words.", file=sys.stderr)
+            advisory = unasserted(run)
+            if advisory:
+                print(f"# {advisory}", file=sys.stderr)
             return 0
         path = append(service.roster.path(run.agent), case)
     except Refused as exc:
