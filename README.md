@@ -37,7 +37,10 @@ is the Telegram bot, and the three things a chat app decides for you;
 puts the trajectory on a run, so a generated case can assert more than
 "it finished";
 [09 — a process you walk away from](notes/09-a-process-you-walk-away-from.md)
-is the difference between a service and a program you run.
+is the difference between a service and a program you run;
+[10 — what decided this](notes/10-what-decided-this.md) counts the
+standing answers, pins an approval to the call it released, and settles
+what an edited package does to a live conversation.
 
 ## Status
 
@@ -47,8 +50,8 @@ that turns a bad turn into an eval case, one actor reachable on several
 channels, a line under the answer for the people who asked for one, and a
 Telegram bot that answers messages and puts a tool call in front of you
 with two buttons on it, a run record that remembers which tools a turn
-called and which of them were refused, and a roster you can edit without
-restarting anything — covered by 422 tests. The API is not stable.
+called and what decided each one, and a roster you can edit without
+restarting anything — covered by 443 tests. The API is not stable.
 
 ## The shape of it
 
@@ -105,10 +108,15 @@ dvara --root examples/agents --actors examples/actors.toml --ask \
       --provider ollama --model qwen3.8-64k:latest \
       say --actor owner --agent scribe "write a haiku into notes.txt"
 
-# what it has been doing -- and what each turn actually did
+# what it has been doing -- what each turn did, and what decided it
 dvara --root examples/agents --actors examples/actors.toml runs
-#   2026-09-18 01:19  owner/scribe  end_turn   $0.0007  'write a haiku…'
-#                     write_file -> write_file(refused)  [answered from terminal]
+#   2026-09-18 03:18  owner/scribe  end_turn   $0.0007  'write API_KEY=…'
+#                     scribe changed after this turn: 0.1.0 -> 0.2.0
+#                     write_file(refused)[rule:eabd9e26]
+
+# and which of your standing answers are earning their place
+dvara --root examples/agents --actors examples/actors.toml \
+      --policy examples/policy.toml rules
 
 # and when one of those turns was bad, write it into the package's gate
 dvara --root examples/agents --actors examples/actors.toml \
@@ -238,6 +246,26 @@ Three rules hold it up, and the third is the one worth carrying away:
 `--policy` is required if you name it and optional at
 `~/dvara/policy.toml`, so a typo in the path is an error rather than a
 file that silently does nothing.
+
+**What each rule has actually done.** A deny announces itself; an allow
+is invisible by construction, because the call just runs. So a policy
+file fills up with lines you cannot tell apart by looking
+([notes/10](notes/10-what-decided-this.md)):
+
+```
+$ dvara rules
+policy.toml  ·  3 rule(s)  ·  calls settled over the last 30 days
+      2  allow  write_file path=haiku.txt
+      1  deny   write_file path=*.env|*/.ssh/*
+      ·  allow  bash command=git status|git diff
+
+  ·  = never matched a call in this window.
+```
+
+Counted over *calls*, not turns. A rule is identified by what it **says**,
+not where it sits — so inserting a line at the top does not shuffle the
+counts, and editing a rule starts its count over, because you changed the
+standing answer.
 
 ### The failure loop
 
@@ -505,14 +533,14 @@ print(reply.text, reply.cost_usd)
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
-| `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)) |
+| `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), and which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)) |
-| `runs.py` | every turn that happened, what it cost, and which tools it called ([notes/08](notes/08-what-the-turn-actually-did.md)) |
+| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | five endpoints and a bearer token (`[http]` extra) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
-| `cli.py` | `agents`, `say`, `runs`, `case`, `telegram`, `serve` |
+| `cli.py` | `agents`, `say`, `runs`, `rules`, `case`, `telegram`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

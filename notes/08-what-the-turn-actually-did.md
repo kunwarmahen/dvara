@@ -154,14 +154,20 @@ the press knows which. The terminal says `terminal`, the bot says
 it is a record and never a check — a front end that does not say still
 gets its answer landed.
 
-**IT IS A PROPERTY OF THE TURN, NOT OF A CALL**, and that is a limit
-rather than a preference. Two escalated calls in one iteration are gated
-*concurrently* — Yantra fans them out with `gather` and reports the
-results in submission order — so their answers may arrive in either
-order, and pairing an approval with the call it approved would need an id
-on `PermissionRequest` that does not exist. Recording the set of doors
-this turn's answers came through is the fact that can be got exactly, and
-"you approved this from Telegram" is the question an owner actually asks.
+**IT IS A PROPERTY OF THE TURN, NOT OF A CALL**, and the reason is
+coupling rather than impossibility. Yantra gates a batch *sequentially*
+(deliberately — three questions arriving at once in a chat window is a
+pile, not a prompt) and reports the results in submission order, so the
+Nth decision does belong to the Nth call and a host could simply count.
+That is three ordering properties of somebody else's loop, none of them
+promised to callers, and a drift in any of them would not raise: it would
+file one person's approval against a different call, which is the worst
+shape a permission record can take. Recording the set of doors this
+turn's answers came through needs none of that, and "you approved this
+from Telegram" is the question an owner actually asks.
+
+*(Closed in [note 10](10-what-decided-this.md), by adding the seam
+instead of taking the coupling.)*
 
 Recorded for a refusal too. "They said no, from their phone" is a fact
 worth as much as the yes.
@@ -315,18 +321,18 @@ discriminates rather than simply always firing.
 
 ## What is not here yet
 
-* **An approval cannot be pinned to the call it approved.** Concurrent
-  gating plus no id on `PermissionRequest` means the doors are recorded
-  per turn. The shape of the fix is a call id on the request — a Yantra
-  seam, argued on Yantra's terms, for a host that wants to correlate a
-  gate decision with the event it produced.
-* **Nothing counts what the rules are doing**, unchanged from
-  [note 03](03-standing-answers.md): which standing yes saved a question,
-  which deny has never fired since it was written. The rows to answer it
-  from now exist.
-* **A trajectory is recorded and never queried.** `dvara runs` prints it;
-  nothing asks "which agent has had the most calls refused this week",
-  which is now one `SELECT` away and not written.
-* **`dvara serve` and `dvara telegram` are still two processes over one
-  state directory**, unchanged from [note 07](07-four-thousand-and-ninety-six.md).
+* ~~**An approval cannot be pinned to the call it approved.**~~ Closed in
+  [note 10](10-what-decided-this.md), with the Yantra seam this bullet
+  predicted: `PermissionRequest.call_id`, argued on Yantra's terms for
+  any host that records decisions rather than only making them.
+* ~~**Nothing counts what the rules are doing**~~ — the rows this note
+  added turned out to be half of it; the other half was recording WHICH
+  rule, which needed the same seam as the approvals.
+  [Note 10](10-what-decided-this.md) has `dvara rules`.
+* **A trajectory is mostly recorded and never queried.** `dvara runs`
+  prints it and [note 10](10-what-decided-this.md) counts rules over it;
+  nothing asks "which agent has had the most calls refused this week".
+* ~~**`dvara serve` and `dvara telegram` are still two processes over one
+  state directory**~~ — settled in
+  [note 09](09-a-process-you-walk-away-from.md).
 * **Locks are still never evicted**, unchanged from notes 01–07.

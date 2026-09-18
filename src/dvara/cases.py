@@ -184,8 +184,17 @@ def _describe(run: Run, because: str | None) -> str:
         opening = because.strip()
     else:
         opening = _self_evident(run)
+    # The VERSION the package declared at the moment the turn ran, when it
+    # declared one. A package is edited on disk and takes effect on the
+    # next turn, so a case written six months later that did not say which
+    # version produced it is a case somebody has to guess about -- and
+    # "unrecorded" is a worse thing to write than nothing, because a
+    # package with no version key has not lost anything.
+    against = run.agent
+    if run.agent_version:
+        against = f"{run.agent} {run.agent_version}"
     return (f"{opening}\n\n"
-            f"Recorded from a real turn against {run.agent} on {when} "
+            f"Recorded from a real turn against {against} on {when} "
             f"(run {run.id}, model {run.model or 'unrecorded'}). The "
             f"ceiling below is what that turn spent, with half again for "
             f"headroom -- a fix that costs more than the failure did is "

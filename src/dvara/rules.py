@@ -62,6 +62,9 @@ file.
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -99,6 +102,27 @@ class Rule:
     #: refuses. "use the deploy agent for that" is worth far more to it
     #: than a second copy of the word "denied".
     reason: str | None = None
+
+    @property
+    def id(self) -> str:
+        """A short name for THIS rule, as written, stable across restarts.
+
+        Content-addressed rather than positional, and that is the whole
+        decision. An index into the file is what the error messages use
+        and it is exactly wrong for counting: insert a rule at the top and
+        every count below it silently moves to a different line.
+
+        A rule you EDIT becomes a different rule with a count of zero, and
+        that is correct rather than a limitation. You changed what it
+        says; its history belongs to what it used to say. ``reason`` is
+        deliberately not in the hash -- rewording the sentence a model
+        reads does not make it a different standing answer.
+        """
+        canonical = json.dumps(
+            [self.tool, self.verdict,
+             sorted((name, list(alts)) for name, alts in self.args.items())],
+            separators=(",", ":"), sort_keys=True)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:8]
 
     def matches(self, tool: str, arguments: Mapping[str, Any]) -> bool:
         """Whether this rule has an opinion about that call.

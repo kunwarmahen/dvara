@@ -268,13 +268,13 @@ property this note opened with.
 
 ## What is not here yet
 
-* **Nothing counts what the rules are doing.** An owner who wants to know
-  which standing yes actually saved them a question, or which deny has
-  never fired since the day it was written, has no way to find out. The
-  `Run` record is the obvious home and this note deliberately did not add
-  a column to it. ([Note 08](08-what-the-turn-actually-did.md) added the
-  rows — every refused call, with the code that refused it — so this is
-  now a query nobody has written rather than a fact nobody has.)
+* ~~**Nothing counts what the rules are doing.**~~ Shipped as
+  `dvara rules` in [note 10](10-what-decided-this.md). It took two
+  notes: [note 08](08-what-the-turn-actually-did.md) added the rows, and
+  note 10 added the half that was missing — WHICH rule, which needed a
+  call id on the permission request to pin a decision to its call. The
+  standing yes is the one worth counting, because it is the only one that
+  leaves no trace by working.
 * **A deny cannot constrain a list-valued argument.** Patterns match
   strings, and a non-string argument never matches — so a tool that takes
   a *list* of paths cannot be constrained here at all. Safe in the

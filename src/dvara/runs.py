@@ -79,8 +79,9 @@ CREATE TABLE IF NOT EXISTS runs (
     detail       TEXT,
     -- How the turn went, as JSON, and both are nullable because every row
     -- written before this column existed has neither.
-    tools        TEXT,            -- [["read_file", null], ["bash", "policy"]]
-    answered_from TEXT            -- ["telegram"]
+    tools        TEXT,            -- [["bash", "policy", "rule:58fbf4ad"], …]
+    answered_from TEXT,           -- ["telegram"]; a summary of tools
+    agent_version TEXT            -- the package's own version, that turn
 );
 -- The daily-allowance query, which runs before EVERY turn: one actor,
 -- one time window. Without this index it is a table scan that grows for
@@ -97,7 +98,7 @@ CREATE INDEX IF NOT EXISTS runs_actor_started
 COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
-           "answered_from")
+           "answered_from, agent_version")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -105,7 +106,8 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 #: to add a column is a migration that loses the audit it exists to keep.
 #: ``ALTER TABLE ADD COLUMN`` with no default is cheap and leaves the old
 #: rows honest -- they have no trajectory, and NULL is what that means.
-ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"))
+ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
+         ("agent_version", "TEXT"))
 
 
 @dataclass(frozen=True)
@@ -126,10 +128,22 @@ class ToolStep:
 
     name: str
     refusal: str | None = None
+    #: What settled this call: ``rule:<id>``, ``asked:<channel>``, or None
+    #: for the ordinary case where the RUNG allowed it and nobody was
+    #: consulted. Absent is most of them, and a field that said "nothing
+    #: in particular" ninety times a day would be a field nobody reads.
+    decided_by: str | None = None
 
     @property
     def ran(self) -> bool:
         return self.refusal is None
+
+    @property
+    def rule(self) -> str | None:
+        """The id of the standing rule that settled this, if one did."""
+        if self.decided_by and self.decided_by.startswith("rule:"):
+            return self.decided_by[len("rule:"):]
+        return None
 
 
 @dataclass
@@ -156,8 +170,17 @@ class Run:
     #: agent.
     tools: list[ToolStep] = field(default_factory=list)
     #: The doors this turn's questions were answered through. Empty when
-    #: nothing was escalated, which is almost every turn.
+    #: nothing was escalated, which is almost every turn. A SUMMARY of
+    #: ``tools``, written from it rather than beside it, so the two
+    #: cannot come to disagree.
     answered_from: list[str] = field(default_factory=list)
+    #: The version the package declared when this turn built it -- or None
+    #: for a package that declares none, and for every row written before
+    #: this column existed. A package edited on disk takes effect on a
+    #: live conversation's NEXT turn (which is desirable when you are
+    #: fixing a prompt and alarming when you are not), and this is the
+    #: only thing that makes it legible afterwards.
+    agent_version: str | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -179,6 +202,12 @@ class Run:
     def refused_tools(self) -> list[str]:
         """Distinct names of the calls the gate turned away, in order."""
         return _distinct(step.name for step in self.tools if not step.ran)
+
+    @property
+    def rules_used(self) -> list[str]:
+        """Ids of the standing rules that settled a call in this turn."""
+        return _distinct(step.rule for step in self.tools
+                         if step.rule is not None)
 
 
 class RunStore:
@@ -231,16 +260,18 @@ class RunStore:
                 "INSERT INTO runs (id, actor, agent, thread, started_at, "
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
-                "cost_usd, stop_reason, detail, tools, answered_from) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "cost_usd, stop_reason, detail, tools, answered_from, "
+                "agent_version) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
                  run.usage.input_tokens, run.usage.output_tokens,
                  run.usage.cache_read_tokens, run.usage.cache_write_tokens,
                  run.cost_usd, run.stop_reason, run.detail,
-                 _dump([[step.name, step.refusal] for step in run.tools]),
-                 _dump(list(run.answered_from))),
+                 _dump([[step.name, step.refusal, step.decided_by]
+                        for step in run.tools]),
+                 _dump(list(run.answered_from)), run.agent_version),
             )
             self._db.commit()
         return run.id
@@ -271,6 +302,36 @@ class RunStore:
         if len(rows) != 1:
             return None
         return _row_to_run(rows[0])
+
+    def rule_counts(self, since: datetime | None = None) -> dict[str, int]:
+        """How many CALLS each standing rule has settled, by rule id.
+
+        Counted over calls rather than over turns, because a rule that
+        saved one question in a turn and a rule that saved nine did not do
+        the same amount of work -- and "which standing yes is earning its
+        place" is the question this exists for.
+
+        Done in Python over the rows rather than in SQL, and that is a
+        deliberate limit rather than an oversight: the trajectory is JSON
+        in a TEXT column, so there is no index to use and a LIKE would
+        match a rule id inside any other field. An owner with a year of
+        runs and a slow answer wants a real schema for this, at which
+        point the column is the thing to change.
+        """
+        counts: dict[str, int] = {}
+        where, params = "", []
+        if since is not None:
+            where, params = "WHERE started_at >= ?", [_stamp(since)]
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT tools FROM runs {where}", params).fetchall()
+        for (raw,) in rows:
+            for step in _load(raw):
+                if isinstance(step, list) and len(step) > 2 and step[2]:
+                    kind, _, name = str(step[2]).partition(":")
+                    if kind == "rule" and name:
+                        counts[name] = counts.get(name, 0) + 1
+        return counts
 
     def recent(self, *, actor: str | None = None, agent: str | None = None,
                limit: int = 20) -> list[Run]:
@@ -314,8 +375,10 @@ def _row_to_run(row: tuple) -> Run:
         usage=Usage(input_tokens=row[9], output_tokens=row[10],
                     cache_read_tokens=row[11], cache_write_tokens=row[12]),
         cost_usd=row[13], stop_reason=row[14], detail=row[15],
-        tools=[ToolStep(name, refusal) for name, refusal in _load(row[16])],
+        tools=[ToolStep(*step[:3]) for step in _load(row[16])
+               if isinstance(step, list) and step],
         answered_from=list(_load(row[17])),
+        agent_version=row[18],
     )
 
 
@@ -347,6 +410,10 @@ def _load(raw: str | None) -> list:
     ``dvara runs`` to stop working. A trajectory nobody can parse is a
     trajectory that is not there, which is a state every caller already
     handles.
+
+    A row written before a step grew its third element unpacks as two,
+    which is why the reader slices rather than destructures: an OLD row is
+    a row with less to say, not a broken one.
     """
     if not raw:
         return []

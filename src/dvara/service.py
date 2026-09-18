@@ -62,6 +62,11 @@ which is what lets a failure become a case that asserts a trajectory
 rather than a case that asserts a turn finished (``cases.py``). It costs
 one branch in a loop that was already running, which is the whole reason
 it is done here and not by a second pass over anything.
+
+The gate writes what DECIDED each of those calls into a ``Decisions``
+(``gate.py``), keyed by the call's own id, and this loop joins the two on
+that id. Two halves of one turn, met in the middle: the loop knows what
+happened and the gate knows why, and neither of them knows both.
 """
 
 from __future__ import annotations
@@ -92,9 +97,9 @@ from yantra.errors import ConfigError
 
 from dvara import money
 from dvara.actors import Actor, ActorBook, Channel
-from dvara.asks import AskDesk, Escalations
+from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
-from dvara.gate import Policy
+from dvara.gate import Decisions, Policy
 from dvara.keys import session_key, workspace_parts
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
@@ -377,10 +382,11 @@ class Service:
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
 
-        # Written by the gate as answers land, read when the Run is
+        # Written by the gate as calls are decided, read when the Run is
         # assembled. It has to exist before the gate is built, which is
         # why it is here rather than beside the loop that fills the rest.
-        escalations = Escalations()
+        decisions = Decisions()
+        run.agent_version = spec.version
         ceiling = self._ceiling(spec=spec, who=who)
         if ceiling.amount is not None and ceiling.amount <= 0:
             raise Refused(
@@ -397,7 +403,7 @@ class Service:
                     desk=self.asks,
                     actor=who.id, agent=run.agent, thread=run.thread,
                     reach=who.reach(),
-                    escalations=escalations,
+                    decisions=decisions,
                 ),
                 cwd=self._workspace(key),
                 provider=provider,
@@ -426,7 +432,9 @@ class Service:
                     # an error result rather than an exception, so a
                     # refusal, a crash and a success all arrive here and
                     # ``refusal`` is what tells them apart.
-                    run.tools.append(ToolStep(event.call.name, event.refusal))
+                    run.tools.append(ToolStep(
+                        event.call.name, event.refusal,
+                        decisions.of(event.call.id)))
         finally:
             # Save even when the turn died. Yantra guarantees history is
             # resumable at this point -- outstanding tool calls have
@@ -443,7 +451,7 @@ class Service:
             run.usage = _delta(before_total, agent.total_usage)
             run.cost_usd = _cost(before_models, agent.usage_by_model,
                                  provider_name=provider_name)
-            run.answered_from = list(escalations.channels)
+            run.answered_from = list(decisions.channels)
             run.ended_at = datetime.now(UTC)
 
         run.stop_reason = end.reason if end else "error"

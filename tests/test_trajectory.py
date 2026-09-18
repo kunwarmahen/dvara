@@ -29,9 +29,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from dvara.asks import AskDesk, Escalations
+from dvara.asks import AskDesk
 from dvara.cases import case_from_run, unasserted
-from dvara.gate import Policy
+from dvara.gate import Decisions, Policy
 from dvara.keys import session_key
 from dvara.runs import Run, RunStore, ToolStep
 
@@ -248,13 +248,23 @@ def test_an_unanswered_question_names_no_door(make_service, agents_root):
     assert run.refused_tools == ["write_file"]
 
 
-def test_the_collector_ignores_silence_and_repeats():
-    seen = Escalations()
-    seen.answered("telegram")
-    seen.answered(None)
-    seen.answered("telegram")
-    seen.answered("http")
+def test_the_doors_are_a_summary_of_the_per_call_answers():
+    """One record, read two ways -- so the two cannot come to disagree."""
+    seen = Decisions()
+    seen.by_person("c1", "telegram")
+    seen.by_person("c2", None)          # answered, channel not named
+    seen.by_person("c3", "telegram")    # the same door twice
+    seen.by_person("c4", "http")
     assert seen.channels == ["telegram", "http"]
+    assert seen.of("c1") == "asked:telegram"
+    assert seen.of("c2") == "asked"
+
+
+def test_a_call_with_no_id_records_nothing():
+    """A request built by hand carries "", and "" names no call."""
+    seen = Decisions()
+    seen.by_person("", "telegram")
+    assert seen.by_call == {}
 
 
 # ---- the store -------------------------------------------------------------
@@ -473,12 +483,33 @@ def test_no_stored_shape_makes_a_row_unreadable(tmp_path, raw):
     store.close()
 
 
-def test_what_the_column_holds_is_names_and_codes(tmp_path):
-    """The stored shape, pinned: two-element pairs, not a dict of extras."""
+def test_what_the_column_holds_is_names_codes_and_who_decided(tmp_path):
+    """The stored shape, pinned: a flat triple, not a dict of extras."""
     store = RunStore(tmp_path / "runs.sqlite3")
     store.record(a_run(stop_reason="end_turn",
-                       tools=[ToolStep("bash", "timeout")]))
+                       tools=[ToolStep("bash", "timeout"),
+                              ToolStep("read_file", None, "rule:58fbf4ad")]))
     raw = sqlite3.connect(store.path).execute(
         "SELECT tools FROM runs").fetchone()[0]
-    assert json.loads(raw) == [["bash", "timeout"]]
+    assert json.loads(raw) == [["bash", "timeout", None],
+                               ["read_file", None, "rule:58fbf4ad"]]
+    store.close()
+
+
+def test_a_row_written_before_the_third_element_still_reads(tmp_path):
+    """An OLD row is a row with less to say, not a broken one."""
+    store = RunStore(tmp_path / "runs.sqlite3")
+    store.record(a_run(stop_reason="end_turn"))
+    store.close()
+    db = sqlite3.connect(tmp_path / "runs.sqlite3")
+    db.execute("UPDATE runs SET tools = ?",
+               (json.dumps([["read_file", None], ["bash", "policy"]]),))
+    db.commit()
+    db.close()
+
+    store = RunStore(tmp_path / "runs.sqlite3")
+    back = store.recent(limit=1)[0]
+    assert back.ran_tools == ["read_file"]
+    assert back.refused_tools == ["bash"]
+    assert [step.decided_by for step in back.tools] == [None, None]
     store.close()

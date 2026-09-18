@@ -182,37 +182,6 @@ class Answer:
 Notifier = Callable[[Ask], Awaitable[None]]
 
 
-@dataclass
-class Escalations:
-    """Where one turn's questions were answered, collected as they land.
-
-    Handed to ``Policy.gate`` and written by ``put``, because that is the
-    one function through which every question in this service passes. A
-    mutable collector rather than a return value: a ``PermissionFn``
-    answers True or False and has nowhere to put a second fact, and
-    threading one back out through the agent loop would be a Yantra
-    change made for a caller Yantra is not supposed to know about.
-
-    IT IS A PROPERTY OF THE TURN, NOT OF A CALL. Two escalated calls in
-    one iteration are gated CONCURRENTLY and their answers may arrive in
-    either order, while the loop reports them in submission order -- so
-    pairing an approval with the call it approved needs an id on
-    ``PermissionRequest`` that does not exist. Recording the set of doors
-    this turn's answers came through is the fact that can be got exactly,
-    and "you approved this from Telegram" is the question an owner
-    actually asks.
-    """
-
-    #: Channel kinds, first use first, no duplicates. Ordered rather than
-    #: a set so that a Run reads the same way twice.
-    channels: list[str] = field(default_factory=list)
-
-    def answered(self, via: str | None) -> None:
-        """Note one answer's door. Silence and repeats are both no-ops."""
-        if via and via not in self.channels:
-            self.channels.append(via)
-
-
 class AskDesk:
     """The questions in flight, and the one place an answer may land.
 

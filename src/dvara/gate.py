@@ -68,12 +68,79 @@ from yantra import (
     yolo,
 )
 
-from dvara.asks import AskDesk, Escalations
+from dvara.asks import AskDesk
 from dvara.rules import RuleBook
 
 #: Strictest first. One order, so that "tighten, never loosen" is a
 #: comparison instead of a paragraph.
 LADDER = ("read_only", "ask", "yolo")
+
+
+@dataclass
+class Decisions:
+    """What decided each call in one turn, keyed by the call's own id.
+
+    Written here and read by whoever assembles the Run, because a
+    ``PermissionFn`` answers True or False and has nowhere to put a
+    second fact. A mutable collector rather than a return value: threading
+    one back out through the agent loop would be a framework change made
+    for a caller the framework is not supposed to know about.
+
+    KEYED BY CALL ID, which is a seam that did not use to exist. Counting
+    would have worked -- Yantra gates a batch sequentially and reports the
+    results in submission order, so the Nth decision belongs to the Nth
+    call -- and that is exactly why it was not done: three ordering
+    properties of somebody else's loop, none of them promised to callers,
+    and a drift in any of them files one person's approval against a
+    different call without raising anything. Note 08 recorded the doors a
+    TURN's answers came through rather than take that coupling;
+    ``PermissionRequest.call_id`` is the seam that made the honest version
+    cheap.
+
+    ONLY THE INTERESTING ONES. A call the rung simply allowed -- a
+    read-only tool, or anything at all under yolo -- records nothing. It
+    is the ordinary case, it is most of them, and a column that says
+    "nothing in particular decided this" for ninety per cent of its rows
+    is a column nobody reads. Absent means the rung.
+    """
+
+    #: call id -> what decided it: ``rule:<id>`` or ``asked:<channel>``.
+    by_call: dict[str, str] = field(default_factory=dict)
+
+    def by_rule(self, call_id: str, rule) -> None:
+        """A standing answer settled this one, and which."""
+        if call_id:
+            self.by_call[call_id] = f"rule:{rule.id}"
+
+    def by_person(self, call_id: str, via: str | None) -> None:
+        """A person settled this one, on a channel if they named it.
+
+        Recorded for a refusal too -- "they said no, from their phone" is
+        a fact worth as much as the yes -- and for an answer with no
+        channel, which is a front end that did not say rather than nobody
+        having answered.
+        """
+        if call_id:
+            self.by_call[call_id] = f"asked:{via}" if via else "asked"
+
+    def of(self, call_id: str) -> str | None:
+        return self.by_call.get(call_id)
+
+    @property
+    def channels(self) -> list[str]:
+        """The doors this turn's answers came through, first use first.
+
+        A SUMMARY OF THE DETAIL, not a second record of it: derived from
+        the same dict the per-call answers live in, so the two cannot
+        disagree. It is what ``Run.answered_from`` has held since note 08,
+        now computed rather than collected separately.
+        """
+        seen = []
+        for how in self.by_call.values():
+            kind, _, where = how.partition(":")
+            if kind == "asked" and where and where not in seen:
+                seen.append(where)
+        return seen
 
 
 def stricter(*modes: str | None) -> str:
@@ -111,7 +178,7 @@ class Policy:
              desk: AskDesk | None = None, actor: str = "", agent: str = "",
              thread: str = "",
              reach: Sequence[tuple[str, str]] = (),
-             escalations: Escalations | None = None) -> PermissionFn:
+             decisions: Decisions | None = None) -> PermissionFn:
         """The ``PermissionFn`` one turn runs under.
 
         Yantra's own two functions where they fit, chosen between rather
@@ -128,11 +195,11 @@ class Policy:
         means only that no channel notifier will fire -- a poller still
         finds the question, because it is in the same one queue.
 
-        ``escalations`` is the other direction and is pure record: where
-        the answers came BACK from, collected for the Run this turn will
-        leave behind. None is ordinary -- an embedder that keeps no
-        history wants none of it -- and nothing here branches on whether
-        it is there.
+        ``decisions`` is the other direction and is pure record: what
+        settled each call, collected for the Run this turn will leave
+        behind. None is ordinary -- an embedder that keeps no history
+        wants none of it -- and nothing here branches on whether it is
+        there.
         """
         # A PACKAGE THAT NAMES NO MODE IS TREATED AS NAMING THE TIGHTEST,
         # which is the one place silence is read as a decision rather than
@@ -150,18 +217,18 @@ class Policy:
         if len(self.rules):
             return ruled(self.rules, mode=mode, desk=desk, actor=actor,
                          agent=agent, thread=thread, reach=reach,
-                         escalations=escalations)
+                         decisions=decisions)
         if mode == "yolo":
             return yolo
         if mode == "ask" and desk is not None:
             return escalating(desk, actor=actor, agent=agent, thread=thread,
-                              reach=reach, escalations=escalations)
+                              reach=reach, decisions=decisions)
         return allow_read_only
 
 
 def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
                reach: Sequence[tuple[str, str]] = (),
-               escalations: Escalations | None = None) -> PermissionFn:
+               decisions: Decisions | None = None) -> PermissionFn:
     """A gate that puts the question to a person and waits for the answer.
 
     Read-only tools are approved without asking, exactly as they are
@@ -178,7 +245,7 @@ def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
         if request.read_only:
             return True
         return put(desk, request, actor=actor, agent=agent, thread=thread,
-                   reach=reach, escalations=escalations)
+                   reach=reach, decisions=decisions)
 
     return gate
 
@@ -186,7 +253,7 @@ def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
 async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
               agent: str, thread: str,
               reach: Sequence[tuple[str, str]] = (),
-              escalations: Escalations | None = None) -> bool:
+              decisions: Decisions | None = None) -> bool:
     """Ask the person, and write their answer onto the request.
 
     The one place a question is put, so the two gates below cannot come to
@@ -199,10 +266,11 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     answer = await desk.put(actor=actor, agent=agent, thread=thread,
                             tool=request.tool_name, summary=request.summary,
                             reach=reach)
-    if escalations is not None:
-        # Recorded for a refusal too. "They said no, from their phone" is
-        # a fact an owner reading a Run wants as much as the yes.
-        escalations.answered(answer.via)
+    if decisions is not None:
+        # A person settled this call, and which call is now sayable: the
+        # request carries the id of the ToolCall it is deciding, so this
+        # lands against that call rather than against the turn.
+        decisions.by_person(request.call_id, answer.via)
     if not answer.approved:
         return refuse(request, answer.reason or "", code=answer.code)
     return True
@@ -211,7 +279,7 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
 def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
           agent: str, thread: str,
           reach: Sequence[tuple[str, str]] = (),
-          escalations: Escalations | None = None) -> PermissionFn:
+          decisions: Decisions | None = None) -> PermissionFn:
     """The gate when the owner has written standing answers down.
 
     One function rather than a wrapper around the three above, for note
@@ -243,9 +311,14 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
         verdict = rule.verdict if rule is not None else None
 
         if verdict == "deny":
+            _by_rule(decisions, request, rule)
             return refuse(request, _refused_by_rule(request, rule),
                           code=REFUSED_POLICY)
         if verdict == "allow" and (rung_allows or can_escalate):
+            # THE STANDING YES THAT SAVED A QUESTION, which is the one an
+            # owner most wants counted: it is invisible from the outside
+            # precisely because it worked (`dvara rules`).
+            _by_rule(decisions, request, rule)
             return True
         if verdict == "allow":
             # A standing yes to a question this rung never asks. Said
@@ -264,11 +337,17 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
             # owner is allowed to mean.
             return put(desk, request, actor=actor, agent=agent,
                        thread=thread, reach=reach,
-                       escalations=escalations)
+                       decisions=decisions)
         return refuse(request, _no_route(request, mode, desk),
                       code=REFUSED_UNATTENDED)
 
     return gate
+
+
+def _by_rule(decisions: Decisions | None, request: PermissionRequest,
+             rule) -> None:
+    if decisions is not None:
+        decisions.by_rule(request.call_id, rule)
 
 
 def _refused_by_rule(request: PermissionRequest, rule) -> str:

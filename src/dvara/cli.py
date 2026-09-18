@@ -40,6 +40,7 @@ import asyncio
 import contextlib
 import os
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from yantra import render_case
@@ -139,6 +140,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="append it to the package's evals/cases.toml "
                            "instead of printing it. You are editing a folder "
                            "you commit, so read it first")
+
+    rules = subs.add_parser(
+        "rules", help="your standing answers, and what each one has done")
+    rules.add_argument("--days", type=int, default=30, metavar="N",
+                       help="count over the last N days (default 30); 0 "
+                            "counts everything ever recorded")
 
     telegram = subs.add_parser(
         "telegram", help="answer messages as a Telegram bot")
@@ -240,6 +247,8 @@ def main(argv: list[str] | None = None) -> int:
             return _runs(service, args)
         if args.command == "case":
             return _case(service, args)
+        if args.command == "rules":
+            return _rules(service, args)
         if args.command == "telegram":
             return _telegram(service, args)
     finally:
@@ -411,18 +420,33 @@ def _runs(service: Service, args) -> int:
     if not rows:
         print("no runs recorded yet")
         return 0
+    # Newest first, so the run AFTER each one has already been printed:
+    # a version that differs there is a package edited between the two,
+    # under a conversation that was already going. The note therefore
+    # hangs on the EARLIER of the pair and says "after this turn", which
+    # is the direction a reader scanning down the page is travelling.
+    previous = {}
     for run in rows:
         cost = f"${run.cost_usd:.4f}" if run.cost_usd is not None else "unpriced"
         stamp = run.started_at.strftime("%Y-%m-%d %H:%M")
         print(f"{stamp}  {run.actor}/{run.agent}  {run.stop_reason:<14} "
               f"{cost:>9}  {run.message[:48]!r}")
+        key = (run.actor, run.agent, run.thread)
+        was = previous.get(key)
+        if was is not None and was != run.agent_version:
+            # A PACKAGE EDITED ON DISK TAKES EFFECT ON THE NEXT TURN --
+            # desirable when you are fixing a prompt, alarming when a
+            # conversation changes personality mid-sentence, and invisible
+            # until somebody writes it down (notes/10).
+            print(f"{'':<18}{run.agent} changed after this turn: "
+                  f"{run.agent_version or '?'} -> {was or '?'}")
+        previous[key] = run.agent_version
         if run.tools:
             # The shape of the turn, on one line, with the refused calls
             # marked. This is the line an owner scans for "what has it
             # been TRYING to do", which the verdict above never said.
             path = " -> ".join(
-                step.name if step.ran else f"{step.name}(refused)"
-                for step in run.tools)
+                _step(step) for step in run.tools)
             where = (f"  [answered from {', '.join(run.answered_from)}]"
                      if run.answered_from else "")
             print(f"{'':<18}{path}{where}")
@@ -432,6 +456,62 @@ def _runs(service: Service, args) -> int:
             # it made the ledger a list of shrugs.
             print(f"{'':<18}{run.detail}")
     return 0
+
+
+def _rules(service: Service, args) -> int:
+    """Each standing answer, and how many calls it has settled.
+
+    THE ONES THAT HAVE NEVER FIRED ARE THE POINT. A rule that is doing
+    work shows up as a question you stopped being asked, which is a thing
+    you notice; a rule that has never matched anything shows up as
+    nothing at all, and lives in the file forever looking like policy.
+
+    A rule is counted by an id hashed from what it SAYS, so editing one
+    starts its count over. That is correct -- you changed the standing
+    answer, and the old one's history is not this one's -- and it is said
+    out loud below, because a zero beside a rule you have had for a year
+    is otherwise alarming.
+    """
+    book = service.policy.rules
+    if not len(book):
+        where = book.source or "no policy file"
+        print(f"no standing rules ({where}). Every call that could change "
+              f"something is decided by the rung alone.")
+        return 0
+    since = None
+    if args.days > 0:
+        since = datetime.now(UTC) - timedelta(days=args.days)
+    counts = service.runs.rule_counts(since)
+
+    window = f"the last {args.days} days" if since else "all recorded runs"
+    print(f"{book.source}  ·  {len(book)} rule(s)  ·  calls settled over "
+          f"{window}")
+    for rule in book:
+        target = ", ".join(f"{name}={'|'.join(alts)}"
+                           for name, alts in sorted(rule.args.items()))
+        wrote = f"{rule.tool} {target}".strip()
+        count = counts.get(rule.id, 0)
+        settled = f"{count:>5}" if count else "    ·"
+        print(f"  {settled}  {rule.verdict:<6} {wrote}")
+    if any(counts.get(rule.id, 0) == 0 for rule in book):
+        print()
+        print("  ·  = never matched a call in this window. A rule you "
+              "edited starts over: the count follows what a rule SAYS, "
+              "not where it sits in the file.")
+    return 0
+
+
+def _step(step) -> str:
+    """One tool call, and what settled it, in as few characters as it takes.
+
+    The decision is shown only when there WAS one. Most calls are allowed
+    by the rung, and writing "(rung)" beside nine of every ten would bury
+    the one that says a person was woken up at two in the morning.
+    """
+    name = step.name if step.ran else f"{step.name}(refused)"
+    if step.decided_by is None:
+        return name
+    return f"{name}[{step.decided_by}]"
 
 
 def _case(service: Service, args) -> int:
