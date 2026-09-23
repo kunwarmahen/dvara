@@ -85,6 +85,40 @@ is what ``GET /asks`` returns and an unfiltered listing there would hand
 every adapter every person's chat id -- a poller already knows where it
 is polling from, so the address is delivery's business and nobody
 else's.
+
+## A question that is over is taken down everywhere it went
+
+A question delivered to three channels is answered on one of them, and
+the other two used to go on showing it: live buttons on a phone for a
+decision already made over HTTP, or already timed out, or put by a turn
+that no longer exists. Pressing one said "no longer waiting", which
+was true and arrived after the person had already believed the question.
+
+The desk could not fix that alone, and the reason is the whole design. A
+delivery that is still RUNNING -- the terminal prompt, blocked on a
+line -- is cancelled when the question ends, and always was. A delivery
+that FINISHED -- a message sent, a notification pushed -- left something
+behind that only the channel knows how to find again: a message id, in
+the channel's own terms, which the desk has no business holding.
+
+So A NOTIFIER MAY HAND BACK ITS OWN UNDO. Whatever a notifier returns,
+if it is callable, is called once when the question is over, with the
+``Answer`` it ended on -- or with None, when the turn that asked went
+away before anybody decided. The channel keeps its own message id in a
+closure and decides its own wording; the desk keeps no table of either.
+A notifier that returns nothing is exactly the notifier it was before.
+
+THE ANSWERING CHANNEL IS TAKEN DOWN BY THE SAME PATH AS THE OTHERS. One
+place writes "approved" under a question, not two -- so the chat a press
+came from and the chat it did not look the same afterwards, and there is
+no second edit racing the first.
+
+TAKING IT DOWN NEVER HOLDS UP THE TURN. The undo runs as a task beside
+the turn rather than in front of it: an edit is a network call, a
+network call can take forty seconds to fail, and the model has been
+waiting for this answer long enough. One that raises is dropped -- a
+question left showing is a cosmetic loss, and the press that follows it
+still says "no longer waiting".
 """
 
 from __future__ import annotations
@@ -174,12 +208,18 @@ class Answer:
     via: str | None = None
 
 
+#: How a delivered question is taken down again, once it is over: given
+#: the ``Answer`` it ended on, or None when the turn that asked went away
+#: first. Returned by a notifier that left something behind.
+Withdraw = Callable[[Answer | None], Awaitable[None]]
+
 #: How a question reaches a person. Given an ``Ask``, put it where they
 #: are; the answer comes back through ``AskDesk.answer`` from wherever
 #: that is. Delivery and reply are deliberately separate paths -- see the
 #: module docstring of ``service.py`` on why answering by SENDING A
-#: MESSAGE cannot work.
-Notifier = Callable[[Ask], Awaitable[None]]
+#: MESSAGE cannot work. May return a ``Withdraw``; see the module
+#: docstring.
+Notifier = Callable[[Ask], Awaitable[Withdraw | None]]
 
 
 class AskDesk:
@@ -211,6 +251,9 @@ class AskDesk:
             str, tuple[Ask, asyncio.Future[tuple[bool, str | None]],
                        asyncio.AbstractEventLoop]
         ] = {}
+        #: Take-downs in flight. Held so the garbage collector cannot take
+        #: one mid-edit, and emptied by their own callbacks.
+        self._withdrawing: set[asyncio.Task] = set()
 
     def route(self, kind: str, notify: Notifier) -> None:
         """Deliver questions for ``kind`` channels through ``notify``.
@@ -260,38 +303,10 @@ class AskDesk:
         self._waiting[ask.id] = (ask, future, loop)
         deliveries = self._deliver(ask, reach)
         deadline = loop.time() + self.timeout
+        answer: Answer | None = None
         try:
-            while True:
-                left = deadline - loop.time()
-                if left <= 0:
-                    return Answer(False, _timed_out(tool, self.timeout),
-                                  REFUSED_TIMEOUT)
-                watching = {future} | {d for d in deliveries if not d.done()}
-                done, _ = await asyncio.wait(
-                    watching, timeout=left,
-                    return_when=asyncio.FIRST_COMPLETED)
-                if not done:
-                    return Answer(False, _timed_out(tool, self.timeout),
-                                  REFUSED_TIMEOUT)
-                # EVERY route failing is the fact that matters, not any
-                # one of them. One bridge down while another is up is a
-                # question that reached the person; refusing on the first
-                # exception would make the least reliable channel the one
-                # that decides. Only when nothing got through is there
-                # nobody at the other end.
-                if deliveries and all(d.done() for d in deliveries):
-                    failures = [d.exception() for d in deliveries]
-                    if all(exc is not None for exc in failures):
-                        return Answer(False, _undeliverable(tool, failures[0]),
-                                      REFUSED_UNATTENDED)
-                if future.done():
-                    approved, via = future.result()
-                    if approved:
-                        return Answer(True, via=via)
-                    return Answer(False, _refused(tool, actor), REFUSED_USER,
-                                  via=via)
-                # Delivered, and nobody has answered yet. Round again on
-                # what is left of the deadline.
+            answer = await self._wait(ask, future, deliveries, deadline)
+            return answer
         finally:
             # Whatever happened -- answered, timed out, the caller hung up
             # -- the question is over. A desk that kept them would hand a
@@ -302,6 +317,76 @@ class AskDesk:
                     delivery.cancel()
                     with suppress(asyncio.CancelledError, Exception):
                         await delivery
+            self._withdraw(deliveries, answer)
+
+    async def _wait(self, ask: Ask,
+                    future: asyncio.Future[tuple[bool, str | None]],
+                    deliveries: list[asyncio.Future],
+                    deadline: float) -> Answer:
+        """The deadline, the deliveries and the answer, whichever speaks first."""
+        loop = asyncio.get_running_loop()
+        tool, actor = ask.tool, ask.actor
+        while True:
+            left = deadline - loop.time()
+            if left <= 0:
+                return Answer(False, _timed_out(tool, self.timeout),
+                              REFUSED_TIMEOUT)
+            watching = {future} | {d for d in deliveries if not d.done()}
+            done, _ = await asyncio.wait(
+                watching, timeout=left,
+                return_when=asyncio.FIRST_COMPLETED)
+            if not done:
+                return Answer(False, _timed_out(tool, self.timeout),
+                              REFUSED_TIMEOUT)
+            # EVERY route failing is the fact that matters, not any
+            # one of them. One bridge down while another is up is a
+            # question that reached the person; refusing on the first
+            # exception would make the least reliable channel the one
+            # that decides. Only when nothing got through is there
+            # nobody at the other end.
+            if deliveries and all(d.done() for d in deliveries):
+                failures = [d.exception() for d in deliveries]
+                if all(exc is not None for exc in failures):
+                    return Answer(False, _undeliverable(tool, failures[0]),
+                                  REFUSED_UNATTENDED)
+            if future.done():
+                approved, via = future.result()
+                if approved:
+                    return Answer(True, via=via)
+                return Answer(False, _refused(tool, actor), REFUSED_USER,
+                              via=via)
+            # Delivered, and nobody has answered yet. Round again on
+            # what is left of the deadline.
+
+    def _withdraw(self, deliveries: list[asyncio.Future],
+                  answer: Answer | None) -> None:
+        """Hand every delivery that left something behind its ending.
+
+        Only a delivery that FINISHED can have left anything: one that was
+        cancelled above never got as far as returning an undo, and one
+        that raised put nothing in front of anybody.
+        """
+        for delivery in deliveries:
+            if delivery.cancelled() or delivery.exception() is not None:
+                continue
+            undo = delivery.result()
+            if callable(undo):
+                task = asyncio.ensure_future(_quietly(undo(answer)))
+                self._withdrawing.add(task)
+                task.add_done_callback(self._withdrawing.discard)
+
+    async def withdrawn(self) -> None:
+        """Wait for the questions that are over to finish coming down.
+
+        For a host that is about to close the connection they go out on,
+        and for a test that wants to look at the result.
+        """
+        # Only the UNFINISHED ones. A task that has finished sits in the
+        # set until its callback runs on the next tick, and a gather over
+        # finished tasks returns without yielding -- so waiting on the set
+        # itself spins forever and the callback never gets its tick.
+        while running := [t for t in self._withdrawing if not t.done()]:
+            await asyncio.gather(*running, return_exceptions=True)
 
     def _deliver(self, ask: Ask, reach: Sequence[tuple[str, str]]
                  ) -> list[asyncio.Future]:
@@ -375,6 +460,12 @@ class AskDesk:
             # loop that is not ours to run.
             loop.call_soon_threadsafe(_resolve, future, bool(approve), via)
         return True
+
+
+async def _quietly(undo: Awaitable[None]) -> None:
+    """A take-down that fails is a question left showing, not a crash."""
+    with suppress(Exception):
+        await undo
 
 
 def _running_loop() -> asyncio.AbstractEventLoop | None:

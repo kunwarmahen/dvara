@@ -32,7 +32,7 @@ are enforced rather than promised:
 """
 
 from dvara.actors import Actor, ActorBook, Channel
-from dvara.asks import Answer, Ask, AskDesk, NotYours
+from dvara.asks import Answer, Ask, AskDesk, NotYours, Withdraw
 from dvara.errors import ConfigProblem, DvaraError, Refused
 from dvara.gate import Policy
 from dvara.keys import parse_key, session_key
@@ -61,6 +61,7 @@ __all__ = [
     "RunStore",
     "Service",
     "TelegramBot",
+    "Withdraw",
     "compose",
     "day_start",
     "next_reset",

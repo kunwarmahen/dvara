@@ -289,7 +289,8 @@ channels name people with strings that can (`matrix:@me:example.org`).
 * **A preferred channel, or an order.** Every channel gets the question.
   Ranking them means deciding how long to wait before trying the next
   one, which is a second deadline living inside the first.
-* **Withdrawing a delivered question.** Answer it on your phone and the
+* ~~**Withdrawing a delivered question.**~~ — shipped in [note 12](12-taken-down-everywhere-it-went.md), with the
+  per-delivery handle guessed at here. Was: answer it on your phone and the
   Telegram message is still sitting there. Retracting across N channels
   needs a per-delivery handle the notifier hands back, and every adapter
   then has to implement editing. ([Note

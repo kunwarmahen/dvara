@@ -19,6 +19,7 @@ it meant to send.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 
@@ -476,24 +477,137 @@ def test_a_press_lands_on_the_desk_and_clears_the_buttons(make_bot,
     service = make_service([says("ok")], actors=actors, asks=desk)
     fake = FakeTelegram()
     bot = make_bot(fake, service=service)
+    desk.route("telegram", bot._deliver_ask)
 
     async def go():
-        put = asyncio.ensure_future(desk.put(
-            actor="mahen", agent="greeter", thread="t", tool="bash",
-            summary="ls", reach=(("telegram", str(KNOWN)),)))
-        await asyncio.sleep(0)
-        ask_id = desk.pending("mahen")[0].id
-        await bot._handle(press(ask_id, approve=True))
-        return await put
+        answer = await _ask_and(desk, fake, lambda ask_id: bot._handle(
+            press(ask_id, approve=True)))
+        await desk.withdrawn()
+        return answer
 
     answer = asyncio.run(go())
     assert answer.approved is True
     assert fake.of("answerCallbackQuery")[0]["text"] == "approved"
     # The chat is where this decision is written down, and a button that
-    # stays pressable invites a second press that can do nothing.
-    edited = fake.of("editMessageText")[0]
+    # stays pressable invites a second press that can do nothing. The
+    # edit lands on the message the question WENT OUT as, and only once.
+    [edited] = fake.of("editMessageText")
+    assert edited["message_id"] == _question_id(fake)
     assert edited["text"].endswith("— approved")
     assert "reply_markup" not in edited
+
+
+async def _delivered(fake) -> None:
+    """Until the question has actually gone out -- a real round trip."""
+    while not any("reply_markup" in p for p in fake.sent()):
+        await asyncio.sleep(0)
+    await asyncio.sleep(0)                # and the notifier has returned
+
+
+async def _ask_and(desk, fake, act):
+    """Put a question, wait until it is delivered, do ``act``, return the answer."""
+    put = asyncio.ensure_future(desk.put(
+        actor="mahen", agent="greeter", thread="t", tool="bash",
+        summary="ls", reach=(("telegram", str(KNOWN)),)))
+    await _delivered(fake)
+    outcome = act(desk.pending("mahen")[0].id)
+    if asyncio.iscoroutine(outcome):
+        await outcome
+    return await put
+
+
+def _question_id(fake) -> int:
+    """The message_id the fake handed back for the question's sendMessage."""
+    index = next(i for i, (m, p) in enumerate(fake.calls)
+                 if m == "sendMessage" and "reply_markup" in p)
+    return index + 1
+
+
+def test_a_question_answered_at_the_keyboard_loses_its_buttons_here(
+        make_bot, make_service, actors):
+    # The phone must not go on offering a decision that was made at the
+    # laptop -- and it must say it was made there, or it looks like
+    # somebody else answered.
+    desk = AskDesk(timeout=5)
+    service = make_service([says("ok")], actors=actors, asks=desk)
+    fake = FakeTelegram()
+    bot = make_bot(fake, service=service)
+    desk.route("telegram", bot._deliver_ask)
+
+    async def go():
+        answer = await _ask_and(desk, fake, lambda ask_id: desk.answer(
+            ask_id, actor="mahen", approve=True, via="terminal"))
+        await desk.withdrawn()
+        return answer
+
+    assert asyncio.run(go()).approved
+    [edited] = fake.of("editMessageText")
+    assert edited["message_id"] == _question_id(fake)
+    assert edited["text"].endswith("— approved at the terminal")
+    assert "reply_markup" not in edited
+
+
+def test_a_question_nobody_answered_says_so_rather_than_waiting_forever(
+        make_bot, make_service, actors):
+    desk = AskDesk(timeout=0.2)
+    service = make_service([says("ok")], actors=actors, asks=desk)
+    fake = FakeTelegram()
+    bot = make_bot(fake, service=service)
+    desk.route("telegram", bot._deliver_ask)
+
+    async def go():
+        answer = await desk.put(actor="mahen", agent="greeter", thread="t",
+                                tool="bash", summary="ls",
+                                reach=(("telegram", str(KNOWN)),))
+        await desk.withdrawn()
+        return answer
+
+    assert asyncio.run(go()).approved is False
+    [edited] = fake.of("editMessageText")
+    assert edited["text"].endswith("nobody answered in time, so it was refused")
+
+
+def test_a_question_whose_turn_went_away_is_not_called_refused(
+        make_bot, make_service, actors):
+    desk = AskDesk(timeout=5)
+    service = make_service([says("ok")], actors=actors, asks=desk)
+    fake = FakeTelegram()
+    bot = make_bot(fake, service=service)
+    desk.route("telegram", bot._deliver_ask)
+
+    async def go():
+        put = asyncio.ensure_future(desk.put(
+            actor="mahen", agent="greeter", thread="t", tool="bash",
+            summary="ls", reach=(("telegram", str(KNOWN)),)))
+        await _delivered(fake)
+        put.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await put
+        await desk.withdrawn()
+
+    asyncio.run(go())
+    [edited] = fake.of("editMessageText")
+    assert "no longer needed" in edited["text"]
+    assert "refused" not in edited["text"].rsplit("—", 1)[-1]
+
+
+def test_an_edit_telegram_rejects_does_not_touch_the_answer(
+        make_bot, make_service, actors):
+    desk = AskDesk(timeout=5)
+    service = make_service([says("ok")], actors=actors, asks=desk)
+    fake = FakeTelegram()
+    fake.status["editMessageText"] = [httpx.Response(
+        400, json={"ok": False, "description": "message can't be edited"})]
+    bot = make_bot(fake, service=service)
+    desk.route("telegram", bot._deliver_ask)
+
+    async def go():
+        answer = await _ask_and(desk, fake, lambda ask_id: bot._handle(
+            press(ask_id, approve=True)))
+        await desk.withdrawn()
+        return answer
+
+    assert asyncio.run(go()).approved
 
 
 def test_a_refusal_is_carried_back_as_a_refusal(make_bot, make_service,

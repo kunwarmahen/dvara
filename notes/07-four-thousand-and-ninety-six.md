@@ -371,7 +371,8 @@ reading.
 
 ## What is not here yet
 
-* **A question answered on one channel still sits on the others.** The
+* ~~**A question answered on one channel still sits on the others.**~~ —
+  shipped in [note 12](12-taken-down-everywhere-it-went.md). The
   button press edits the message it arrived on; the same question
   delivered to a second channel is untouched, which is [note
   05](05-one-person-two-channels.md)'s "withdrawing a delivered question"

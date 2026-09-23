@@ -110,6 +110,11 @@ channel adapter usually goes wrong.
   that message behind the very turn it was meant to release
   (``service.py``), so the question carries buttons and the press lands
   on ``AskDesk.answer`` down a path the turn is not holding.
+* **A question that is over loses its buttons, wherever it was
+  answered.** Delivering one hands the desk an undo that edits the
+  message it sent (``asks.py``); the desk calls it however the question
+  ended -- a press here, a "y" at the keyboard, a POST, the deadline, or
+  a turn that went away -- and the words under the question say which.
 """
 
 from __future__ import annotations
@@ -119,9 +124,10 @@ import contextlib
 import sys
 
 import httpx
+from yantra import REFUSED_TIMEOUT
 
 from dvara.actors import Channel
-from dvara.asks import Ask, NotYours
+from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
 from dvara.locks import KeyedLocks
 from dvara.service import Service
@@ -587,7 +593,7 @@ class TelegramBot:
 
     # ---- the question, and the button --------------------------------------
 
-    async def _deliver_ask(self, ask: Ask) -> None:
+    async def _deliver_ask(self, ask: Ask) -> Withdraw:
         """Put one "may I?" in front of the person it was addressed to.
 
         Sent to ``ask.to`` -- their own chat with this bot -- rather than
@@ -600,6 +606,10 @@ class TelegramBot:
         Raising here is meaningful and is left to propagate: the desk
         reads a delivery that failed as a channel that is not listening,
         and refuses the call rather than spending the deadline on it.
+
+        What comes back is how to take it down again. The message id is
+        Telegram's, so it stays here in the closure; the desk only knows
+        that there is something to call.
         """
         data = [f"y:{ask.id}", f"n:{ask.id}"]
         if any(len(d.encode("utf-8")) > CALLBACK_LIMIT for d in data):
@@ -612,13 +622,22 @@ class TelegramBot:
                 "this question carries no Telegram address; it was handed "
                 "here by a catch-all notifier rather than by a route")
         head = f"{ask.agent} wants to run {ask.tool}:\n\n"
-        body = elide(ask.summary, MESSAGE_LIMIT - utf16_len(head))
-        await self._send(
-            int(ask.to), head + body,
+        question = head + elide(ask.summary, MESSAGE_LIMIT - utf16_len(head))
+        chat = int(ask.to)
+        sent = await self._send(
+            chat, question,
             reply_markup={"inline_keyboard": [[
                 {"text": "approve", "callback_data": data[0]},
                 {"text": "refuse", "callback_data": data[1]},
             ]]})
+        message_id = (sent or {}).get("message_id")
+
+        async def withdraw(answer: Answer | None) -> None:
+            if message_id is None:
+                return
+            await self._settle(chat, message_id, question, answer)
+
+        return withdraw
 
     async def _pressed(self, query: dict) -> None:
         """A button, turned into an answer at the desk.
@@ -660,27 +679,26 @@ class TelegramBot:
         if not landed:
             await self._toast(query_id, "that question is no longer waiting")
             return
+        # The message is NOT edited here. The desk takes the question
+        # down on every channel it went to, this one included, through
+        # the undo ``_deliver_ask`` handed it -- one writer, so a press
+        # here and an answer from anywhere else go through the same code.
         await self._toast(query_id, "approved" if approve else "refused")
-        await self._settle(query.get("message") or {}, approve)
 
-    async def _settle(self, message: dict, approve: bool) -> None:
-        """Replace the buttons with what was decided.
+    async def _settle(self, chat: int, message_id: int, question: str,
+                      answer: Answer | None) -> None:
+        """Replace the buttons with how the question ended.
 
         Two jobs in one edit. A pair of buttons that stays pressable after
         the question is gone invites a second press that can do nothing,
         and the chat is the only place this decision is written down where
-        the person who made it will ever look again.
+        the person who made it will ever look again. An edit without
+        ``reply_markup`` is what removes them.
         """
-        chat = message.get("chat", {}).get("id")
-        message_id = message.get("message_id")
-        if chat is None or message_id is None:
-            return
-        decided = "approved" if approve else "refused"
-        body = message.get("text", "")
         with contextlib.suppress(TelegramError, httpx.HTTPError):
             await self._api("editMessageText", chat_id=chat,
                             message_id=message_id,
-                            text=f"{body}\n\n— {decided}")
+                            text=f"{question}\n\n— {ending(answer)}")
 
     async def _toast(self, query_id: str, text: str) -> None:
         """Stop the spinner on the button, and say why if there is a why.
@@ -754,6 +772,25 @@ class TelegramBot:
                     f"{body.get('description') or response.text[:200]}")
             return body.get("result")
         raise TelegramError(f"{method}: gave up after a rate limit")
+
+
+def ending(answer: Answer | None) -> str:
+    """The words left under a question once it is over.
+
+    WHERE IT WAS DECIDED IS SAID ONLY WHEN IT WAS NOT HERE. "approved" on
+    the message that was pressed; "approved at the terminal" on the one
+    that was not, which is the difference between a phone that agrees
+    with you and a phone that looks like somebody else answered.
+    """
+    if answer is None:
+        return "no longer needed; the conversation that asked has ended"
+    if answer.code == REFUSED_TIMEOUT:
+        return "nobody answered in time, so it was refused"
+    decided = "approved" if answer.approved else "refused"
+    if answer.via in (None, "telegram"):
+        return decided
+    place = {"terminal": "at the terminal", "http": "over HTTP"}
+    return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
 
 
 def _body(response: httpx.Response) -> dict:

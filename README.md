@@ -43,7 +43,10 @@ standing answers, pins an approval to the call it released, and settles
 what an edited package does to a live conversation;
 [11 — only while somebody is waiting](notes/11-only-while-somebody-is-waiting.md)
 lets a conversation's lock go when nobody needs it any more, and not a
-moment before.
+moment before;
+[12 — taken down everywhere it went](notes/12-taken-down-everywhere-it-went.md)
+clears a question off every channel it was sent to, once it is answered,
+refused, timed out or no longer needed.
 
 ## Status
 
@@ -55,8 +58,9 @@ Telegram bot that answers messages and puts a tool call in front of you
 with two buttons on it, a run record that remembers which tools a turn
 called and what decided each one, and a roster you can edit without
 restarting anything. A process left running for months holds a lock only
-for each conversation in flight, not for every one it has ever served —
-covered by 452 tests. The API is not stable.
+for each conversation in flight, not for every one it has ever served, and
+a question answered in one place stops asking in all the others —
+covered by 462 tests. The API is not stable.
 
 ## The shape of it
 
@@ -491,6 +495,19 @@ desk = AskDesk(timeout=120)
 desk.route("telegram", send_to_telegram)   # ask.to is their address
 ```
 
+A notifier that leaves something behind — a message with buttons on it —
+may return how to take it down. The desk calls that once the question is
+over, on every channel it went to, with the `Answer` it ended on (or
+`None` if the turn that asked went away first):
+
+```python
+async def send_to_telegram(ask):
+    sent = await post_question(ask.to, ask.summary)
+    async def withdraw(answer):
+        await edit_message(ask.to, sent.id, "done" if answer else "no longer needed")
+    return withdraw
+```
+
 With a desk, `mode = "ask"` means ask: the turn suspends — it does not
 block, so every other conversation keeps running — until a person answers
 or the deadline passes. With no desk it means read-only tools only, which
@@ -510,7 +527,10 @@ through `POST /asks/{id}` — or, in a chat, as a button press, which is a
 `dvara telegram --ask` is the whole of this wired up: the question is
 delivered to the person's own chat with two buttons on it, the press
 lands on `AskDesk.answer`, and the message is edited to say what was
-decided so it cannot be pressed twice.
+decided so it cannot be pressed twice. That edit happens however the
+question ended — pressed here, answered at the terminal or over HTTP,
+timed out, or abandoned by a turn that went away — and says which
+([notes/12](notes/12-taken-down-everywhere-it-went.md)).
 
 ## Embedding it
 
@@ -540,11 +560,11 @@ print(reply.text, reply.cost_usd)
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
-| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), and which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)) |
+| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), and taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | five endpoints and a bearer token (`[http]` extra) |
-| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)) |
+| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `cli.py` | `agents`, `say`, `runs`, `rules`, `case`, `telegram`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

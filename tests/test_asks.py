@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from yantra import REFUSED_TIMEOUT
 
 from dvara.asks import AskDesk, NotYours
 
@@ -457,3 +458,141 @@ def test_an_address_is_for_the_notifier_not_for_everyone_listing():
         await asking
 
     run(go())
+
+
+# ---- a question that is over is taken down everywhere it went -------------
+#
+# The fifth way a question goes wrong, and the only one that is not about
+# the turn at all: it is still showing somewhere after it stopped meaning
+# anything. A person who believes a stale question presses a button that
+# can do nothing.
+
+
+def _leaves_behind(endings: list):
+    """A notifier that delivers at once and records how it was taken down."""
+    async def notify(ask):
+        async def withdraw(answer):
+            endings.append(answer)
+        return withdraw
+    return notify
+
+
+def test_every_channel_it_went_to_is_told_how_it_ended():
+    desk = AskDesk(timeout=5)
+    phone, laptop = [], []
+    desk.route("telegram", _leaves_behind(phone))
+    desk.route("matrix", _leaves_behind(laptop))
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=(
+            ("telegram", "1"), ("matrix", "@me"))))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        await asyncio.sleep(0)            # both deliveries have finished
+        ask = desk.pending()[0]
+        desk.answer(ask.id, actor="owner", approve=True, via="terminal")
+        answer = await asking
+        await desk.withdrawn()
+        return answer
+
+    answer = run(go())
+    assert phone == [answer] and laptop == [answer]
+    assert answer.via == "terminal"
+
+
+def test_a_question_nobody_answered_is_taken_down_as_a_timeout():
+    desk = AskDesk(timeout=0.05)
+    endings: list = []
+    desk.route("telegram", _leaves_behind(endings))
+
+    async def go():
+        answer = await put(desk, reach=(("telegram", "1"),))
+        await desk.withdrawn()
+        return answer
+
+    answer = run(go())
+    assert endings == [answer]
+    assert answer.code == REFUSED_TIMEOUT
+
+
+def test_a_turn_that_went_away_takes_its_question_down_with_none():
+    # Not an Answer: nobody decided anything, and a channel that wrote
+    # "refused" under it would be recording a decision that was not made.
+    desk = AskDesk(timeout=5)
+    endings: list = []
+    desk.route("telegram", _leaves_behind(endings))
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=(("telegram", "1"),)))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        asking.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asking
+        await desk.withdrawn()
+
+    run(go())
+    assert endings == [None]
+
+
+def test_a_take_down_that_breaks_does_not_touch_the_answer():
+    desk = AskDesk(timeout=5)
+
+    async def notify(ask):
+        async def withdraw(answer):
+            raise RuntimeError("the edit failed")
+        return withdraw
+
+    desk.route("telegram", notify)
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=(("telegram", "1"),)))
+        await answered(desk, approve=True)
+        answer = await asking
+        await desk.withdrawn()
+        return answer
+
+    assert run(go()).approved
+
+
+def test_a_take_down_never_holds_up_the_turn():
+    desk = AskDesk(timeout=5)
+
+    async def slow_notify(ask):
+        async def withdraw(answer):
+            await asyncio.sleep(30)
+        return withdraw
+
+    desk.route("telegram", slow_notify)
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=(("telegram", "1"),)))
+        await answered(desk, approve=True)
+        # Came back while the thirty-second edit is still going.
+        answer = await asyncio.wait_for(asking, timeout=1)
+        for task in list(desk._withdrawing):
+            task.cancel()
+        return answer
+
+    assert run(go()).approved
+
+
+def test_a_notifier_that_returns_nothing_is_taken_down_by_nobody():
+    desk = AskDesk(timeout=5)
+    seen = []
+
+    async def notify(ask):
+        seen.append(ask.id)
+
+    desk.route("telegram", notify)
+
+    async def go():
+        asking = asyncio.create_task(put(desk, reach=(("telegram", "1"),)))
+        await answered(desk, approve=False)
+        answer = await asking
+        await desk.withdrawn()
+        return answer
+
+    assert run(go()).approved is False
+    assert len(seen) == 1
