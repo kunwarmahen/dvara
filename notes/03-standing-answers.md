@@ -286,7 +286,7 @@ property this note opened with.
   a matcher that resolved paths would be resolving them against a
   workspace that only exists once the turn has started — but it means an
   allow rule is matching the model's spelling rather than the file.
-* **Locks are still never evicted**, unchanged from notes 01 and 02.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01 and 02.
 * ~~**One actor per channel**~~ -- settled in
   [note 05](05-one-person-two-channels.md), and it was indeed more
   expensive than it looked: two actor ids is also two daily allowances.

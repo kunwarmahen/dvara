@@ -311,6 +311,6 @@ column 13)
   unchanged from [note 08](08-what-the-turn-actually-did.md).
 * **Nothing counts what the rules are doing**, unchanged from
   [note 03](03-standing-answers.md).
-* **Locks are still never evicted**, unchanged from notes 01–08 — and now
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–08 — and now
   slightly funnier, since this note is about a process that stays up for
   months.

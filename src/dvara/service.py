@@ -41,6 +41,9 @@ the store is the conversation; everything else comes out of the package.
 Interleaving them would put two user messages into one history with one
 assistant reply between them, and Yantra's resumability invariant holds
 at prompt boundaries for a reason.
+The lock lives only while a turn holds it or a message waits on it
+(``locks.py``), so a process that stays up for months holds one per
+conversation in flight, not one per conversation it has ever served.
 
 That lock is held while a turn waits for a person to approve a tool call,
 and the consequence is worth stating before somebody meets it: A PENDING
@@ -101,6 +104,7 @@ from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Decisions, Policy
 from dvara.keys import session_key, workspace_parts
+from dvara.locks import KeyedLocks
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
 
@@ -189,7 +193,7 @@ class Service:
         # a second connection pool to the same endpoint.
         self._provider_factory = provider_factory or _default_provider
         self._providers: dict[str, Provider] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+        self._locks: KeyedLocks[str] = KeyedLocks()
 
     # ---- lifecycle ---------------------------------------------------------
 
@@ -341,7 +345,7 @@ class Service:
                          run_id=None, agent=agent, actor=actor,
                          stop_reason="refused")
 
-        async with self._lock(key):
+        async with self._locks.hold(key):
             # Costing zero until something is spent. The distinction the
             # ledger draws is between "nothing was spent" and "tokens
             # were spent that nobody can price", and a refusal is firmly
@@ -536,18 +540,6 @@ class Service:
         payload = self.sessions.load_latest(key)
         if payload is not None:
             apply_payload(agent, payload, history_only=True)
-
-    def _lock(self, key: str) -> asyncio.Lock:
-        """One lock per conversation.
-
-        Kept forever, on purpose and with a known cost: an entry per
-        session key the process has ever served. That is a few hundred
-        bytes against a correctness property, and evicting locks safely
-        needs a refcount nobody has asked to maintain yet.
-        """
-        if key not in self._locks:
-            self._locks[key] = asyncio.Lock()
-        return self._locks[key]
 
 
 # ---- small pure helpers ----------------------------------------------------

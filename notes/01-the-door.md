@@ -329,7 +329,7 @@ message; an exception is a reply that silently never arrives.
 
 ## What is not here yet
 
-* **Locks are never evicted**, and [note 02](02-a-question-that-can-wait.md)
+* ~~**Locks are never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); and [note 02](02-a-question-that-can-wait.md)
   makes them hold for longer at a time. One `asyncio.Lock` per session key
   the process has ever served — a few hundred bytes against a correctness
   property, and evicting them safely needs a refcount nobody has asked

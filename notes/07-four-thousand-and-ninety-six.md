@@ -394,4 +394,4 @@ reading.
 * ~~**A channel identity still cannot be added without a restart**~~ --
   shipped in [note 09](09-a-process-you-walk-away-from.md), which this
   note is the reason for.
-* **Locks are still never evicted**, unchanged from notes 01–06.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–06.

@@ -339,7 +339,7 @@ answered or has expired is a `404`.
   read this bullet asked for rather than a bigger hammer on the thread:
   the descriptor goes to the event loop, so giving up on the question
   leaves nothing behind at all.
-* **Locks are still never evicted**, unchanged from note 01, and now
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from note 01, and now
   holding for longer at a time.
 * ~~**One actor per channel.**~~ Closed by
   [note 05](05-one-person-two-channels.md). The two queues are one

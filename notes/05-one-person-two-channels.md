@@ -318,7 +318,7 @@ channels name people with strings that can (`matrix:@me:example.org`).
 * **A notifier that hangs holds a delivery task for the whole deadline.**
   It is cancelled in the `finally`, so nothing leaks past the turn, but
   a slow channel cannot be given a shorter clock than a fast one.
-* **Locks are still never evicted**, unchanged from notes 01–03.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–03.
 * **Still no channel.** That is the next note, and it is now the small
   one it was always supposed to be: a long poll, a notifier, a call to
   `answer`, and a 4096-character cap to think about.

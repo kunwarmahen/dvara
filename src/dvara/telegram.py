@@ -123,6 +123,7 @@ import httpx
 from dvara.actors import Channel
 from dvara.asks import Ask, NotYours
 from dvara.errors import ConfigProblem, Refused
+from dvara.locks import KeyedLocks
 from dvara.service import Service
 
 #: Telegram's own base. Settable so a test can point at a transport and
@@ -273,17 +274,20 @@ class _Pacer:
     order, and an earliest-next-send stamp so they go out a second apart.
     The lock is the half that matters: two tasks interleaving their
     chunks would deliver one person two half-answers shuffled together.
+
+    Neither table grows with the number of chats the bot has ever seen.
+    A lock goes when nobody holds or waits on it (``locks.py``), and a
+    stamp goes once it is in the past -- a stamp that has already passed
+    makes ``wait`` return at once, which is what no stamp does too.
     """
 
     def __init__(self, gap: float = SEND_GAP) -> None:
         self.gap = gap
-        self._locks: dict[int, asyncio.Lock] = {}
+        self._locks: KeyedLocks[int] = KeyedLocks()
         self._next: dict[int, float] = {}
 
-    def lock(self, chat: int) -> asyncio.Lock:
-        if chat not in self._locks:
-            self._locks[chat] = asyncio.Lock()
-        return self._locks[chat]
+    def lock(self, chat: int):
+        return self._locks.hold(chat)
 
     async def wait(self, chat: int) -> None:
         loop = asyncio.get_running_loop()
@@ -292,7 +296,10 @@ class _Pacer:
             await asyncio.sleep(due)
 
     def sent(self, chat: int) -> None:
-        self._next[chat] = asyncio.get_running_loop().time() + self.gap
+        now = asyncio.get_running_loop().time()
+        for stale in [c for c, due in self._next.items() if due <= now]:
+            del self._next[stale]
+        self._next[chat] = now + self.gap
 
 
 class TelegramBot:

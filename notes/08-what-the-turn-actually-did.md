@@ -335,4 +335,4 @@ discriminates rather than simply always firing.
 * ~~**`dvara serve` and `dvara telegram` are still two processes over one
   state directory**~~ — settled in
   [note 09](09-a-process-you-walk-away-from.md).
-* **Locks are still never evicted**, unchanged from notes 01–07.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–07.

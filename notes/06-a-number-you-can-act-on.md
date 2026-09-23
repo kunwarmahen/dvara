@@ -208,4 +208,4 @@ to find out.
   receipt: `spent_since` sums what it can price. A model nobody can price
   is therefore free of its ceiling, which is a gap in the meter rather
   than in this line under it.
-* **Locks are still never evicted**, unchanged from notes 01–05.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–05.

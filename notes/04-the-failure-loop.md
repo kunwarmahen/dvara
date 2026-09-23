@@ -252,7 +252,7 @@ section.
   provider and a key at the moment somebody is doing bookkeeping. (Less
   likely to pass trivially since note 08 — a case that asserts a
   trajectory has something to fail on — but still nothing checks.)
-* **Locks are still never evicted**, unchanged from notes 01–03.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–03.
 * ~~**One actor per channel**~~ -- settled in
   [note 05](05-one-person-two-channels.md), which was the last thing
   standing between escalation and somewhere real to escalate to.

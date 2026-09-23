@@ -262,7 +262,7 @@ good faith, that has never matched anything.
   package bumped it, so two different prompts can both call themselves
   `0.1.0` and the ledger will say nothing changed. A content hash would
   be honest and would also flag a reformatted comment as a change.
-* **Locks are still never evicted**, unchanged from notes 01–09.
+* ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–09.
 
 ---
 

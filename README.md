@@ -40,7 +40,10 @@ puts the trajectory on a run, so a generated case can assert more than
 is the difference between a service and a program you run;
 [10 — what decided this](notes/10-what-decided-this.md) counts the
 standing answers, pins an approval to the call it released, and settles
-what an edited package does to a live conversation.
+what an edited package does to a live conversation;
+[11 — only while somebody is waiting](notes/11-only-while-somebody-is-waiting.md)
+lets a conversation's lock go when nobody needs it any more, and not a
+moment before.
 
 ## Status
 
@@ -51,7 +54,9 @@ channels, a line under the answer for the people who asked for one, and a
 Telegram bot that answers messages and puts a tool call in front of you
 with two buttons on it, a run record that remembers which tools a turn
 called and what decided each one, and a roster you can edit without
-restarting anything — covered by 443 tests. The API is not stable.
+restarting anything. A process left running for months holds a lock only
+for each conversation in flight, not for every one it has ever served —
+covered by 452 tests. The API is not stable.
 
 ## The shape of it
 
@@ -531,6 +536,7 @@ print(reply.text, reply.cost_usd)
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
+| `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
