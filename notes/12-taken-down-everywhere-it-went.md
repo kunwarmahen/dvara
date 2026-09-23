@@ -144,15 +144,17 @@ so it was refused` once `--ask-timeout` passes.
   undo tasks are cancelled with everything else, and a question can be
   left showing. After a restart, pressing it says it is no longer
   waiting — the old behaviour, and an honest one. Doing better needs the
-  message ids written to disk, and nothing has asked for that yet.
+  message ids written to disk, and a question left showing is a small
+  thing next to a reply never sent, which is what
+  [note 13](13-a-reply-that-is-owed.md) writes down instead.
 * **An undo for the terminal.** A question typed at a terminal has
   scrolled away by the time it matters, and the prompt waiting for a
   line was already cancelled.
 
 ## What is not here yet
 
-* **A crash loses the message that was in flight**, unchanged from
-  [note 07](07-four-thousand-and-ninety-six.md).
+* ~~**A crash loses the message that was in flight**~~ — shipped in
+  [note 13](13-a-reply-that-is-owed.md).
 
 Continues [note 05](05-one-person-two-channels.md), which predicted the
 design, and [note 07](07-four-thousand-and-ninety-six.md), which gave it

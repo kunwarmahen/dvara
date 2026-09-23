@@ -378,7 +378,9 @@ reading.
   05](05-one-person-two-channels.md)'s "withdrawing a delivered question"
   exactly as it was left. It now has one real instance rather than a
   hypothetical one.
-* **A crash loses the message that was in flight.** Argued for above, and
+* ~~**A crash loses the message that was in flight.**~~ — the message is
+  still lost, as argued above, but the person is now told: [note 13](13-a-reply-that-is-owed.md). Was:
+  argued for above, and
   still a loss. A person who gets no reply has no way to tell it from a
   slow turn except by waiting.
 * ~~**Nothing records which channel a question went out on**~~ -- a

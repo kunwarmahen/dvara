@@ -139,8 +139,8 @@ is rebuilt from the actors file, so it is exactly as big as that file.
 
 * ~~**A question answered on one channel still sits on the others**~~ —
   shipped in [note 12](12-taken-down-everywhere-it-went.md).
-* **A crash loses the message that was in flight**, unchanged from
-  [note 07](07-four-thousand-and-ninety-six.md).
+* ~~**A crash loses the message that was in flight**~~ — shipped in
+  [note 13](13-a-reply-that-is-owed.md).
 
 Continues [note 01](01-the-door.md), which named the problem, and
 [note 07](07-four-thousand-and-ninety-six.md), which added the second

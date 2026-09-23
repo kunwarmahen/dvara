@@ -46,7 +46,10 @@ lets a conversation's lock go when nobody needs it any more, and not a
 moment before;
 [12 — taken down everywhere it went](notes/12-taken-down-everywhere-it-went.md)
 clears a question off every channel it was sent to, once it is answered,
-refused, timed out or no longer needed.
+refused, timed out or no longer needed;
+[13 — a reply that is owed](notes/13-a-reply-that-is-owed.md) tells a
+person, after a crash, that their message was not answered and will not
+be run again.
 
 ## Status
 
@@ -59,8 +62,9 @@ with two buttons on it, a run record that remembers which tools a turn
 called and what decided each one, and a roster you can edit without
 restarting anything. A process left running for months holds a lock only
 for each conversation in flight, not for every one it has ever served, and
-a question answered in one place stops asking in all the others —
-covered by 462 tests. The API is not stable.
+a question answered in one place stops asking in all the others. A crash
+mid-answer is owned up to on the next start rather than left as silence —
+covered by 475 tests. The API is not stable.
 
 ## The shape of it
 
@@ -377,6 +381,17 @@ A backlog is passed over at startup — a day-old "what changed today?"
 answered now is a wrong answer, and ten held messages spend ten turns of
 somebody's allowance at once. `--catch-up` answers them instead.
 
+A message the bot was in the middle of answering when it stopped is
+**never run again** — the turn may already have run a tool — but it is
+not forgotten either. On the next start, that person is told their
+message was not answered and can be sent again; an answer that was
+finished but only partly sent has its remaining parts sent
+([notes/13](notes/13-a-reply-that-is-owed.md)):
+
+```
+telegram: 1 reply owed from before the last stop
+```
+
 Somebody who is not in `actors.toml` gets **silence**, and you get the
 line that says how to add them:
 
@@ -565,6 +580,7 @@ print(reply.text, reply.cost_usd)
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | five endpoints and a bearer token (`[http]` extra) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |
+| `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `cli.py` | `agents`, `say`, `runs`, `rules`, `case`, `telegram`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

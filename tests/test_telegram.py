@@ -90,7 +90,10 @@ class FakeTelegram:
         self.calls.append((method, payload))
         scripted = self.status.get(method)
         if scripted:
-            return scripted.pop(0)
+            outcome = scripted.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome             # the network, not Telegram
+            return outcome
         if method == "getMe":
             return _ok({"username": "testbot"})
         if method == "getUpdates":

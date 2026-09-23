@@ -58,6 +58,12 @@ knows their backlog is worth running; the startup line says how many
 were passed over, because a message that silently evaporates is
 indistinguishable from a bot that is broken.
 
+What survives a crash is not the turn but THE FACT THAT A REPLY IS OWED
+(``outbox.py``). A message taken and never answered becomes, on the next
+boot, one sentence telling that person it was not answered and was not
+run again; an answer that was finished but not fully sent has its
+remaining parts sent. The turn itself is never repeated.
+
 ## Rate limits
 
 Telegram publishes one message per second per chat and roughly thirty
@@ -130,6 +136,7 @@ from dvara.actors import Channel
 from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
 from dvara.locks import KeyedLocks
+from dvara.outbox import Outbox, Owed
 from dvara.service import Service
 
 #: Telegram's own base. Settable so a test can point at a transport and
@@ -324,6 +331,7 @@ class TelegramBot:
                  poll_seconds: int = POLL_SECONDS,
                  send_gap: float = SEND_GAP,
                  client: httpx.AsyncClient | None = None,
+                 outbox: Outbox | None = None,
                  log=None) -> None:
         if not token or ":" not in token:
             raise ConfigProblem(
@@ -349,6 +357,8 @@ class TelegramBot:
         self._client = client or httpx.AsyncClient(timeout=poll_seconds + 15)
         self._owns_client = client is None
         self._pacer = _Pacer(send_gap)
+        self.outbox = outbox or Outbox(service.state / "outbox.sqlite3")
+        self._owns_outbox = outbox is None
         self._turns: set[asyncio.Task] = set()
         self._stopping = asyncio.Event()
 
@@ -369,6 +379,7 @@ class TelegramBot:
         offset = await self._first_offset()
         self._note(f"dvara · telegram · @{me.get('username', '?')} "
                    f"→ {self.agent}")
+        await self._pay_what_is_owed()
         backoff = BACKOFF_START
         try:
             while not self._stopping.is_set():
@@ -464,6 +475,8 @@ class TelegramBot:
             await asyncio.gather(*self._turns, return_exceptions=True)
         if self._owns_client:
             await self._client.aclose()
+        if self._owns_outbox:
+            self.outbox.close()
 
     async def _sleep(self, seconds: float) -> None:
         """Sleep, unless somebody asks us to stop first."""
@@ -517,6 +530,12 @@ class TelegramBot:
             await self._send(chat, self._introduction())
             return
 
+        # OWED FROM HERE. Written before the turn starts, so a process
+        # that dies anywhere past this line leaves a row that says so --
+        # see ``outbox.py``. Nothing before it is a turn.
+        row = self.outbox.took(agent=self.agent, chat=str(chat),
+                               sender=str(native), text=text)
+
         # The first action is awaited rather than left to the task: a
         # person who sent a message wants the "typing" the moment they
         # sent it, and a task that has only been SCHEDULED shows nothing
@@ -536,8 +555,68 @@ class TelegramBot:
             # The channel gets the polite sentence; the owner, who is the
             # one person who can fix a bad base URL, gets the reason.
             self._note(f"telegram: {reply.stop_reason}: {reply.detail}")
-        for chunk in self._reply_messages(reply.text, reply.receipt):
+        parts = self._reply_messages(reply.text, reply.receipt)
+        self.outbox.answered(row, parts)
+        for count, chunk in enumerate(parts, start=1):
             await self._send(chat, chunk)
+            self.outbox.sent(row, count)
+        self.outbox.settled(row)
+
+    async def _pay_what_is_owed(self) -> None:
+        """Before any new message: what the last run of this bot left owing.
+
+        THE ROSTER IS ASKED AGAIN. A person taken off the list while the
+        process was down is a stranger now, and a stranger gets silence --
+        the row goes, and the owner gets the line.
+
+        A NETWORK THAT IS DOWN KEEPS THE ROW; A CHAT THAT REFUSES DROPS
+        IT. A connection error will be better on the next boot and the
+        person is still owed their sentence. A 403 -- they blocked the bot,
+        the chat is gone -- will not, and a row retried at every start for
+        ever is a startup line nobody can make go away.
+        """
+        owed = self.outbox.owed(self.agent)
+        if not owed:
+            return
+        self._note(f"telegram: {len(owed)} repl"
+                   f"{'y' if len(owed) == 1 else 'ies'} owed from before "
+                   f"the last stop")
+        for debt in owed:
+            try:
+                self.service.actors.resolve("telegram", debt.sender)
+            except Refused:
+                self._note(f"telegram: {debt.sender} is no longer in the "
+                           f"actors file; the reply owed to them is dropped")
+                self.outbox.settled(debt.id)
+                continue
+            try:
+                await self._pay(debt)
+            except httpx.HTTPError as exc:
+                self._note(f"telegram: could not reach Telegram to settle "
+                           f"what is owed ({type(exc).__name__}); trying "
+                           f"again at the next start")
+                return
+            except TelegramError as exc:
+                self._note(f"telegram: chat {debt.chat} refused what it was "
+                           f"owed ({exc}); dropped")
+            self.outbox.settled(debt.id)
+
+    async def _pay(self, debt: Owed) -> None:
+        chat = int(debt.chat)
+        when = f"{debt.taken_at:%d %b %H:%M} UTC"
+        if not debt.answered:
+            await self._send(chat, (
+                f"I restarted before I could answer your message from "
+                f"{when}:\n\n“{debt.asked}”\n\nIt will not be run again "
+                f"on its own. Send it again if you still want an answer."))
+            return
+        rest = "the rest of " if debt.sent else ""
+        await self._send(chat, (
+            f"I restarted while sending {rest}my answer to your message "
+            f"from {when} (“{debt.asked}”). Here it is."))
+        for count, chunk in enumerate(debt.unsent, start=debt.sent + 1):
+            await self._send(chat, chunk)
+            self.outbox.sent(debt.id, count)
 
     def _introduction(self) -> str:
         """The one command Telegram itself defines, answered here.
