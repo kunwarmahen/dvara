@@ -509,13 +509,24 @@ class Service:
         if who.receipt is None:
             return None
         remaining = None
+        waiting = None
         if who.receipt == "remaining":
             remaining = money.remaining_today(
                 who.max_usd_per_day,
                 self.runs.spent_since(who.id, money.day_start()))
-        return money.receipt(who.receipt, cost_usd=run.cost_usd,
-                             free=bills_nothing(provider_name),
-                             remaining=remaining)
+            # The other allowance, read back the same way and for the same
+            # reason (notes/15). A free provider silences the money half
+            # and not this one: waiting on a person costs the same on
+            # every road.
+            waiting = patience.receipt(
+                patience.remaining_today(
+                    who.max_wait_per_day,
+                    self.runs.waited_since(who.id, money.day_start())),
+                run.waited_seconds)
+        spent = money.receipt(who.receipt, cost_usd=run.cost_usd,
+                              free=bills_nothing(provider_name),
+                              remaining=remaining)
+        return " · ".join(part for part in (spent, waiting) if part) or None
 
     def _provider(self, name: str) -> Provider:
         """One connection pool per provider, for the life of the service."""

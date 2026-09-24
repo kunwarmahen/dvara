@@ -52,7 +52,9 @@ person, after a crash, that their message was not answered and will not
 be run again;
 [14 — a day's worth of being asked](notes/14-a-days-worth-of-being-asked.md)
 limits how long a person may be kept waiting on questions in a day,
-without stopping anything that needed nobody.
+without stopping anything that needed nobody;
+[15 — where the waiting shows](notes/15-where-the-waiting-shows.md)
+puts that allowance under the answer and in `dvara runs`.
 
 ## Status
 
@@ -68,7 +70,7 @@ for each conversation in flight, not for every one it has ever served, and
 a question answered in one place stops asking in all the others. A crash
 mid-answer is owned up to on the next start rather than left as silence,
 and a person who stops answering stops being asked for the day —
-covered by 489 tests. The API is not stable.
+covered by 494 tests. The API is not stable.
 
 ## The shape of it
 
@@ -195,14 +197,18 @@ an unanswered ping is the case that matters
 ([notes/14](notes/14-a-days-worth-of-being-asked.md)).
 
 **What follows their answers.** `receipt = "cost"` puts what the turn cost
-under it; `receipt = "remaining"` puts what is left of their allowance.
-Absent — the default — puts nothing.
+under it; `receipt = "remaining"` puts what is left of their allowance,
+and, under a turn that kept them waiting, how much waiting is left today
+([notes/15](notes/15-where-the-waiting-shows.md)). Absent — the default —
+puts nothing.
 
 Two keys rather than one boolean because two readers want two different
 numbers: an owner is watching a bill, and a person on an allowance is
 deciding whether to ask the follow-up. `"remaining"` without a
-`max_usd_per_day` is refused at load. Under a provider that bills nothing
-both render nothing, because a meter that cannot move is noise.
+`max_usd_per_day` or `max_wait_per_day` is refused at load. Under a
+provider that bills nothing the money renders nothing, because a meter
+that cannot move is noise; the waiting still shows, because a person's
+time costs the same on every road.
 
 **Where a person can be reached.** A channel adapter does not carry its
 own table of who is who; it hands over the identity it has and the
@@ -589,7 +595,7 @@ print(reply.text, reply.cost_usd)
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
-| `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)) |
+| `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), and taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |

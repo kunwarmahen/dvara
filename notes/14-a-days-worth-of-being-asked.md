@@ -108,18 +108,17 @@ reservation this service does not keep.
 **No limit counted in questions.** See above: the unanswered ping is the
 case that matters, and a count cannot tell it from a quick yes.
 
-**Not shown in `dvara runs` yet.** The ledger has the seconds; the
-listing does not print them.
-
 **No change to Yantra's wrapper.** For a single turn, refusing
 everything once the allowance is gone is a defensible rule, and its note
 51 argues for it. A day is a different unit.
 
 ## What is not here yet
 
-* **The waiting is not in the receipt line.** `receipt = "remaining"`
-  shows money left; it could show time left too.
-* **`dvara runs` does not print `waited_seconds`.**
+* ~~**The waiting is not in the receipt line.**~~ Shipped in [note 15](15-where-the-waiting-shows.md):
+  under a turn that waited. Was: `receipt = "remaining"` showed money
+  left only.
+* ~~**`dvara runs` does not print `waited_seconds`.**~~ Shipped in
+  [note 15](15-where-the-waiting-shows.md): `[waited 10s]` on the turn's line.
 
 ## Receipt
 

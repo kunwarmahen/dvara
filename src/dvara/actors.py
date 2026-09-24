@@ -396,8 +396,9 @@ def _receipt(body: dict, name: str, where) -> str | None:
 
     The cross-check is the point of doing this here rather than in a
     one-line coercion: ``"remaining"`` names a fraction of an allowance,
-    and an actor with no ``max_usd_per_day`` has no allowance for
-    anything to remain of. Rendering nothing would be a key that silently
+    and an actor with neither ``max_usd_per_day`` nor
+    ``max_wait_per_day`` (notes/15) has no allowance for anything to
+    remain of. Rendering nothing would be a key that silently
     does not work; rendering the turn's cost instead would be answering a
     question nobody asked.
     """
@@ -409,11 +410,12 @@ def _receipt(body: dict, name: str, where) -> str | None:
             f"{where}: [actor.{name}] receipt must be one of "
             f"{', '.join(RECEIPTS)} (got {value!r}); omit the key for "
             f"nothing under the answer, which is the default")
-    if value == "remaining" and body.get("max_usd_per_day") is None:
+    if (value == "remaining" and body.get("max_usd_per_day") is None
+            and body.get("max_wait_per_day") is None):
         raise ConfigProblem(
             f"{where}: [actor.{name}] asks for what is left of a daily "
-            f"allowance and has no max_usd_per_day to have anything left "
-            f"of; set one, or use receipt = \"cost\"")
+            f"allowance and has no max_usd_per_day or max_wait_per_day to "
+            f"have anything left of; set one, or use receipt = \"cost\"")
     return value
 
 

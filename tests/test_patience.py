@@ -10,7 +10,9 @@ it wrong that are worse than not having it:
 * let the last question of the day wait the desk's full deadline anyway,
   and refuse it with a sentence about silence when it was the day that
   ran out;
-* keep a figure the next turn cannot see, so the limit resets every turn.
+* keep a figure the next turn cannot see, so the limit resets every turn;
+* show it nowhere a person or owner looks (notes/15): not in the receipt
+  under an answer that waited, not in ``dvara runs``.
 
 Plus the ordinary one: an owner's typo meaning "no limit".
 """
@@ -29,9 +31,10 @@ from dvara.actors import ActorBook
 from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem
 from dvara.gate import Policy
+from dvara import patience
 from dvara.patience import Patience, remaining_today
 from dvara.rules import Rule, RuleBook
-from dvara.runs import SCHEMA, Run, RunStore
+from dvara.runs import SCHEMA, Run, RunStore, ToolStep
 
 from tests.conftest import says
 from tests.test_what_decided_it import answer_each, scribe, two_calls
@@ -188,3 +191,53 @@ def test_a_turn_writes_what_it_waited_and_the_next_turn_sees_it(
     assert [step.refusal for step in second.tools] == [REFUSED_OUT_OF_TIME] * 2
     assert second.waited_seconds == 0.0
     assert second.stop_reason == "end_turn"  # the turn ran; only asks stopped
+
+
+# ---- where it is seen (notes/15) --------------------------------------------
+
+def test_the_receipt_says_what_waiting_is_left_after_a_turn_that_waited():
+    assert patience.receipt(280.0, waited=20.0) == "4m 40s of waiting left today"
+
+
+def test_a_turn_that_asked_nobody_says_nothing_about_waiting():
+    assert patience.receipt(280.0, waited=0.0) is None
+    assert patience.receipt(None, waited=20.0) is None
+
+
+def test_remaining_may_name_either_allowance():
+    book = ActorBook.from_dict({"actor": {"guest": {
+        "max_wait_per_day": 60, "receipt": "remaining"}}})
+    assert book.get("guest").receipt == "remaining"
+    with pytest.raises(ConfigProblem, match="max_wait_per_day"):
+        ActorBook.from_dict({"actor": {"guest": {"receipt": "remaining"}}})
+
+
+def test_a_free_road_still_shows_the_waiting(make_service, agents_root):
+    """Money is silenced on a provider that bills nothing; waiting on a
+    person costs the same on every road."""
+    scribe(agents_root)
+    desk = AskDesk(timeout=0.2)
+    actors = ActorBook.from_dict({"actor": {"owner": {
+        "permissions": "ask", "max_wait_per_day": 60,
+        "receipt": "remaining"}}})
+    service = make_service([two_calls(), says("done.")], asks=desk,
+                           actors=actors, provider_name="ollama")
+    reply = asyncio.run(service.deliver(actor="owner", agent="scribe",
+                                        thread="t", text="write both"))
+    assert reply.receipt is not None
+    assert "of waiting left today" in reply.receipt
+    assert "$" not in reply.receipt
+
+
+def test_runs_shows_who_was_kept_waiting(make_service, agents_root, capsys):
+    from types import SimpleNamespace
+
+    from dvara.cli import _runs
+    service = make_service([])
+    service.runs.record(Run(actor="owner", agent="scribe", thread="t",
+                            message="m", started_at=datetime.now(UTC),
+                            stop_reason="end_turn", waited_seconds=20.005,
+                            tools=[ToolStep("write_file", "timeout",
+                                            "asked")]))
+    _runs(service, SimpleNamespace(actor=None, agent=None, limit=5))
+    assert "[waited 20s]" in capsys.readouterr().out

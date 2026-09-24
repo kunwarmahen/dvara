@@ -85,6 +85,28 @@ def remaining_today(limit: float | None, waited: float) -> float | None:
     return max(0.0, limit - waited)
 
 
+def receipt(left: float | None, waited: float | None) -> str | None:
+    """The waiting half of a "remaining" receipt (notes/15), or None.
+
+    ONLY UNDER A TURN THAT WAITED. The money figure is worth a line on
+    every answer because every answer spends; most turns ask nobody
+    anything, and "4m 40s of waiting left" under each of them is a line
+    about a thing that did not happen.
+    """
+    if left is None or not waited:
+        return None
+    return f"{duration(left)} of waiting left today"
+
+
+def duration(seconds: float) -> str:
+    """"4m 40s", "45s" -- a figure a person reads at a glance."""
+    whole = int(round(seconds))
+    if whole < 60:
+        return f"{whole}s"
+    minutes, rest = divmod(whole, 60)
+    return f"{minutes}m {rest}s" if rest else f"{minutes}m"
+
+
 def spent_out(tool: str, now: datetime | None = None) -> str:
     """The refusal when nobody is asked because the day is used up.
 

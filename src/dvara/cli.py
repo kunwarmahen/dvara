@@ -45,6 +45,7 @@ from pathlib import Path
 
 from yantra import render_case
 
+from dvara import patience
 from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run, unasserted
@@ -449,7 +450,12 @@ def _runs(service: Service, args) -> int:
                 _step(step) for step in run.tools)
             where = (f"  [answered from {', '.join(run.answered_from)}]"
                      if run.answered_from else "")
-            print(f"{'':<18}{path}{where}")
+            # How long a person was kept on the hook (notes/15) -- only
+            # when somebody was, which is the turn the owner wants to see.
+            waited = (f"  [waited {patience.duration(run.waited_seconds)}]"
+                      if run.waited_seconds and run.waited_seconds >= 0.5
+                      else "")
+            print(f"{'':<18}{path}{where}{waited}")
         if run.detail and not run.ok:
             # Why it went wrong, where the owner is already looking. The
             # store has carried this since the first commit; not printing
