@@ -273,7 +273,8 @@ class AskDesk:
 
     async def put(self, *, actor: str, agent: str, thread: str, tool: str,
                   summary: str,
-                  reach: Sequence[tuple[str, str]] = ()) -> Answer:
+                  reach: Sequence[tuple[str, str]] = (),
+                  timeout: float | None = None) -> Answer:
         """Ask, wait, and come back with a decision either way.
 
         Never raises for anything a person or a channel could have caused:
@@ -295,17 +296,25 @@ class AskDesk:
         clock would not start until somebody had already typed. A deadline
         that only applies to the front ends that do not need it is not a
         deadline.
+
+        ``timeout`` shortens this one question's deadline below the desk's
+        -- what is left of a person's day of waiting (patience.py). It
+        never lengthens it: the desk's timeout is the owner's word on how
+        long any one question may wait.
         """
+        limit = (self.timeout if timeout is None
+                 else max(0.0, min(self.timeout, timeout)))
         ask = Ask(id=secrets.token_urlsafe(16), actor=actor, agent=agent,
                   thread=thread, tool=tool, summary=summary)
         loop = asyncio.get_running_loop()
         future: asyncio.Future[tuple[bool, str | None]] = loop.create_future()
         self._waiting[ask.id] = (ask, future, loop)
         deliveries = self._deliver(ask, reach)
-        deadline = loop.time() + self.timeout
+        deadline = loop.time() + limit
         answer: Answer | None = None
         try:
-            answer = await self._wait(ask, future, deliveries, deadline)
+            answer = await self._wait(ask, future, deliveries, deadline,
+                                      limit)
             return answer
         finally:
             # Whatever happened -- answered, timed out, the caller hung up
@@ -322,21 +331,21 @@ class AskDesk:
     async def _wait(self, ask: Ask,
                     future: asyncio.Future[tuple[bool, str | None]],
                     deliveries: list[asyncio.Future],
-                    deadline: float) -> Answer:
+                    deadline: float, limit: float) -> Answer:
         """The deadline, the deliveries and the answer, whichever speaks first."""
         loop = asyncio.get_running_loop()
         tool, actor = ask.tool, ask.actor
         while True:
             left = deadline - loop.time()
             if left <= 0:
-                return Answer(False, _timed_out(tool, self.timeout),
+                return Answer(False, _timed_out(tool, limit),
                               REFUSED_TIMEOUT)
             watching = {future} | {d for d in deliveries if not d.done()}
             done, _ = await asyncio.wait(
                 watching, timeout=left,
                 return_when=asyncio.FIRST_COMPLETED)
             if not done:
-                return Answer(False, _timed_out(tool, self.timeout),
+                return Answer(False, _timed_out(tool, limit),
                               REFUSED_TIMEOUT)
             # EVERY route failing is the fact that matters, not any
             # one of them. One bridge down while another is up is a

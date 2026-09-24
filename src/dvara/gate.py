@@ -55,11 +55,14 @@ package asks for when it ships ``tools/*.py`` at all.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from yantra import (
+    REFUSED_OUT_OF_TIME,
     REFUSED_POLICY,
+    REFUSED_TIMEOUT,
     REFUSED_UNATTENDED,
     PermissionFn,
     PermissionRequest,
@@ -68,7 +71,9 @@ from yantra import (
     yolo,
 )
 
+from dvara import patience as waiting
 from dvara.asks import AskDesk
+from dvara.patience import Patience
 from dvara.rules import RuleBook
 
 #: Strictest first. One order, so that "tighten, never loosen" is a
@@ -178,7 +183,8 @@ class Policy:
              desk: AskDesk | None = None, actor: str = "", agent: str = "",
              thread: str = "",
              reach: Sequence[tuple[str, str]] = (),
-             decisions: Decisions | None = None) -> PermissionFn:
+             decisions: Decisions | None = None,
+             patience: Patience | None = None) -> PermissionFn:
         """The ``PermissionFn`` one turn runs under.
 
         Yantra's own two functions where they fit, chosen between rather
@@ -200,6 +206,10 @@ class Policy:
         behind. None is ordinary -- an embedder that keeps no history
         wants none of it -- and nothing here branches on whether it is
         there.
+
+        ``patience`` is this turn's share of the person's day of waiting
+        (patience.py), carried to the one place a question is put. None
+        means no limit and no tally.
         """
         # A PACKAGE THAT NAMES NO MODE IS TREATED AS NAMING THE TIGHTEST,
         # which is the one place silence is read as a decision rather than
@@ -217,18 +227,20 @@ class Policy:
         if len(self.rules):
             return ruled(self.rules, mode=mode, desk=desk, actor=actor,
                          agent=agent, thread=thread, reach=reach,
-                         decisions=decisions)
+                         decisions=decisions, patience=patience)
         if mode == "yolo":
             return yolo
         if mode == "ask" and desk is not None:
             return escalating(desk, actor=actor, agent=agent, thread=thread,
-                              reach=reach, decisions=decisions)
+                              reach=reach, decisions=decisions,
+                              patience=patience)
         return allow_read_only
 
 
 def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
                reach: Sequence[tuple[str, str]] = (),
-               decisions: Decisions | None = None) -> PermissionFn:
+               decisions: Decisions | None = None,
+               patience: Patience | None = None) -> PermissionFn:
     """A gate that puts the question to a person and waits for the answer.
 
     Read-only tools are approved without asking, exactly as they are
@@ -245,7 +257,7 @@ def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
         if request.read_only:
             return True
         return put(desk, request, actor=actor, agent=agent, thread=thread,
-                   reach=reach, decisions=decisions)
+                   reach=reach, decisions=decisions, patience=patience)
 
     return gate
 
@@ -253,7 +265,8 @@ def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
 async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
               agent: str, thread: str,
               reach: Sequence[tuple[str, str]] = (),
-              decisions: Decisions | None = None) -> bool:
+              decisions: Decisions | None = None,
+              patience: Patience | None = None) -> bool:
     """Ask the person, and write their answer onto the request.
 
     The one place a question is put, so the two gates below cannot come to
@@ -262,10 +275,35 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     approve, and it carries the CODE across as well -- refused, timed out
     and undeliverable are three facts a host may want to count separately
     without matching on English (Yantra's note 39).
+
+    THE ONE PLACE A PERSON'S DAY OF WAITING IS SPENT (patience.py), for
+    the reason this is the one place a question is put: everything that
+    did not need a person was decided before this was reached, and a
+    limit checked anywhere earlier would also stop calls nobody was
+    going to be asked about.
     """
-    answer = await desk.put(actor=actor, agent=agent, thread=thread,
-                            tool=request.tool_name, summary=request.summary,
-                            reach=reach)
+    if patience is not None and patience.spent_out:
+        return refuse(request, waiting.spent_out(request.tool_name),
+                      code=REFUSED_OUT_OF_TIME)
+    deadline = (patience.deadline(desk.timeout) if patience is not None
+                else desk.timeout)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    try:
+        answer = await desk.put(actor=actor, agent=agent, thread=thread,
+                                tool=request.tool_name,
+                                summary=request.summary, reach=reach,
+                                timeout=deadline)
+    finally:
+        # Spent in a finally: a question the caller hung up on still kept
+        # the person waiting for as long as it was up.
+        if patience is not None:
+            patience.spend(loop.time() - started)
+    if answer.code == REFUSED_TIMEOUT and deadline < desk.timeout:
+        # The day ran out under this question, not the desk's deadline;
+        # the sentence says which clock stopped it.
+        answer = replace(answer, reason=waiting.ran_out(request.tool_name,
+                                                        deadline))
     if decisions is not None:
         # A person settled this call, and which call is now sayable: the
         # request carries the id of the ToolCall it is deciding, so this
@@ -279,7 +317,8 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
 def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
           agent: str, thread: str,
           reach: Sequence[tuple[str, str]] = (),
-          decisions: Decisions | None = None) -> PermissionFn:
+          decisions: Decisions | None = None,
+          patience: Patience | None = None) -> PermissionFn:
     """The gate when the owner has written standing answers down.
 
     One function rather than a wrapper around the three above, for note
@@ -337,7 +376,7 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
             # owner is allowed to mean.
             return put(desk, request, actor=actor, agent=agent,
                        thread=thread, reach=reach,
-                       decisions=decisions)
+                       decisions=decisions, patience=patience)
         return refuse(request, _no_route(request, mode, desk),
                       code=REFUSED_UNATTENDED)
 

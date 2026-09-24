@@ -49,7 +49,10 @@ clears a question off every channel it was sent to, once it is answered,
 refused, timed out or no longer needed;
 [13 — a reply that is owed](notes/13-a-reply-that-is-owed.md) tells a
 person, after a crash, that their message was not answered and will not
-be run again.
+be run again;
+[14 — a day's worth of being asked](notes/14-a-days-worth-of-being-asked.md)
+limits how long a person may be kept waiting on questions in a day,
+without stopping anything that needed nobody.
 
 ## Status
 
@@ -63,8 +66,9 @@ called and what decided each one, and a roster you can edit without
 restarting anything. A process left running for months holds a lock only
 for each conversation in flight, not for every one it has ever served, and
 a question answered in one place stops asking in all the others. A crash
-mid-answer is owned up to on the next start rather than left as silence —
-covered by 475 tests. The API is not stable.
+mid-answer is owned up to on the next start rather than left as silence,
+and a person who stops answering stops being asked for the day —
+covered by 489 tests. The API is not stable.
 
 ## The shape of it
 
@@ -164,6 +168,10 @@ agents           = ["greeter"]     # a COMPLETE whitelist; omit for all
 max_usd_per_turn = 0.02
 max_usd_per_day  = 0.10
 permissions      = "read_only"     # served, but never asked to approve
+
+[actor.friend]
+permissions      = "ask"           # may be asked to approve a write...
+max_wait_per_day = 300             # ...for up to five minutes of waiting a day
 ```
 
 `permissions` can only ever tighten. The mode a turn runs under is the
@@ -174,9 +182,17 @@ An unknown key is an error, not a shrug:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, channel, max_usd_per_day, max_usd_per_turn, permissions,
-receipt
+known: agents, channel, max_usd_per_day, max_usd_per_turn,
+max_wait_per_day, permissions, receipt
 ```
+
+**How long they may be kept waiting.** `max_wait_per_day` is seconds a
+day the service may spend waiting on this person's answers. What is
+left shortens each question's deadline; once it is spent, calls that
+would have been asked are refused without asking, while reads and
+anything a standing rule allows still run. Time, not questions, because
+an unanswered ping is the case that matters
+([notes/14](notes/14-a-days-worth-of-being-asked.md)).
 
 **What follows their answers.** `receipt = "cost"` puts what the turn cost
 under it; `receipt = "remaining"` puts what is left of their allowance.
@@ -573,6 +589,7 @@ print(reply.text, reply.cost_usd)
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
+| `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), and taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |

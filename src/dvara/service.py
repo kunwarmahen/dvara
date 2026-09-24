@@ -98,7 +98,7 @@ from yantra import (
 from yantra.config import guess_provider
 from yantra.errors import ConfigError
 
-from dvara import money
+from dvara import money, patience
 from dvara.actors import Actor, ActorBook, Channel
 from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
@@ -398,6 +398,16 @@ class Service:
                 f"{money.next_reset():%H:%M UTC on %-d %b}"
             )
 
+        # The other allowance, read from the same ledger at the same
+        # moment. Not a refusal of the turn when it is spent, unlike
+        # money: a turn with no waiting left can still do everything
+        # that needs nobody, and gate.put refuses only what would have
+        # been asked (patience.py).
+        wait = patience.Patience(patience.remaining_today(
+            who.max_wait_per_day,
+            (0.0 if who.max_wait_per_day is None
+             else self.runs.waited_since(who.id, money.day_start()))))
+
         provider = self._provider(provider_name)
         try:
             agent = replace(spec, max_usd_per_turn=ceiling.amount).build_async(
@@ -408,6 +418,7 @@ class Service:
                     actor=who.id, agent=run.agent, thread=run.thread,
                     reach=who.reach(),
                     decisions=decisions,
+                    patience=wait,
                 ),
                 cwd=self._workspace(key),
                 provider=provider,
@@ -456,6 +467,7 @@ class Service:
             run.cost_usd = _cost(before_models, agent.usage_by_model,
                                  provider_name=provider_name)
             run.answered_from = list(decisions.channels)
+            run.waited_seconds = round(wait.waited, 3)
             run.ended_at = datetime.now(UTC)
 
         run.stop_reason = end.reason if end else "error"

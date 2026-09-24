@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS runs (
     -- written before this column existed has neither.
     tools        TEXT,            -- [["bash", "policy", "rule:58fbf4ad"], …]
     answered_from TEXT,           -- ["telegram"]; a summary of tools
-    agent_version TEXT            -- the package's own version, that turn
+    agent_version TEXT,           -- the package's own version, that turn
+    waited_seconds REAL           -- how long it waited on a person
 );
 -- The daily-allowance query, which runs before EVERY turn: one actor,
 -- one time window. Without this index it is a table scan that grows for
@@ -98,7 +99,7 @@ CREATE INDEX IF NOT EXISTS runs_actor_started
 COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
-           "answered_from, agent_version")
+           "answered_from, agent_version, waited_seconds")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -107,7 +108,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 #: ``ALTER TABLE ADD COLUMN`` with no default is cheap and leaves the old
 #: rows honest -- they have no trajectory, and NULL is what that means.
 ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
-         ("agent_version", "TEXT"))
+         ("agent_version", "TEXT"), ("waited_seconds", "REAL"))
 
 
 @dataclass(frozen=True)
@@ -181,6 +182,11 @@ class Run:
     #: fixing a prompt and alarming when you are not), and this is the
     #: only thing that makes it legible afterwards.
     agent_version: str | None = None
+    #: Seconds this turn spent waiting on a person's answers (patience.py)
+    #: -- the ledger a daily allowance of waiting is summed from. 0.0 for
+    #: a turn that asked nothing; None on a row written before this was
+    #: kept, which SUMs as nothing waited, and nothing was counted.
+    waited_seconds: float | None = 0.0
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -261,8 +267,8 @@ class RunStore:
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
                 "cost_usd, stop_reason, detail, tools, answered_from, "
-                "agent_version) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "agent_version, waited_seconds) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
@@ -271,7 +277,8 @@ class RunStore:
                  run.cost_usd, run.stop_reason, run.detail,
                  _dump([[step.name, step.refusal, step.decided_by]
                         for step in run.tools]),
-                 _dump(list(run.answered_from)), run.agent_version),
+                 _dump(list(run.answered_from)), run.agent_version,
+                 run.waited_seconds),
             )
             self._db.commit()
         return run.id
@@ -281,6 +288,18 @@ class RunStore:
         with self._lock:
             row = self._db.execute(
                 "SELECT COALESCE(SUM(cost_usd), 0.0) FROM runs "
+                "WHERE actor = ? AND started_at >= ?",
+                (actor, _stamp(since)),
+            ).fetchone()
+        return float(row[0])
+
+    def waited_since(self, actor: str, since: datetime) -> float:
+        """Seconds this actor has been kept waiting on questions since
+        ``since`` (patience.py) -- the same query as ``spent_since``, on
+        the other allowance."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT COALESCE(SUM(waited_seconds), 0.0) FROM runs "
                 "WHERE actor = ? AND started_at >= ?",
                 (actor, _stamp(since)),
             ).fetchone()
@@ -379,6 +398,7 @@ def _row_to_run(row: tuple) -> Run:
                if isinstance(step, list) and step],
         answered_from=list(_load(row[17])),
         agent_version=row[18],
+        waited_seconds=row[19],
     )
 
 

@@ -15,6 +15,7 @@ boring: TOML, reviewable, diffable, and it holds no secrets.
     agents           = ["researcher"]   # omit => every agent in the roster
     max_usd_per_turn = 0.25
     max_usd_per_day  = 2.00
+    max_wait_per_day = 300              # seconds kept waiting on them, a day
     permissions      = "ask"            # this person may be asked to approve
 
 ``agents`` follows ``AgentSpec.tool_allow``'s convention exactly: absent
@@ -126,7 +127,8 @@ from dvara.gate import LADDER
 #: failure a ceiling exists to prevent (the same rule Yantra's package
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
-                        "permissions", "channel", "receipt"})
+                        "max_wait_per_day", "permissions", "channel",
+                        "receipt"})
 
 #: What may follow an answer, under it, for this person. Absent is the
 #: third option and the default, because most people in a chat did not
@@ -176,6 +178,9 @@ class Actor:
     agents: tuple[str, ...] | None = None
     max_usd_per_turn: float | None = None
     max_usd_per_day: float | None = None
+    #: Seconds a day this person may be kept waiting on questions
+    #: (patience.py). None means no limit.
+    max_wait_per_day: float | None = None
     #: A rung on gate.py's ladder, or None for the tightest one. Composes
     #: by minimum with the package's mode and the owner's policy, so it
     #: can only ever make a turn stricter.
@@ -312,6 +317,8 @@ class ActorBook:
                 agents=_agents(body.get("agents"), name, where),
                 max_usd_per_turn=_money(body, "max_usd_per_turn", name, where),
                 max_usd_per_day=_money(body, "max_usd_per_day", name, where),
+                max_wait_per_day=_seconds(body, "max_wait_per_day", name,
+                                          where),
                 permissions=_mode(body.get("permissions"), name, where),
                 channels=_channels(body.get("channel"), name, where),
                 receipt=_receipt(body, name, where),
@@ -480,6 +487,24 @@ def _mode(value, name: str, where) -> str | None:
             f"{where}: [actor.{name}] permissions must be one of "
             f"{', '.join(LADDER)} (got {value!r})")
     return value
+
+
+def _seconds(body: dict, key: str, name: str, where) -> float | None:
+    """A positive number of seconds, or None. Zero is refused for money's
+    reason: an allowance of nothing is "never ask this person", which is
+    said with ``permissions = "read_only"``, where it is legible."""
+    value = body.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ConfigProblem(
+            f"{where}: [actor.{name}] {key} must be a number of seconds")
+    if value <= 0:
+        raise ConfigProblem(
+            f"{where}: [actor.{name}] {key} must be greater than zero "
+            f"(got {value}); to never ask this person, give them "
+            f'permissions = "read_only"')
+    return float(value)
 
 
 def _money(body: dict, key: str, name: str, where) -> float | None:
