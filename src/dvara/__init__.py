@@ -35,6 +35,7 @@ from dvara.actors import Actor, ActorBook, Channel
 from dvara.asks import Answer, Ask, AskDesk, NotYours, Withdraw
 from dvara.errors import ConfigProblem, DvaraError, Refused
 from dvara.gate import Policy
+from dvara.holds import Hold, HoldBook, NoSuchHold, NotYourHold, Waiting
 from dvara.keys import parse_key, session_key
 from dvara.money import Ceiling, compose, day_start, next_reset
 from dvara.roster import Roster
@@ -52,6 +53,10 @@ __all__ = [
     "Channel",
     "ConfigProblem",
     "DvaraError",
+    "Hold",
+    "HoldBook",
+    "NoSuchHold",
+    "NotYourHold",
     "NotYours",
     "Policy",
     "Refused",
@@ -61,6 +66,7 @@ __all__ = [
     "RunStore",
     "Service",
     "TelegramBot",
+    "Waiting",
     "Withdraw",
     "compose",
     "day_start",

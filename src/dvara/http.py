@@ -1,14 +1,17 @@
 """The HTTP surface -- a transport, and honest about being only that.
 
-Five endpoints, no session state, no cleverness. Everything that decides
+Seven endpoints, no session state, no cleverness. Everything that decides
 anything lives in ``service.py``; this module moves JSON.
 
-TWO WAYS IN, AND THEY ARE NOT THE SAME WAY. ``/message`` starts a turn;
+THREE WAYS IN, AND THEY ARE NOT THE SAME WAY. ``/message`` starts a turn;
 ``/asks`` and ``/asks/{id}`` release one that is already standing there
 waiting for a person to approve a tool call. They have to be separate
 paths, because a turn holds its conversation's lock while it waits -- an
 approval arriving as a MESSAGE would queue up behind the very turn it was
-meant to release, and sit there until the deadline passed.
+meant to release, and sit there until the deadline passed. ``/holds`` and
+``/holds/{id}`` carry on a turn that stopped because nobody answered in
+time (notes/16): nothing is standing there any more, so an answer there
+STARTS the rest of the turn and replies with what it came to.
 
 THE TOKEN AUTHENTICATES THE CALLER, NOT THE PERSON. That distinction is
 the whole security posture of this layer. A caller here is a channel
@@ -25,7 +28,7 @@ map it, which is the same trust boundary with one fewer place to be
 wrong: a bridge that carries no table of its own cannot carry a stale
 one, and an owner who removes somebody from ``actors.toml`` has removed
 them, rather than having removed them from one of two files. Both forms
-are accepted on all three endpoints that name a person; exactly one per
+are accepted on every endpoint that names a person; exactly one per
 request.
 
 Consequences, accepted on purpose:
@@ -60,6 +63,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from dvara.actors import Channel
 from dvara.asks import NotYours
 from dvara.errors import ConfigProblem, Refused
+from dvara.holds import NoSuchHold, NotYourHold
 from dvara.service import Service
 
 
@@ -218,6 +222,9 @@ def create_app(service: Service, *, token: str,
             # shape -- parsing the sentence back into the number is how
             # the two drift apart.
             "receipt": reply.receipt,
+            # The turn stopped for approval nobody gave in time. The id is
+            # what POST /holds/{id} answers; the calls are what to show.
+            "held": reply.held.as_dict() if reply.held else None,
         }
 
     @app.get("/asks")
@@ -293,5 +300,67 @@ def create_app(service: Service, *, token: str,
                        "answered, it timed out, or the turn behind it went "
                        "away")
         return {"answered": True, "approved": body["approve"]}
+
+    @app.get("/holds")
+    async def holds(actor: str | None = None, channel: str | None = None,
+                    channel_id: str | None = None,
+                    authorization: str | None = Header(default=None)) -> dict:
+        """Held turns that can still be answered, oldest first.
+
+        Filtered exactly as ``/asks`` is, and for the same reason: one
+        adapter may serve several people, and one person is one queue.
+        """
+        check(authorization)
+        if channel is not None or channel_id is not None:
+            if actor is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="name a person with actor or with "
+                           "channel+channel_id, not both")
+            actor = _resolve(service, channel, channel_id)
+        return {"holds": [hold.as_dict()
+                          for hold in service.holds.pending(actor)]}
+
+    @app.post("/holds/{hold_id}")
+    async def carry_on(hold_id: str, request: Request,
+                       authorization: str | None = Header(default=None)
+                       ) -> dict:
+        """Answer a held turn, and reply with what it came to.
+
+        ``answers`` maps each waiting call's id to true, false, or the
+        person's reason for refusing it as a string. ONLY A JSON BOOLEAN
+        APPROVES, for the reason ``/asks/{id}`` insists on one: the
+        string "yes" is a refusal whose reason is "yes", never a yes.
+        """
+        check(authorization)
+        body = await request.json()
+        actor, via = _whom(body)
+        door = via.kind if via is not None else "http"
+        if via is not None:
+            # Resolved here, as /asks/{id} does, so an identity the roster
+            # has never heard of is the same 404 on both answer paths.
+            actor = _resolve(service, via.kind, via.id)
+        answers = body.get("answers")
+        if not isinstance(answers, dict) or not answers:
+            raise HTTPException(
+                status_code=400,
+                detail="answers must map each waiting call's id to true, "
+                       "false, or a reason")
+        try:
+            reply = await service.resume(hold_id, answers=answers,
+                                         actor=actor, door=door)
+        except NotYourHold:
+            raise HTTPException(
+                status_code=403,
+                detail="that held turn ran as somebody else") from None
+        except NoSuchHold as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        except Refused as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        return {"text": reply.text, "ok": reply.ok, "run_id": reply.run_id,
+                "agent": reply.agent, "actor": reply.actor,
+                "stop_reason": reply.stop_reason, "detail": reply.detail,
+                "cost_usd": reply.cost_usd, "receipt": reply.receipt,
+                "held": reply.held.as_dict() if reply.held else None}
 
     return app

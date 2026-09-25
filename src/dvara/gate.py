@@ -60,6 +60,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from yantra import (
+    HELD,
     REFUSED_OUT_OF_TIME,
     REFUSED_POLICY,
     REFUSED_TIMEOUT,
@@ -67,6 +68,7 @@ from yantra import (
     PermissionFn,
     PermissionRequest,
     allow_read_only,
+    hold,
     refuse,
     yolo,
 )
@@ -281,8 +283,22 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     did not need a person was decided before this was reached, and a
     limit checked anywhere earlier would also stop calls nobody was
     going to be asked about.
+
+    AND THE ONE PLACE A CALL IS HELD (notes/16), when the desk's owner
+    said silence should hold rather than deny. Three ways in, all of
+    them "the person is not here right now": the question went
+    unanswered; an earlier question in this turn did, so this one is
+    not put at all; or their day of waiting is already used up, which
+    under ``deny`` is a refusal and under ``hold`` is a question kept
+    for when they are back.
     """
+    holds = desk.on_timeout == "hold"
+    if holds and patience is not None and patience.holding:
+        return hold(request)
     if patience is not None and patience.spent_out:
+        if holds:
+            patience.holding = True
+            return hold(request)
         return refuse(request, waiting.spent_out(request.tool_name),
                       code=REFUSED_OUT_OF_TIME)
     deadline = (patience.deadline(desk.timeout) if patience is not None
@@ -304,6 +320,12 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         # the sentence says which clock stopped it.
         answer = replace(answer, reason=waiting.ran_out(request.tool_name,
                                                         deadline))
+    if answer.code == HELD:
+        # Nobody answered, and the owner chose to keep the question. No
+        # decision to record yet: the resumed turn records the real one.
+        if patience is not None:
+            patience.holding = True
+        return hold(request)
     if decisions is not None:
         # A person settled this call, and which call is now sayable: the
         # request carries the id of the ToolCall it is deciding, so this

@@ -63,6 +63,10 @@ so no notification goes out that nobody will wait for:
 write_file was denied: nobody was asked. The person this conversation would ask has been kept waiting on questions for as long as this service allows in one day; that comes back at 00:00 UTC. ...
 ```
 
+Under `--on-timeout hold` ([note 16](16-kept-for-when-you-are-back.md))
+a spent day holds the call instead of refusing it. Nobody is asked
+either way; with hold, the question waits for them to come back.
+
 ## The one decision that mattered: where to check it
 
 Yantra already had `with_wait_budget`, a wrapper that spends down a

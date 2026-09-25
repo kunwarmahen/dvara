@@ -57,7 +57,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from yantra import Usage
+from yantra import HELD, Usage
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS runs (
     tools        TEXT,            -- [["bash", "policy", "rule:58fbf4ad"], …]
     answered_from TEXT,           -- ["telegram"]; a summary of tools
     agent_version TEXT,           -- the package's own version, that turn
-    waited_seconds REAL           -- how long it waited on a person
+    waited_seconds REAL,          -- how long it waited on a person
+    resumes      TEXT             -- the held Run this one carried on
 );
 -- The daily-allowance query, which runs before EVERY turn: one actor,
 -- one time window. Without this index it is a table scan that grows for
@@ -99,7 +100,7 @@ CREATE INDEX IF NOT EXISTS runs_actor_started
 COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
-           "answered_from, agent_version, waited_seconds")
+           "answered_from, agent_version, waited_seconds, resumes")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -108,7 +109,8 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 #: ``ALTER TABLE ADD COLUMN`` with no default is cheap and leaves the old
 #: rows honest -- they have no trajectory, and NULL is what that means.
 ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
-         ("agent_version", "TEXT"), ("waited_seconds", "REAL"))
+         ("agent_version", "TEXT"), ("waited_seconds", "REAL"),
+         ("resumes", "TEXT"))
 
 
 @dataclass(frozen=True)
@@ -116,7 +118,8 @@ class ToolStep:
     """One tool call the loop reported, and whether it got to happen.
 
     ``refusal`` is the gate's own code (``policy``, ``user``, ``timeout``,
-    ``unattended``) or None when the call ran -- Yantra's token rather
+    ``unattended``, or ``held`` for a call left waiting when the turn
+    stopped -- notes/16) or None when the call ran -- Yantra's token rather
     than the sentence beside it, because a sentence written for a model is
     going to be reworded and a column that has to be grepped for English
     is a column nobody queries twice.
@@ -187,6 +190,11 @@ class Run:
     #: a turn that asked nothing; None on a row written before this was
     #: kept, which SUMs as nothing waited, and nothing was counted.
     waited_seconds: float | None = 0.0
+    #: The id of the held Run this turn carried on (notes/16), or None for
+    #: a turn that began with a message. A held turn and its answer are
+    #: two rows, because they are two turns -- different budgets,
+    #: different hours, possibly a different day -- and this is the link.
+    resumes: str | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -206,8 +214,13 @@ class Run:
 
     @property
     def refused_tools(self) -> list[str]:
-        """Distinct names of the calls the gate turned away, in order."""
-        return _distinct(step.name for step in self.tools if not step.ran)
+        """Distinct names of the calls the gate turned away, in order.
+
+        Not the HELD ones (notes/16): a call left waiting was not turned
+        away, and its answer is on the Run that resumes this one.
+        """
+        return _distinct(step.name for step in self.tools
+                         if not step.ran and step.refusal != HELD)
 
     @property
     def rules_used(self) -> list[str]:
@@ -267,8 +280,8 @@ class RunStore:
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
                 "cost_usd, stop_reason, detail, tools, answered_from, "
-                "agent_version, waited_seconds) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "agent_version, waited_seconds, resumes) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
@@ -278,7 +291,7 @@ class RunStore:
                  _dump([[step.name, step.refusal, step.decided_by]
                         for step in run.tools]),
                  _dump(list(run.answered_from)), run.agent_version,
-                 run.waited_seconds),
+                 run.waited_seconds, run.resumes),
             )
             self._db.commit()
         return run.id
@@ -399,6 +412,7 @@ def _row_to_run(row: tuple) -> Run:
         answered_from=list(_load(row[17])),
         agent_version=row[18],
         waited_seconds=row[19],
+        resumes=row[20],
     )
 
 

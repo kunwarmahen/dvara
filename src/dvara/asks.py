@@ -38,10 +38,14 @@ reachable SEVERAL ways this becomes "every delivery failed": one channel
 down while another is up is a question that arrived, and the wait goes
 on.
 
-**SILENCE DENIES.** A deadline that approved would make an absent owner
-the most permissive setting in the system, which is exactly backwards.
-The refusal says how long it waited, because a model that knows it was
-refused for silence can ask again later; one told only "denied" cannot.
+**SILENCE DENIES -- OR, IF THE OWNER SAYS SO, HOLDS.** A deadline that
+approved would make an absent owner the most permissive setting in the
+system, which is exactly backwards. The refusal says how long it waited,
+because a model that knows it was refused for silence can ask again
+later; one told only "denied" cannot. ``on_timeout="hold"`` is the other
+answer silence may have (notes/16): the turn stops where it is and the
+question waits in ``holds.py`` for the person to come back. Neither
+answer ever approves.
 
 And one thing that is not a decision so much as a fact about where
 answers come from: AN ANSWER MAY ARRIVE FROM ANOTHER THREAD. The turn
@@ -130,12 +134,16 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
-from yantra import REFUSED_TIMEOUT, REFUSED_UNATTENDED, REFUSED_USER
+from yantra import HELD, REFUSED_TIMEOUT, REFUSED_UNATTENDED, REFUSED_USER
 
 #: Long enough that a person can pick up their phone, short enough that a
 #: forgotten question does not pin a conversation open all afternoon. The
 #: owner sets it on ``Policy``; this is only the value nobody chose.
 DEFAULT_TIMEOUT = 120.0
+
+#: What an unanswered question comes to. Never "allow": see the module
+#: docstring.
+ON_TIMEOUT = ("deny", "hold")
 
 
 @dataclass(frozen=True)
@@ -232,13 +240,24 @@ class AskDesk:
     """
 
     def __init__(self, *, timeout: float = DEFAULT_TIMEOUT,
-                 notify: Notifier | None = None) -> None:
+                 notify: Notifier | None = None,
+                 on_timeout: str = "deny") -> None:
         if timeout <= 0:
             raise ValueError(
                 "an ask timeout of zero or less is a service that denies "
                 "before it asks; say so with Policy(mode='read_only') "
                 "instead, where it is legible")
+        if on_timeout not in ON_TIMEOUT:
+            raise ValueError(
+                f"on_timeout must be one of {', '.join(ON_TIMEOUT)} (got "
+                f"{on_timeout!r}); silence never approves")
         self.timeout = float(timeout)
+        #: What silence comes to: a refusal, or a turn that stops and
+        #: waits for the person to come back (notes/16). Decided HERE
+        #: rather than in the gate so the answer every channel is handed
+        #: when it takes the question down already says which -- "kept
+        #: for later" and "refused" are different words under a button.
+        self.on_timeout = on_timeout
         #: The catch-all: everything, with no address, for a front end
         #: that is the only place a question could go.
         self.notify = notify
@@ -338,15 +357,13 @@ class AskDesk:
         while True:
             left = deadline - loop.time()
             if left <= 0:
-                return Answer(False, _timed_out(tool, limit),
-                              REFUSED_TIMEOUT)
+                return self._silence(tool, limit)
             watching = {future} | {d for d in deliveries if not d.done()}
             done, _ = await asyncio.wait(
                 watching, timeout=left,
                 return_when=asyncio.FIRST_COMPLETED)
             if not done:
-                return Answer(False, _timed_out(tool, limit),
-                              REFUSED_TIMEOUT)
+                return self._silence(tool, limit)
             # EVERY route failing is the fact that matters, not any
             # one of them. One bridge down while another is up is a
             # question that reached the person; refusing on the first
@@ -366,6 +383,16 @@ class AskDesk:
                               via=via)
             # Delivered, and nobody has answered yet. Round again on
             # what is left of the deadline.
+
+    def _silence(self, tool: str, limit: float) -> Answer:
+        """Nobody answered: refused, or held for later, as the owner chose.
+
+        A held answer carries no sentence. The model is not told anything
+        -- the turn stops, and it reads the real answer when there is one.
+        """
+        if self.on_timeout == "hold":
+            return Answer(False, None, HELD)
+        return Answer(False, _timed_out(tool, limit), REFUSED_TIMEOUT)
 
     def _withdraw(self, deliveries: list[asyncio.Future],
                   answer: Answer | None) -> None:

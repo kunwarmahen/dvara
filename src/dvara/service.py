@@ -54,6 +54,14 @@ where it sits until the deadline passes. Answers arrive through the desk
 purpose -- an approval is not a sentence for the model to read, it is a
 decision about a call that is already in flight.
 
+A HELD TURN IS NOT ANSWERED BY A MESSAGE EITHER, BUT A MESSAGE ENDS IT.
+When the owner has told silence to hold (``--on-timeout hold``), an
+unanswered question stops the turn instead of refusing the call, the lock
+is let go, and the turn waits in ``holds.py`` -- across a restart, if it
+comes to that. ``resume`` carries it on with the person's answers.
+Sending something else instead is allowed and means "never mind": the
+waiting calls are set aside and the new message is answered.
+
 No streaming in v1. One message, one reply: channels are turn-shaped, and
 a bot that streams is a bot that edits the same message forty times and
 gets rate-limited for it.
@@ -76,12 +84,13 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from yantra import (
+    HELD,
     AgentSpec,
     ToolExecuted,
     Provider,
@@ -97,12 +106,15 @@ from yantra import (
 )
 from yantra.config import guess_provider
 from yantra.errors import ConfigError
+from yantra.hold import check_answers, held_task
 
 from dvara import money, patience
 from dvara.actors import Actor, ActorBook, Channel
 from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Decisions, Policy
+from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
+                         NotYourHold, Waiting, waiting_text)
 from dvara.keys import session_key, workspace_parts
 from dvara.locks import KeyedLocks
 from dvara.roster import Roster
@@ -140,6 +152,10 @@ class Reply:
     #: to decide how a footer looks in its own medium, rather than this
     #: service picking a separator for every channel there will ever be.
     receipt: str | None = None
+    #: The turn stopped for approval nobody gave in time and is waiting in
+    #: the queue (holds.py) -- what a channel shows, with the id it
+    #: answers by. None for every turn that did not stop.
+    held: Hold | None = None
 
     @property
     def ok(self) -> bool:
@@ -156,6 +172,7 @@ class Service:
                  model: str | None = None,
                  provider_factory: Callable[[str], Provider] | None = None,
                  log=None,
+                 hold_for: float = DEFAULT_KEEP,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -187,6 +204,12 @@ class Service:
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
         self.runs = RunStore(self.state / "runs.sqlite3")
+        # Always open, even when nothing is configured to hold: a turn
+        # held yesterday by a service started with --on-timeout hold can
+        # still be answered today by one started without it. Whether
+        # silence holds is a policy for new questions, not a way to
+        # strand old ones (holds.py).
+        self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
         # The one seam between this service and the network. Injected so
         # tests exercise the real assembly against a scripted provider,
         # and so an embedder that already holds a provider does not open
@@ -216,6 +239,7 @@ class Service:
             provider.close()
         self._providers.clear()
         self.runs.close()
+        self.holds.close()
 
     async def aclose(self) -> None:
         """Give back BOTH pools. The shutdown a running service calls.
@@ -228,6 +252,7 @@ class Service:
             await provider.aclose()
         self._providers.clear()
         self.runs.close()
+        self.holds.close()
 
     # ---- the owner's files, read again -------------------------------------
 
@@ -378,10 +403,97 @@ class Service:
                              actor=actor, stop_reason="error",
                              detail=run.detail)
 
+    async def resume(self, hold_id: str, *,
+                     answers: Mapping[str, bool | str],
+                     actor: str | None = None,
+                     via: Channel | None = None,
+                     door: str | None = None) -> Reply:
+        """Answer a held turn, and let it carry on (notes/16).
+
+        ``answers`` has one entry per waiting call, by call id: True runs
+        it, False refuses it, and a string refuses it in the person's own
+        words, which the model reads. ``door`` is where the answer came
+        from, for the Run -- the same record ``AskDesk.answer`` keeps.
+
+        A REFUSAL BEFORE THE TURN IS RAISED, NOT REPLIED. Unlike
+        ``deliver``, the caller here is an approval path -- a button, a
+        POST, a command -- that already has to tell "that is not yours"
+        from "that is gone", and a reply-shaped refusal would make every
+        one of them parse a sentence. ``NotYourHold`` and ``NoSuchHold``
+        say which; any other ``Refused`` is the answers or the person's
+        access. Once the turn is running, it answers exactly as
+        ``deliver`` does: a reply either way.
+
+        A RESUME IS A NEW TURN. It is checked against today's money
+        before anything is used up, so a person whose allowance is spent
+        keeps their hold and can answer it tomorrow.
+        """
+        started = datetime.now(UTC)
+        self.refresh()
+        actor, _ = self._whom(actor, via, "")
+        door = door or (via.kind if via is not None else None)
+        hold = self.holds.get(hold_id)
+        if hold is None:
+            raise NoSuchHold(
+                "no held turn with that id is waiting -- it was answered, "
+                "set aside by a newer message, or has expired")
+        if hold.actor != actor:
+            raise NotYourHold(hold_id)
+        if self.holds.expired(hold):
+            self.holds.drop(hold.id)
+            raise NoSuchHold(
+                f"that turn was held more than "
+                f"{patience.duration(self.holds.keep_for)} ago and can no "
+                f"longer be answered; ask again if it is still wanted")
+        for call_id, answer in answers.items():
+            if not isinstance(answer, bool | str):
+                raise Refused(
+                    f"the answer for {call_id} must be true, false, or your "
+                    f"reason for refusing it")
+        who = self.actors.may(actor, hold.agent)
+        spec = self.roster.spec(hold.agent)
+
+        async with self._locks.hold(hold.key):
+            # Looked up again under the lock: two answers racing for one
+            # hold must not both carry it on.
+            if self.holds.get(hold_id) is None:
+                raise NoSuchHold("that turn was answered a moment ago")
+            run = Run(actor=actor, agent=hold.agent, thread=hold.thread,
+                      message="", started_at=started, cost_usd=0.0)
+            try:
+                return await self._turn(spec=spec, who=who, key=hold.key,
+                                        run=run, resuming=hold,
+                                        answers=answers, door=door)
+            except (NoSuchHold, NotYourHold):
+                raise
+            except Refused as exc:
+                if self.holds.get(hold_id) is not None:
+                    # Refused before the hold was used -- bad answers, a
+                    # spent allowance. Nothing ran; nothing to record.
+                    raise
+                run.reply, run.stop_reason = str(exc), "refused"
+                self.runs.record(run)
+                return Reply(text=str(exc), run_id=run.id, agent=run.agent,
+                             actor=actor, stop_reason="refused")
+            except asyncio.CancelledError:
+                run.stop_reason, run.reply = "cancelled", ""
+                self.runs.record(run)
+                raise
+            except Exception as exc:  # noqa: BLE001 -- as deliver
+                run.stop_reason = "error"
+                run.detail = f"{type(exc).__name__}: {exc}"
+                run.reply = "that went wrong at my end"
+                self.runs.record(run)
+                return Reply(text=run.reply, run_id=run.id, agent=run.agent,
+                             actor=actor, stop_reason="error",
+                             detail=run.detail)
+
     # ---- one turn, in the order that works ---------------------------------
 
     async def _turn(self, *, spec: AgentSpec, who: Actor, key: str,
-                    run: Run) -> Reply:
+                    run: Run, resuming: Hold | None = None,
+                    answers: Mapping[str, bool | str] | None = None,
+                    door: str | None = None) -> Reply:
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
@@ -432,14 +544,30 @@ class Service:
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
         self._rehydrate(agent, key)
+        if resuming is not None:
+            events = self._carry_on(agent, resuming, answers or {}, run,
+                                    decisions, door)
+        else:
+            if agent.held is not None:
+                # A NEW MESSAGE SETS A HELD TURN ASIDE -- Yantra answers the
+                # waiting calls "set aside, never ran" as this turn begins
+                # (its note 88), and the queue follows the conversation
+                # rather than offering an answer nothing can take.
+                self.holds.drop_key(key)
+            events = agent.run_streaming(run.message)
         before_total = _copy(agent.total_usage)
         before_models = {m: _copy(u) for m, u in agent.usage_by_model.items()}
 
         end: TurnEnd | None = None
         try:
-            async for event in agent.run_streaming(run.message):
+            async for event in events:
                 if isinstance(event, TurnEnd):
                     end = event
+                    if end.reason == "held" and agent.held is not None:
+                        # Named on the hold before the checkpoint below is
+                        # written, so the Run that answers it can say which
+                        # one it continues even after a restart.
+                        agent.held.recorded = run.id
                 elif isinstance(event, ToolExecuted):
                     # A REFUSED CALL IS STILL ONE OF THESE, which is
                     # Yantra's own decision and the reason this is one
@@ -474,6 +602,10 @@ class Service:
         run.detail = end.detail if end else None
         run.reply = (end.response.message.text().strip()
                      if end and end.response is not None else "")
+        held = None
+        if run.stop_reason == "held" and agent.held is not None:
+            held = self._keep(agent, key, run, decisions)
+            run.reply = waiting_text(held)
         if not run.reply:
             run.reply = _explain(run.stop_reason, run.detail, ceiling)
         self.runs.record(run)
@@ -481,7 +613,59 @@ class Service:
                      actor=run.actor, stop_reason=run.stop_reason,
                      detail=run.detail, cost_usd=run.cost_usd,
                      usage=run.usage,
-                     receipt=self._receipt(who, run, provider_name))
+                     receipt=self._receipt(who, run, provider_name),
+                     held=held)
+
+    def _keep(self, agent, key: str, run: Run,
+              decisions: Decisions) -> Hold:
+        """File a turn that stopped, and put its waiting calls on the Run.
+
+        A HELD CALL IS A STEP, marked ``held``. The loop reports no
+        ``ToolExecuted`` for it -- it has no result -- so without this the
+        ledger would show a turn that stopped for no visible reason.
+        """
+        waiting = agent.held.waiting
+        for request in waiting:
+            run.tools.append(ToolStep(request.tool_name, HELD,
+                                      decisions.of(request.call_id)))
+        return self.holds.keep(
+            key=key, actor=run.actor, agent=run.agent, thread=run.thread,
+            run_id=run.id,
+            held_at=datetime.fromtimestamp(agent.held.at, UTC),
+            calls=[Waiting(r.call_id, r.tool_name, r.summary)
+                   for r in waiting])
+
+    def _carry_on(self, agent, hold: Hold, answers: Mapping[str, bool | str],
+                  run: Run, decisions: Decisions, door: str | None):
+        """Check a hold against the conversation, use it up, and resume.
+
+        EVERYTHING THAT CAN BE WRONG IS FOUND BEFORE THE ROW GOES. The
+        checkpoint may no longer hold this turn (a newer message set it
+        aside, somebody cleared the conversation), or the answers may not
+        match what is waiting; either is a refusal that costs nothing and
+        leaves the person free to try again. Only then is the row dropped
+        -- before a single call runs, so a crash cannot run one twice
+        (holds.py).
+        """
+        if agent.held is None or agent.held.ids != [c.call_id
+                                                    for c in hold.calls]:
+            self.holds.drop(hold.id)
+            raise NoSuchHold(
+                "that turn is no longer waiting: the conversation moved on "
+                "since it was held, so there is nothing to carry on")
+        try:
+            check_answers(agent.held, answers, agent.history)
+        except ValueError as exc:
+            raise Refused(str(exc)) from None
+        run.message = held_task(agent.history) or run.message
+        run.resumes = agent.held.recorded or hold.run_id
+        self.holds.drop(hold.id)
+        for call_id in answers:
+            # The person settled every one of these, from wherever they
+            # answered -- the same record a question answered in time
+            # leaves (gate.py).
+            decisions.by_person(call_id, door)
+        return agent.resume(dict(answers))
 
     # ---- the pieces --------------------------------------------------------
 

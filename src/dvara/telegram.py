@@ -116,6 +116,14 @@ channel adapter usually goes wrong.
   that message behind the very turn it was meant to release
   (``service.py``), so the question carries buttons and the press lands
   on ``AskDesk.answer`` down a path the turn is not holding.
+* **A turn that stopped to wait carries its own buttons** (notes/16).
+  Under ``--on-timeout hold`` a question nobody answered stops the turn
+  instead of refusing the call, and the reply that says so ends with
+  "approve all" and "refuse all". A press carries the turn on and the
+  rest of the answer arrives in the same chat. One answer for the whole
+  batch, because a chat button cannot collect several without this bot
+  keeping state of its own; answering call by call is ``POST /holds/ID``
+  or ``dvara resume``.
 * **A question that is over loses its buttons, wherever it was
   answered.** Delivering one hands the desk an undo that edits the
   message it sent (``asks.py``); the desk calls it however the question
@@ -130,11 +138,12 @@ import contextlib
 import sys
 
 import httpx
-from yantra import REFUSED_TIMEOUT
+from yantra import HELD, REFUSED_TIMEOUT
 
 from dvara.actors import Channel
 from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
+from dvara.holds import Hold, NoSuchHold, NotYourHold
 from dvara.locks import KeyedLocks
 from dvara.outbox import Outbox, Owed
 from dvara.service import Service
@@ -146,9 +155,9 @@ API_BASE = "https://api.telegram.org"
 #: One message, in UTF-16 code units. Telegram's number, not a guess.
 MESSAGE_LIMIT = 4096
 
-#: One inline button's ``callback_data``, in BYTES. An ask id is 22
-#: characters of urlsafe base64 and the verdict prefix is two more, so
-#: 24 of these 64 are spent -- stated here because the day somebody
+#: One inline button's ``callback_data``, in BYTES. An ask id -- and a
+#: hold id -- is 22 characters of urlsafe base64 and the verdict prefix is
+#: two more, so 24 of these 64 are spent -- stated here because the day somebody
 #: lengthens an id is the day this silently stops round-tripping.
 CALLBACK_LIMIT = 64
 
@@ -551,14 +560,21 @@ class TelegramBot:
             typing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await typing
-        if reply.detail and not reply.ok:
+        await self._answer(chat, row, reply)
+
+    async def _answer(self, chat: int, row: int, reply) -> None:
+        """Send one turn's reply, marking it paid part by part."""
+        if reply.detail and not reply.ok and reply.held is None:
             # The channel gets the polite sentence; the owner, who is the
             # one person who can fix a bad base URL, gets the reason.
             self._note(f"telegram: {reply.stop_reason}: {reply.detail}")
         parts = self._reply_messages(reply.text, reply.receipt)
         self.outbox.answered(row, parts)
         for count, chunk in enumerate(parts, start=1):
-            await self._send(chat, chunk)
+            last = count == len(parts)
+            extra = ({"reply_markup": _hold_buttons(reply.held)}
+                     if last and reply.held is not None else {})
+            await self._send(chat, chunk, **extra)
             self.outbox.sent(row, count)
         self.outbox.settled(row)
 
@@ -736,6 +752,9 @@ class TelegramBot:
         query_id = query.get("id", "")
         native = query.get("from", {}).get("id")
         verdict, _, ask_id = str(query.get("data", "")).partition(":")
+        if verdict in ("h", "x") and ask_id:
+            await self._carry_on(query, ask_id, approve=verdict == "h")
+            return
         if self.service.asks is None or not ask_id \
                 or verdict not in ("y", "n"):
             await self._toast(query_id, "that button means nothing here")
@@ -763,6 +782,59 @@ class TelegramBot:
         # the undo ``_deliver_ask`` handed it -- one writer, so a press
         # here and an answer from anywhere else go through the same code.
         await self._toast(query_id, "approved" if approve else "refused")
+
+    async def _carry_on(self, query: dict, hold_id: str, *,
+                        approve: bool) -> None:
+        """A press on a held turn: answer every waiting call, and send
+        what the turn comes to into the conversation it belongs to.
+
+        WHO PRESSED IS WHO ANSWERED, exactly as for a question; the
+        service insists the hold ran as them. The rest of the answer goes
+        to the conversation's own chat, which is not always the one the
+        press came from -- a turn in a group is still answered in the
+        group.
+        """
+        query_id = query.get("id", "")
+        native = query.get("from", {}).get("id")
+        pressed = query.get("message") or {}
+        try:
+            actor = self.service.actors.resolve("telegram", native).id
+        except Refused as exc:
+            await self._toast(query_id, str(exc))
+            return
+        hold = self.service.holds.get(hold_id)
+        if hold is None:
+            await self._toast(query_id, "that is no longer waiting")
+            return
+        answers = dict.fromkeys((c.call_id for c in hold.calls), approve)
+        chat = _chat_of(hold, pressed)
+        verb = "approved" if approve else "refused"
+        row = self.outbox.took(
+            agent=self.agent, chat=str(chat), sender=str(native),
+            text=f"[{verb}: {', '.join(c.tool for c in hold.calls)}]")
+        typing = asyncio.ensure_future(self._typing(chat))
+        try:
+            reply = await self.service.resume(hold_id, actor=actor,
+                                              answers=answers,
+                                              door="telegram")
+        except (NotYourHold, NoSuchHold, Refused) as exc:
+            self.outbox.settled(row)
+            await self._toast(query_id, str(exc))
+            return
+        finally:
+            typing.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await typing
+        await self._toast(query_id, verb)
+        if pressed.get("message_id") and pressed.get("chat", {}).get("id"):
+            # The buttons come off the message that carried them, with
+            # what was decided -- the same courtesy a question gets.
+            with contextlib.suppress(TelegramError, httpx.HTTPError):
+                await self._api("editMessageText",
+                                chat_id=pressed["chat"]["id"],
+                                message_id=pressed["message_id"],
+                                text=f"{pressed.get('text', '')}\n\n— {verb}")
+        await self._answer(chat, row, reply)
 
     async def _settle(self, chat: int, message_id: int, question: str,
                       answer: Answer | None) -> None:
@@ -863,6 +935,8 @@ def ending(answer: Answer | None) -> str:
     """
     if answer is None:
         return "no longer needed; the conversation that asked has ended"
+    if answer.code == HELD:
+        return "nobody answered in time, so the turn is waiting for you"
     if answer.code == REFUSED_TIMEOUT:
         return "nobody answered in time, so it was refused"
     decided = "approved" if answer.approved else "refused"
@@ -870,6 +944,27 @@ def ending(answer: Answer | None) -> str:
         return decided
     place = {"terminal": "at the terminal", "http": "over HTTP"}
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
+
+
+def _hold_buttons(hold: Hold) -> dict:
+    """"approve all" and "refuse all", under a reply that stopped to wait."""
+    return {"inline_keyboard": [[
+        {"text": "approve all", "callback_data": f"h:{hold.id}"},
+        {"text": "refuse all", "callback_data": f"x:{hold.id}"},
+    ]]}
+
+
+def _chat_of(hold: Hold, pressed: dict) -> int:
+    """The chat a held turn's conversation lives in.
+
+    A turn that came in over Telegram is keyed ``telegram:<chat>``
+    (service.py). One that came in any other way has no chat of its own
+    here, so its answer goes where the press came from.
+    """
+    kind, _, chat = hold.thread.partition(":")
+    if kind == "telegram" and chat.lstrip("-").isdigit():
+        return int(chat)
+    return int(pressed.get("chat", {}).get("id", 0))
 
 
 def _body(response: httpx.Response) -> dict:

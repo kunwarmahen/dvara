@@ -14,6 +14,8 @@ how the receipts in the notes were produced.
     dvara agents --root ~/agents
     dvara say --actor mahen --agent researcher "what changed today?"
     dvara runs --actor mahen
+    dvara held --actor mahen
+    dvara resume <hold id> --actor mahen --approve
     dvara serve --host 127.0.0.1 --port 8765
     dvara telegram --agent researcher
 
@@ -26,6 +28,12 @@ question with two buttons on it and the press comes back through the poll
 it never stopped running; a served process supplies neither, because the
 answer is going to arrive over HTTP from an adapter that is talking to
 somebody elsewhere.
+
+``--on-timeout hold`` changes what happens when nobody answers: the turn
+stops and waits instead of the call being refused (notes/16). ``held``
+lists what is waiting and ``resume`` answers it -- from this keyboard,
+for any conversation, because a held turn is on disk rather than in a
+process.
 
 ``telegram`` and ``serve`` are the two ways a person who is not at this
 keyboard gets in, and they are not alternatives. The bot runs the service
@@ -47,11 +55,12 @@ from yantra import render_case
 
 from dvara import patience
 from dvara.actors import ActorBook, Channel
-from dvara.asks import DEFAULT_TIMEOUT, Ask, AskDesk
+from dvara.asks import DEFAULT_TIMEOUT, ON_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run, unasserted
 from dvara.claim import Claim
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Policy
+from dvara.holds import DEFAULT_KEEP, age_text
 from dvara.roster import Roster
 from dvara.rules import RuleBook
 from dvara.service import Service
@@ -106,6 +115,16 @@ def build_parser() -> argparse.ArgumentParser:
                         metavar="SECONDS",
                         help=f"how long a question waits before it is refused "
                              f"for silence (default {DEFAULT_TIMEOUT:g})")
+    parser.add_argument("--on-timeout", choices=ON_TIMEOUT, default="deny",
+                        help="what an unanswered question comes to. deny "
+                             "(the default) refuses the call; hold stops the "
+                             "turn where it is and keeps it for the person "
+                             "to answer later, from `dvara held`, POST "
+                             "/holds/ID, or the buttons in their chat")
+    parser.add_argument("--hold-for", type=float, default=DEFAULT_KEEP,
+                        metavar="SECONDS",
+                        help=f"how long a held turn may wait for its answer "
+                             f"(default {DEFAULT_KEEP:g}, a day)")
 
     subs = parser.add_subparsers(dest="command", required=True)
 
@@ -124,6 +143,27 @@ def build_parser() -> argparse.ArgumentParser:
                           "e.g. --as telegram:8675309")
     say.add_argument("--agent", required=True)
     say.add_argument("--thread", default="cli")
+
+    held = subs.add_parser("held", help="turns waiting for an answer")
+    held.add_argument("--actor", default=None)
+
+    resume = subs.add_parser(
+        "resume", help="answer a held turn, and let it carry on")
+    resume.add_argument("hold", help="the held turn's id, from `dvara held`")
+    resume.add_argument("--actor", required=True,
+                        help="who is answering; it must be who the turn ran as")
+    verdict = resume.add_mutually_exclusive_group()
+    verdict.add_argument("--approve", action="store_true",
+                         help="approve every waiting call")
+    verdict.add_argument("--refuse", nargs="?", const="", default=None,
+                         metavar="REASON",
+                         help="refuse every waiting call, with your reason "
+                              "for the model if you give one")
+    resume.add_argument("--call", action="append", default=[],
+                        metavar="ID=yes|no|REASON",
+                        help="answer one call, overriding --approve or "
+                             "--refuse for it. Anything but yes or no is "
+                             "a refusal in your words")
 
     runs = subs.add_parser("runs", help="what this service has been doing")
     runs.add_argument("--actor", default=None)
@@ -187,14 +227,19 @@ def build_parser() -> argparse.ArgumentParser:
 #: The read-only ones are absent on purpose -- see claim.py: looking at
 #: your own ledger while the bot answers somebody is the most ordinary
 #: thing an owner does.
-CLAIMS = ("say", "serve", "telegram")
+CLAIMS = ("say", "serve", "telegram", "resume")
 
 
 def _service(args) -> Service:
     desk = None
+    if args.on_timeout == "hold" and not args.ask:
+        raise ConfigProblem(
+            "--on-timeout hold needs --ask: with nobody to ask, nothing "
+            "can go unanswered")
     if args.ask:
         try:
-            desk = AskDesk(timeout=args.ask_timeout)
+            desk = AskDesk(timeout=args.ask_timeout,
+                           on_timeout=args.on_timeout)
         except ValueError as exc:
             raise ConfigProblem(str(exc)) from None
     # NAMED IS REQUIRED, DEFAULT IS OPTIONAL. An owner who typed a path
@@ -204,15 +249,19 @@ def _service(args) -> Service:
     named = bool(args.policy)
     rules = RuleBook.from_toml(Path(args.policy or DEFAULT_POLICY),
                                required=named)
-    return Service(
-        roster=Roster(Path(args.root)),
-        actors=ActorBook.from_toml(Path(args.actors)),
-        state=Path(args.state),
-        policy=Policy(mode="yolo" if args.yolo else "ask", rules=rules),
-        asks=desk,
-        provider_name=args.provider,
-        model=args.model,
-    )
+    try:
+        return Service(
+            roster=Roster(Path(args.root)),
+            actors=ActorBook.from_toml(Path(args.actors)),
+            state=Path(args.state),
+            policy=Policy(mode="yolo" if args.yolo else "ask", rules=rules),
+            asks=desk,
+            provider_name=args.provider,
+            model=args.model,
+            hold_for=args.hold_for,
+        )
+    except ValueError as exc:
+        raise ConfigProblem(str(exc)) from None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -246,6 +295,10 @@ def main(argv: list[str] | None = None) -> int:
             return _say(service, args)
         if args.command == "runs":
             return _runs(service, args)
+        if args.command == "held":
+            return _held(service, args)
+        if args.command == "resume":
+            return _resume(service, args)
         if args.command == "case":
             return _case(service, args)
         if args.command == "rules":
@@ -391,13 +444,19 @@ def _say(service: Service, args) -> int:
 
     reply = asyncio.run(go())
     print(reply.text)
+    if reply.held is not None:
+        # The terminal's way to answer, which the reply itself leaves to
+        # the channel (holds.waiting_text).
+        print(f"\n  dvara resume {reply.held.id} --actor {reply.actor} "
+              f"--approve   (or --refuse, or --call ID=yes|no|REASON)",
+              file=sys.stderr)
     if reply.receipt:
         # Where a chat would put it, so `say` shows an owner what their
         # guest will actually see -- the same reason --as exists. The
         # banner below is the operator's view of the same turn and says
         # more; this is the person's.
         print(reply.receipt)
-    if reply.detail and not reply.ok:
+    if reply.detail and not reply.ok and reply.held is None:
         # The owner is standing right here. A channel gets the polite
         # sentence; the person who can FIX it gets the reason, because a
         # misconfigured base URL that reports only "that went wrong at my
@@ -412,7 +471,9 @@ def _say(service: Service, args) -> int:
     if reply.run_id:
         line += f" · run {reply.run_id}"
     print(f"{line}]", file=sys.stderr)
-    return 0 if reply.ok else 1
+    # A turn that stopped to wait did what it was told to do; a script
+    # checking the exit code should not read it as a failure.
+    return 0 if reply.ok or reply.held is not None else 1
 
 
 def _runs(service: Service, args) -> int:
@@ -432,6 +493,10 @@ def _runs(service: Service, args) -> int:
         stamp = run.started_at.strftime("%Y-%m-%d %H:%M")
         print(f"{stamp}  {run.actor}/{run.agent}  {run.stop_reason:<14} "
               f"{cost:>9}  {run.message[:48]!r}")
+        if run.resumes:
+            # Two rows, one piece of work: the answer an hour later is
+            # its own turn, and this is the thread back (notes/16).
+            print(f"{'':<18}resumes {run.resumes}")
         key = (run.actor, run.agent, run.thread)
         was = previous.get(key)
         if was is not None and was != run.agent_version:
@@ -456,12 +521,91 @@ def _runs(service: Service, args) -> int:
                       if run.waited_seconds and run.waited_seconds >= 0.5
                       else "")
             print(f"{'':<18}{path}{where}{waited}")
-        if run.detail and not run.ok:
+        if run.detail and not run.ok and run.stop_reason != "held":
             # Why it went wrong, where the owner is already looking. The
             # store has carried this since the first commit; not printing
             # it made the ledger a list of shrugs.
             print(f"{'':<18}{run.detail}")
     return 0
+
+
+def _held(service: Service, args) -> int:
+    """What is waiting for an answer, oldest first, and how old it is."""
+    holds = service.holds.pending(args.actor)
+    if not holds:
+        print("nothing is waiting for an answer")
+        return 0
+    for hold in holds:
+        print(f"{hold.id}  {hold.actor}/{hold.agent}  thread {hold.thread}  "
+              f"run {hold.run_id}")
+        for call in hold.calls:
+            print(f"    {call.call_id}  {call.tool}: {call.summary}")
+        print(f"    {age_text(hold)}")
+    return 0
+
+
+def _answers(service: Service, args) -> dict[str, bool | str]:
+    """The command line's verdicts, as one answer per waiting call.
+
+    A call with no answer is left out rather than guessed at, and the
+    service refuses the whole set before anything runs -- which is the
+    point of saying nothing: approving what nobody named would be the one
+    wrong default.
+    """
+    hold = service.holds.get(args.hold)
+    ids = [c.call_id for c in hold.calls] if hold is not None else []
+    answers: dict[str, bool | str] = {}
+    if args.approve:
+        answers = dict.fromkeys(ids, True)
+    elif args.refuse is not None:
+        answers = dict.fromkeys(ids, args.refuse or False)
+    for spec in args.call:
+        call_id, sep, said = spec.partition("=")
+        if not sep or not call_id.strip():
+            raise ConfigProblem(f"--call wants ID=yes|no|REASON (got {spec!r})")
+        word = said.strip()
+        answers[call_id.strip()] = (True if word.lower() == "yes" else
+                                    False if word.lower() in ("no", "")
+                                    else word)
+    return answers
+
+
+def _resume(service: Service, args) -> int:
+    if service.asks is not None:
+        # A resumed turn may ask something new, and the person answering
+        # is at this keyboard -- the same reason `say` does this.
+        service.asks.notify = _ask_at_the_keyboard(service.asks)
+    try:
+        answers = _answers(service, args)
+    except ConfigProblem as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    hold = service.holds.get(args.hold)
+    if hold is not None:
+        print(age_text(hold), file=sys.stderr)
+
+    async def go():
+        try:
+            return await service.resume(args.hold, actor=args.actor,
+                                        answers=answers, door="terminal")
+        finally:
+            await service.aclose()
+
+    try:
+        reply = asyncio.run(go())
+    except Refused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(reply.text)
+    if reply.receipt:
+        print(reply.receipt)
+    tail = f"[{reply.stop_reason}"
+    if reply.cost_usd is not None:
+        tail += f" · ${reply.cost_usd:.4f}"
+    if reply.run_id:
+        tail += f" · run {reply.run_id}"
+    print(f"{tail}]", file=sys.stderr)
+    return 0 if reply.ok or reply.held is not None else 1
 
 
 def _rules(service: Service, args) -> int:
@@ -514,7 +658,12 @@ def _step(step) -> str:
     by the rung, and writing "(rung)" beside nine of every ten would bury
     the one that says a person was woken up at two in the morning.
     """
-    name = step.name if step.ran else f"{step.name}(refused)"
+    if step.ran:
+        name = step.name
+    elif step.refusal == "held":
+        name = f"{step.name}(held)"
+    else:
+        name = f"{step.name}(refused)"
     if step.decided_by is None:
         return name
     return f"{name}[{step.decided_by}]"

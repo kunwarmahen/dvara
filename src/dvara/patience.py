@@ -60,6 +60,12 @@ class Patience:
         #: What this turn has waited so far -- recorded for every turn,
         #: limited or not, so a limit added tomorrow has a history.
         self.waited = 0.0
+        #: Set once a question in this turn went unanswered and was HELD
+        #: (notes/16). The person is evidently away, so the rest of the
+        #: batch is held without asking: two questions in a row would
+        #: otherwise each wait out the full deadline before the turn
+        #: could stop.
+        self.holding = False
 
     @property
     def spent_out(self) -> bool:
@@ -103,6 +109,11 @@ def duration(seconds: float) -> str:
     whole = int(round(seconds))
     if whole < 60:
         return f"{whole}s"
+    if whole >= 3600:
+        # A held turn can be a day old (notes/16); "1440m" is not a
+        # figure anybody reads at a glance, and the seconds stop mattering.
+        hours, rest = divmod(whole // 60, 60)
+        return f"{hours}h {rest}m" if rest else f"{hours}h"
     minutes, rest = divmod(whole, 60)
     return f"{minutes}m {rest}s" if rest else f"{minutes}m"
 

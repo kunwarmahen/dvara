@@ -190,6 +190,11 @@ because agents are built per turn and the coroutine that asked is gone.
 A persisted question would outlive the only thing that could act on it,
 which is not durability. It is a lie with a timestamp on it.
 
+That is still true of a question. [Note 16](16-kept-for-when-you-are-back.md)
+adds the case where it is not: a turn that STOPS when nobody answers,
+with the stop saved in the conversation's checkpoint. Then the thing that
+can act on it is on disk, and the queue of held turns is a table.
+
 The same reasoning covers a caller who hangs up. Cancellation takes the
 question with it, and it does **not** become a denial: a dropped
 connection is not a person saying no, and history must not record one.
@@ -322,7 +327,10 @@ answered or has expired is a `404`.
   Worth having, and it is a column in a table note 01 created — a
   migration, for a question nobody has asked yet.
 * **No queue, no reminders, no retry.** One question, one deadline, one
-  answer.
+  answer. (A queue arrived in [note 16](16-kept-for-when-you-are-back.md),
+  of held turns rather than questions: `--on-timeout hold` keeps what
+  nobody answered until somebody does. Reminders and retries still do
+  not exist.)
 
 ## What is not here yet
 

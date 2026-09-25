@@ -54,7 +54,10 @@ be run again;
 limits how long a person may be kept waiting on questions in a day,
 without stopping anything that needed nobody;
 [15 — where the waiting shows](notes/15-where-the-waiting-shows.md)
-puts that allowance under the answer and in `dvara runs`.
+puts that allowance under the answer and in `dvara runs`;
+[16 — kept for when you are back](notes/16-kept-for-when-you-are-back.md)
+lets a question nobody answered wait for the person instead of being
+refused, across a restart, and carries the turn on when they answer.
 
 ## Status
 
@@ -69,8 +72,9 @@ restarting anything. A process left running for months holds a lock only
 for each conversation in flight, not for every one it has ever served, and
 a question answered in one place stops asking in all the others. A crash
 mid-answer is owned up to on the next start rather than left as silence,
-and a person who stops answering stops being asked for the day —
-covered by 494 tests. The API is not stable.
+a person who stops answering stops being asked for the day, and a
+question they never saw can wait for them to come back instead of being
+refused — covered by 533 tests. The API is not stable.
 
 ## The shape of it
 
@@ -120,6 +124,15 @@ dvara --root examples/agents --actors examples/actors.toml \
 dvara --root examples/agents --actors examples/actors.toml --ask \
       --provider ollama --model qwen3.8-64k:latest \
       say --actor owner --agent scribe "write a haiku into haiku.txt"
+
+# ...and if I do not answer in time, keep it for me rather than refusing
+dvara --root examples/agents --actors examples/actors.toml --ask \
+      --ask-timeout 60 --on-timeout hold \
+      --provider ollama --model qwen3.8-64k:latest \
+      say --actor owner --agent scribe "write a haiku into haiku.txt"
+dvara --root examples/agents --actors examples/actors.toml held
+dvara --root examples/agents --actors examples/actors.toml \
+      resume HOLD_ID --actor owner --approve
 
 # ...and stop asking me the ones I have already answered
 dvara --root examples/agents --actors examples/actors.toml --ask \
@@ -399,6 +412,14 @@ Three things the medium decides for you:
   conversation's lock while it waits, so "yes" typed into the chat queues
   behind the very turn it was meant to release.
 
+Under `--on-timeout hold`, a question nobody answered stops the turn
+rather than refusing the call, and the reply that says so ends with
+**approve all** and **refuse all**. A press carries the turn on, and the
+rest of the answer arrives in the conversation's own chat — the group,
+if that is where it started. One answer for the whole batch; answering
+call by call is `dvara resume` or `POST /holds/{id}`
+([notes/16](notes/16-kept-for-when-you-are-back.md)).
+
 A backlog is passed over at startup — a day-old "what changed today?"
 answered now is a wrong answer, and ten held messages spend ten turns of
 somebody's allowance at once. `--catch-up` answers them instead.
@@ -448,8 +469,8 @@ So a bot *and* an HTTP surface means one process:
 DVARA_TOKEN=… TELEGRAM_TOKEN=… dvara serve --telegram researcher
 ```
 
-Commands that run a turn (`say`, `serve`, `telegram`) take the claim.
-Commands that only read (`runs`, `case`, `agents`) do not — looking at
+Commands that run a turn (`say`, `serve`, `telegram`, `resume`) take the claim.
+Commands that only read (`runs`, `held`, `case`, `agents`) do not — looking at
 your ledger while the bot answers somebody is ordinary. And `Service`
 itself claims nothing, so embedding it in your own process is unaffected.
 
@@ -485,6 +506,8 @@ GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
 POST /asks/{id}    {actor, approve}              -> {answered, approved}
+GET  /holds?actor=                               -> {holds: [{id, calls, age, ...}]}
+POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
 ```
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
@@ -505,7 +528,10 @@ POST /asks/{id}    {"channel": {...}, "approve": true}
 ```
 
 `/message` answers with the `actor` it ran as, which is what a bridge
-needs to answer a question that turn raised.
+needs to answer a question that turn raised — and, for a turn that
+stopped to wait, with `held`: the id `POST /holds/{id}` answers, and the
+calls to show. Only a JSON `true` approves; the string `"yes"` is a
+refusal whose reason is "yes".
 
 ## Asking a person
 
@@ -561,6 +587,30 @@ very turn it was meant to release. Answers come through the desk, or
 through `POST /asks/{id}` — or, in a chat, as a button press, which is a
 `callback_query` and not a message.
 
+**When nobody answers.** By default, silence refuses the call, and the
+model is told it was silence. `--on-timeout hold` (`AskDesk(...,
+on_timeout="hold")`) keeps it instead: the turn **stops**, nothing past
+the question runs, and it waits — for a day, or `--hold-for` seconds —
+for the person to come back ([notes/16](notes/16-kept-for-when-you-are-back.md)).
+
+```
+$ dvara held
+VamBTs5Z_X3GzDPNY6UYeQ  owner/scribe  thread cli  run efa292db101a
+    call_fq5canuu  write_file: NEW FILE a.txt (1 lines)
+    call_b6dmlw42  write_file: NEW FILE b.txt (1 lines)
+    held 30s ago. What you approve runs against things as they are now, not as they were then.
+
+$ dvara resume VamBTs5Z_X3GzDPNY6UYeQ --actor owner \
+      --call call_fq5canuu=yes --call "call_b6dmlw42=leave b.txt alone"
+```
+
+A held turn is **on disk, not in memory** — Yantra saves it inside the
+conversation's checkpoint — so it survives a restart, where a question
+never could. An answer is a new turn with its own budget, recorded as its
+own run with `resumes` pointing back. Sending a new message instead means
+"never mind": the waiting calls are set aside. Silence still never
+approves.
+
 `dvara telegram --ask` is the whole of this wired up: the question is
 delivered to the person's own chat with two buttons on it, the press
 lands on `AskDesk.answer`, and the message is edited to say what was
@@ -589,7 +639,7 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
@@ -598,14 +648,15 @@ print(reply.text, reply.cost_usd)
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)) |
 | `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
-| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), and taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |
-| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)) |
+| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
+| `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
+| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), and which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | five endpoints and a bearer token (`[http]` extra) |
-| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)) |
+| `http.py` | seven endpoints and a bearer token (`[http]` extra) |
+| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
-| `cli.py` | `agents`, `say`, `runs`, `rules`, `case`, `telegram`, `serve` |
+| `cli.py` | `agents`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve` |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences
