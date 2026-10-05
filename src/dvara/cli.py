@@ -121,6 +121,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "turn where it is and keeps it for the person "
                              "to answer later, from `dvara held`, POST "
                              "/holds/ID, or the buttons in their chat")
+    parser.add_argument("--samay", nargs="?", const="on", default=None,
+                        metavar="PATH",
+                        help="let each person's agent offer to do things later "
+                             "or on a repeat, through Samay: their schedules, "
+                             "run as them on this road, made only after they "
+                             "say yes on their channel. Off unless asked for "
+                             "(PATH names the samay program; also DVARA_SAMAY). "
+                             "Set SAMAY_DVARA_URL and SAMAY_DVARA_TOKEN here "
+                             "too: Samay checks each schedule against them")
     parser.add_argument("--hold-for", type=float, default=DEFAULT_KEEP,
                         metavar="SECONDS",
                         help=f"how long a held turn may wait for its answer "
@@ -249,6 +258,7 @@ def _service(args) -> Service:
     named = bool(args.policy)
     rules = RuleBook.from_toml(Path(args.policy or DEFAULT_POLICY),
                                required=named)
+    samay = _samay(args.samay or os.environ.get("DVARA_SAMAY"))
     try:
         return Service(
             roster=Roster(Path(args.root)),
@@ -259,9 +269,37 @@ def _service(args) -> Service:
             provider_name=args.provider,
             model=args.model,
             hold_for=args.hold_for,
+            samay=samay,
         )
     except ValueError as exc:
         raise ConfigProblem(str(exc)) from None
+
+
+def _samay(asked: str | None) -> str | None:
+    """The samay program to give people's turns, checked now. ASKED FOR
+    OR OFF: unlike a session at a keyboard, a service does not switch on
+    something that lets every person it serves spend the owner's
+    allowance on a timer just because it was found on PATH. Asked for and
+    not usable stops the start, where the owner is looking."""
+    if not asked or asked.strip().lower() == "off":
+        return None
+    from yantra.samay_link import SamayLinkError, load, resolve_mode
+
+    mode, path = resolve_mode(asked, "")
+    try:
+        found = load("on", path)
+    except SamayLinkError as exc:
+        raise ConfigProblem(f"--samay: {exc}") from None
+    assert found is not None
+    data, program = found
+    if not os.environ.get("SAMAY_DVARA_URL"):
+        print("dvara: schedules on, but SAMAY_DVARA_URL is not set here; Samay "
+              "will refuse every schedule made through this service until it "
+              "is", file=sys.stderr)
+    print(f"dvara: schedules through samay {data.get('version')} ({program}); its "
+          f"clock is {'running' if data.get('serving') else 'NOT running (samay serve)'}",
+          file=sys.stderr)
+    return program
 
 
 def main(argv: list[str] | None = None) -> int:

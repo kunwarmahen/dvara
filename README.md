@@ -61,6 +61,9 @@ refused, across a restart, and carries the turn on when they answer.
 [17 — nobody wrote first](notes/17-nobody-wrote-first.md) runs a turn
 nobody typed (a schedule's, from Samay) with the answers the person gave
 ahead of time, and tells a person something they did not ask about.
+[18 — a schedule asked for in the chat](notes/18-a-schedule-asked-for-in-the-chat.md)
+lets a person's agent offer one, made only with their yes on their own
+channel.
 
 ## Status
 
@@ -79,7 +82,9 @@ a person who stops answering stops being asked for the day, and a
 question they never saw can wait for them to come back instead of being
 refused. A turn nobody typed runs with the yes the person gave ahead of
 time and nothing more, and a finding nobody asked for reaches them on
-their own channels — covered by 556 tests. The API is not stable.
+their own channels; with `--samay`, a person can ask for a schedule in
+the chat and say yes to it there — covered by 566 tests. The API is not
+stable.
 
 ## The shape of it
 
@@ -553,6 +558,37 @@ stopped to wait, with `held`: the id `POST /holds/{id}` answers, and the
 calls to show. Only a JSON `true` approves; the string `"yes"` is a
 refusal whose reason is "yes".
 
+### Schedules, asked for in the chat
+
+With [Samay](https://github.com/kunwarmahen/samay) installed, `--samay`
+lets each person's agent offer to do something later or on a repeat:
+*"check whether example.com is up every hour, and tell me if it's down"*.
+The agent previews it and reads the sentence back; on a yes, the question
+arrives on the person's channel as a card in words (when, who hears, what
+may run unasked), and approved, the schedule is theirs, running this
+agent as them through this service.
+
+```bash
+export SAMAY_DVARA_URL=http://127.0.0.1:8765 SAMAY_DVARA_TOKEN=$DVARA_TOKEN
+dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PATH
+#   dvara: schedules through samay 0.1.0 (/path/to/samay); its clock is running
+```
+
+* Off unless asked for: it lets every person you serve put work on a
+  timer that you pay for.
+* Each turn starts `samay mcp --for <that person> --agent <this agent>
+  --runner dvara` and stops it when the turn ends. A scheduled turn gets
+  none of it.
+* The package must say `[permissions] mode = "ask"` (a `read_only`
+  package refuses without asking), and a package with `[tools] allow`
+  must list `mcp__samay__*`.
+* `SAMAY_DVARA_URL` and `SAMAY_DVARA_TOKEN` must be set here as well as
+  for `samay serve`: Samay checks every schedule made here against this
+  service. The start warns when they aren't.
+* The person sees their schedules by asking; the owner sees all of them
+  with `samay list`
+  ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)).
+
 ## Asking a person
 
 With nobody attached, a service refuses anything that could change
@@ -659,7 +695,7 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
@@ -677,7 +713,7 @@ print(reply.text, reply.cost_usd)
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
-| `cli.py` | `agents`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve` |
+| `cli.py` | `agents`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

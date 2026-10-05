@@ -107,6 +107,7 @@ from yantra import (
 from yantra.config import guess_provider
 from yantra.errors import ConfigError
 from yantra.hold import check_answers, held_task
+from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
 from dvara import money, patience
@@ -121,6 +122,17 @@ from dvara.locks import KeyedLocks
 from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
+
+
+#: Where a person on a channel sees their schedules: by asking.
+SEEN_HERE = ("The person sees their schedules by asking you: list them with "
+             "`mcp__samay__list_schedules`, and pause or delete one when they say so.")
+
+
+#: A stopped clock, on a service: the owner's to start, not the person's.
+CLOCK_OFF = ("Samay's clock is not running on this service right now: when you "
+             "make a schedule, say it will start running once the service's owner "
+             "starts it. Do not ask the person to run anything.")
 
 
 def _default_provider(name: str) -> Provider:
@@ -183,6 +195,7 @@ class Service:
                  provider_factory: Callable[[str], Provider] | None = None,
                  log=None,
                  hold_for: float = DEFAULT_KEEP,
+                 samay: str | None = None,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -210,6 +223,10 @@ class Service:
         #: bound now, so a host that redirects stderr later is obeyed.
         self.log = log
         self._complained: str | None = None
+        #: The samay program, when the owner turned schedules on
+        #: (``--samay``): each person's turn gets Samay's tools, for
+        #: that person, on this road (``_schedules``). None: no turn does.
+        self.samay = samay
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
@@ -597,6 +614,56 @@ class Service:
             # a sentence, or a channel adapter gets a traceback.
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
+        schedules = await self._schedules(agent, who=who, run=run, key=key)
+        try:
+            return await self._run_turn(
+                agent, key=key, run=run, resuming=resuming, answers=answers,
+                door=door, decisions=decisions, wait=wait, ceiling=ceiling,
+                provider_name=provider_name, who=who)
+        finally:
+            if schedules is not None:
+                await asyncio.to_thread(schedules.shutdown)
+
+    async def _schedules(self, agent, *, who: Actor, run: Run, key: str):
+        """Samay's tools for this turn's person, or None.
+
+        ONE SERVER PER TURN, FOR THAT PERSON. ``samay mcp --for <actor>``
+        starts beside the agent and stops when the turn ends, like the
+        agent itself (a fresh agent per turn, above): nothing outlives a
+        turn that could carry one person's schedules into another's. A
+        schedule made here runs this agent, as this person, on this road
+        (``--runner dvara``), so their allowance and the owner's rules
+        apply to every run. Creating one is a write, asked about on the
+        person's channel with Yantra's card in words (its notes/115).
+
+        A SCHEDULED TURN GETS NONE: nobody is there to say yes. And a
+        Samay that will not start costs the turn its tools, never the
+        turn -- the owner hears about it once.
+        """
+        if self.samay is None or is_unattended():
+            return None
+        from yantra.mcp import MCPError, MCPManager
+        from yantra.samay_link import Samay, SamayLinkError, load
+
+        manager = MCPManager(agent.registry, agent=agent,
+                             memory_path=self._workspace(key) / ".yantra" / "mcp.json")
+        try:
+            found = await asyncio.to_thread(load, "on", self.samay)
+            assert found is not None
+            link = Samay(mode="on", data=found[0], program=found[1],
+                         person=who.id, agent=run.agent, runner="dvara",
+                         seen_at=SEEN_HERE, clock_off=CLOCK_OFF)
+            await asyncio.to_thread(link.connect, manager, agent)
+        except (MCPError, SamayLinkError) as exc:
+            self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
+            await asyncio.to_thread(manager.shutdown)
+            return None
+        return manager
+
+    async def _run_turn(self, agent, *, key: str, run: Run,
+                        resuming: Hold | None, answers, door: str | None,
+                        decisions: Decisions, wait, ceiling, provider_name: str,
+                        who: Actor) -> Reply:
         self._rehydrate(agent, key)
         if resuming is not None:
             events = self._carry_on(agent, resuming, answers or {}, run,
