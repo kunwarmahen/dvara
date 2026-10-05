@@ -111,7 +111,7 @@ from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
 from dvara import money, patience
-from dvara.actors import Actor, ActorBook, Channel
+from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
 from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Decisions, Policy
@@ -127,6 +127,12 @@ from dvara.runs import Run, RunStore, ToolStep
 #: Where a person on a channel sees their schedules: by asking.
 SEEN_HERE = ("The person sees their schedules by asking you: list them with "
              "`mcp__samay__list_schedules`, and pause or delete one when they say so.")
+
+
+#: How a person here gets an account connected: they cannot run Setu
+#: from a chat, so the owner does it for them, at the machine.
+CONNECT_THERE = ("the person cannot connect one from here; the owner of this "
+                 "service connects it for them -- say so, and say which")
 
 
 #: A stopped clock, on a service: the owner's to start, not the person's.
@@ -614,17 +620,92 @@ class Service:
             # a sentence, or a channel adapter gets a traceback.
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
-        schedules = await self._schedules(agent, who=who, run=run, key=key)
+        servers = await self._servers(agent, who=who, run=run, key=key, spec=spec)
         try:
             return await self._run_turn(
                 agent, key=key, run=run, resuming=resuming, answers=answers,
                 door=door, decisions=decisions, wait=wait, ceiling=ceiling,
                 provider_name=provider_name, who=who)
         finally:
-            if schedules is not None:
-                await asyncio.to_thread(schedules.shutdown)
+            if servers is not None:
+                await asyncio.to_thread(servers.shutdown)
 
-    async def _schedules(self, agent, *, who: Actor, run: Run, key: str):
+    async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec):
+        """The MCP servers this turn gets, all stopped when it ends: the
+        person's own accounts (``_accounts``) and Samay's tools
+        (``_schedules``). None when there are none to start."""
+        accounts = who.setu is not None and bool(spec.connections)
+        schedules = self.samay is not None and not is_unattended()
+        if not (accounts or schedules):
+            return None
+        from yantra.mcp import MCPManager
+
+        manager = MCPManager(agent.registry, agent=agent,
+                             memory_path=self._workspace(key) / ".yantra" / "mcp.json")
+        if accounts:
+            await self._accounts(agent, manager, who=who, spec=spec)
+        if schedules:
+            await self._schedules(agent, manager, who=who, run=run)
+        return manager
+
+    def setu_home(self, who: Actor) -> Path | None:
+        """Where this person's sign-ins live, made (yours alone) when it
+        is a folder of their own under this service's state."""
+        if who.setu is None:
+            return None
+        if who.setu != OWN_SETU:
+            return Path(who.setu)
+        home = self.state / "setu" / who.id
+        home.mkdir(parents=True, exist_ok=True, mode=0o700)
+        return home
+
+    async def _accounts(self, agent, manager, *, who: Actor, spec: AgentSpec) -> None:
+        """The person's OWN accounts, as far as the package asked.
+
+        THEIR FOLDER, NEVER ANYBODY ELSE'S. Setu is read in this person's
+        home (``SETU_HOME``) and every connector asks there for its pass,
+        so one person's agent cannot reach another's inbox or the owner's
+        -- unless the owner pointed them at a folder on purpose, and then
+        ``setu_accounts`` can narrow it to the accounts meant.
+
+        BOTH MUST ALLOW. A connection is used only when the package's
+        ``[connections] needs`` names its connector, at the package's
+        level at most: the person's sign-in is not a reason for an agent
+        that never asked to read their mail. A scheduled turn gets the
+        same, because the person made the schedule (its card said what
+        it reads). A Setu that cannot be read costs the accounts, never
+        the turn.
+        """
+        from yantra.mcp import MCPError
+        from yantra.setu_link import Setu, SetuLinkError, account_of, load, needs_allow
+
+        needs = needs_allow(spec.connections)
+        home = str(self.setu_home(who))
+        try:
+            link = await asyncio.to_thread(load, "on", None, home)
+        except SetuLinkError as exc:
+            self._note(f"dvara: {who.id}'s accounts are off for this turn -- setu: {exc}")
+            return
+        allow = {}
+        for row in (link.connections if link is not None else []):
+            account = f"{row.get('connector')}:{account_of(row)}"
+            if who.setu_accounts is not None and account not in who.setu_accounts:
+                continue
+            if row.get("connector") in needs:
+                allow[account] = needs[row["connector"]]
+        setu = Setu(mode="on", home=home, link=link, allow=allow,
+                    package=spec.name, mention=frozenset(needs),
+                    connect_how=CONNECT_THERE)
+        try:
+            done = await asyncio.to_thread(setu.sync, manager, agent)
+        except MCPError as exc:
+            self._note(f"dvara: {who.id}'s accounts are off for this turn -- {exc}")
+            return
+        for note in done.notes:
+            self._note(f"dvara: {who.id}: setu: {note}")
+        agent.setu = setu        # Samay's card names what a schedule reads
+
+    async def _schedules(self, agent, manager, *, who: Actor, run: Run) -> None:
         """Samay's tools for this turn's person, or None.
 
         ONE SERVER PER TURN, FOR THAT PERSON. ``samay mcp --for <actor>``
@@ -640,13 +721,9 @@ class Service:
         Samay that will not start costs the turn its tools, never the
         turn -- the owner hears about it once.
         """
-        if self.samay is None or is_unattended():
-            return None
-        from yantra.mcp import MCPError, MCPManager
+        from yantra.mcp import MCPError
         from yantra.samay_link import Samay, SamayLinkError, load
 
-        manager = MCPManager(agent.registry, agent=agent,
-                             memory_path=self._workspace(key) / ".yantra" / "mcp.json")
         try:
             found = await asyncio.to_thread(load, "on", self.samay)
             assert found is not None
@@ -656,9 +733,6 @@ class Service:
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
-            await asyncio.to_thread(manager.shutdown)
-            return None
-        return manager
 
     async def _run_turn(self, agent, *, key: str, run: Run,
                         resuming: Hold | None, answers, door: str | None,

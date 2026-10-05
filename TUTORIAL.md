@@ -842,6 +842,36 @@ service ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)). How
 Samay itself is set up — its clock, its page, keeping it running — is in
 [Samay's README](https://github.com/kunwarmahen/samay).
 
+## 16 · Their own accounts
+
+At a keyboard, Setu's accounts are whoever is typing. Behind a door there
+are several people, so each one gets a Setu folder of their own, named in
+the actors file:
+
+```toml
+[actor.raj]
+setu = true                          # a folder of his own, under the state directory
+
+[actor.priya]
+setu = "~/.local/state/setu"         # an existing folder -- yours
+setu_accounts = ["gmail:personal"]   # ...narrowed to one account
+```
+
+Sign them in at the machine (`SETU_HOME=<their folder> setu connect
+gmail`). From then on, each of their turns reads Setu in *their* folder
+and starts their connections there, so their agent can open only their
+accounts, and only what the package asks for in `[connections] needs`,
+at the package's level. Scheduled runs get the same. An account the
+package needs that they haven't connected is named to the agent with the
+truth: the owner connects it for them.
+
+Live, with two people asking *"how many unread emails do I have?"*: priya
+got her count from `gmail-personal` alone, with the owner's other account
+never started; raj got *"the Gmail account isn't connected … it would
+need to be connected by the owner of this service"*. A person's tokens
+sit on the owner's disk, and the owner could read them. Say so to anyone
+you give a folder ([notes/19](notes/19-their-own-accounts.md)).
+
 ---
 
 # Where to read next
@@ -867,7 +897,7 @@ Each topic, and the note that argues it:
 | `notes/16-kept-for-when-you-are-back.md` | a question nobody answered waits for the person instead of being refused |
 | `notes/17-nobody-wrote-first.md` | a turn nobody typed (a schedule's), the answers given ahead of time, and a message nobody asked for |
 | `notes/18-a-schedule-asked-for-in-the-chat.md` | a person's agent offering a schedule in the chat, made only with their yes on their own channel |
-| `notes/18-a-schedule-asked-for-in-the-chat.md` | a person's agent offering a schedule in the chat, made only with their yes on their own channel |
+| `notes/19-their-own-accounts.md` | each person's own Setu sign-ins, and an agent that reaches only those, as far as its package asks |
 
 ---
 
@@ -911,11 +941,11 @@ refusals and gaps, and each one is argued in the note that owns it.
   Run, so the change appears in the ledger instead of being guessed at.
   Pinning a version per thread stays refused, because a pinned thread is
   one that does not get the prompt fix you made *because of it*.
-* **No Setu accounts behind the door yet.** An agent here gets no MCP
-  servers except Samay's, so a person's agent cannot read a Gmail
-  connected through [Setu](https://github.com/kunwarmahen/setu). Setu
-  keeps the owner's accounts, and this door serves several people: whose
-  accounts a person's agent may use is a design question, not wiring.
+* **No signing in from the chat yet.** Google's sign-in comes back to
+  the machine running Setu, so a person's accounts are connected there,
+  for now. Pasting the failed page's address back to the bot is planned.
+* **A person's tokens are readable by the owner.** They sit on the
+  owner's disk ([notes/19](notes/19-their-own-accounts.md)).
 
 ---
 
@@ -935,5 +965,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 566 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 581 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*

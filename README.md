@@ -63,7 +63,8 @@ nobody typed (a schedule's, from Samay) with the answers the person gave
 ahead of time, and tells a person something they did not ask about.
 [18 — a schedule asked for in the chat](notes/18-a-schedule-asked-for-in-the-chat.md)
 lets a person's agent offer one, made only with their yes on their own
-channel.
+channel. [19 — their own accounts](notes/19-their-own-accounts.md) gives
+each person their own Setu sign-ins.
 
 New here? [TUTORIAL.md](TUTORIAL.md) walks through it in order, from a
 first turn to a bot that asks you before anything changes.
@@ -78,10 +79,10 @@ first turn to a bot that asks you before anything changes.
   lets their agent offer one in the chat
   ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)). Samay's
   own setup is in its README.
-* **[Setu](https://github.com/kunwarmahen/setu)** — not yet. Agents behind this door get no Setu
-  accounts: Setu keeps the owner's sign-ins, and this door serves
-  several people, so whose accounts a person's agent may use has to be
-  decided first.
+* **[Setu](https://github.com/kunwarmahen/setu)** — each person can have
+  a folder of sign-ins of their own (`setu` in the actors file); their
+  agent reaches only those accounts, as far as the package asks
+  ([notes/19](notes/19-their-own-accounts.md)).
 
 ## Status
 
@@ -101,7 +102,9 @@ question they never saw can wait for them to come back instead of being
 refused. A turn nobody typed runs with the yes the person gave ahead of
 time and nothing more, and a finding nobody asked for reaches them on
 their own channels; with `--samay`, a person can ask for a schedule in
-the chat and say yes to it there — covered by 566 tests. The API is not
+the chat and say yes to it there; and each person's agent reaches that
+person's own accounts through Setu, never anybody else's — covered by
+581 tests. The API is not
 stable.
 
 ## The shape of it
@@ -226,7 +229,7 @@ An unknown key is an error, not a shrug:
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, channel, max_usd_per_day, max_usd_per_turn,
-max_wait_per_day, permissions, receipt
+max_wait_per_day, permissions, receipt, setu, setu_accounts
 ```
 
 **How long they may be kept waiting.** `max_wait_per_day` is seconds a
@@ -282,6 +285,29 @@ dvara say --as telegram:8675309 --agent greeter "who are you?"
 A turn that arrives through a channel is keyed under `kind:thread`, so
 two channels whose thread ids collide stay two conversations. Naming an
 actor directly keys exactly as it always did.
+
+**Their own accounts.** `setu = true` gives a person a
+[Setu](https://github.com/kunwarmahen/setu) folder of their own
+(`<state>/setu/<name>`, readable by the service alone); a path points at
+an existing one, such as yours. `setu_accounts` narrows a folder to the
+accounts meant. Absent means none.
+
+```toml
+[actor.raj]
+setu = true
+
+[actor.priya]
+setu = "~/.local/state/setu"         # your own folder...
+setu_accounts = ["gmail:personal"]   # ...but only this account of it
+```
+
+Each turn reads Setu in that person's folder and starts their
+connections there, so their agent can only open their accounts, and only
+those the package asks for in `[connections] needs`, at the package's
+level. Signing in happens at the machine, for now:
+`SETU_HOME=~/dvara/state/setu/raj setu connect gmail`. A person's tokens
+sit on your disk, where you could read them; say so to anyone you give a
+folder ([notes/19](notes/19-their-own-accounts.md)).
 
 ### The policy file
 
@@ -713,9 +739,9 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
-| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
+| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |

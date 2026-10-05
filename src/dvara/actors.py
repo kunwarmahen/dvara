@@ -128,7 +128,11 @@ from dvara.gate import LADDER
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
-                        "receipt"})
+                        "receipt", "setu", "setu_accounts"})
+
+#: ``setu = true``: a Setu folder of the person's own, under the
+#: service's state. Any other value is a path to one that exists already.
+OWN_SETU = "own"
 
 #: What may follow an answer, under it, for this person. Absent is the
 #: third option and the default, because most people in a chat did not
@@ -193,6 +197,13 @@ class Actor:
     #: for nothing at all. See the module docstring on why it is not a
     #: boolean.
     receipt: str | None = None
+    #: Whose sign-ins this person's agents may use: ``OWN_SETU`` for a
+    #: folder of their own under the service's state, a path to an
+    #: existing Setu folder, or None for none at all (the default).
+    setu: str | None = None
+    #: The accounts of that folder they may reach (``gmail:personal``);
+    #: None for all of them. Narrowing, for a folder shared with them.
+    setu_accounts: tuple[str, ...] | None = None
 
     def may_use(self, agent: str) -> bool:
         return self.agents is None or agent in self.agents
@@ -322,6 +333,8 @@ class ActorBook:
                 permissions=_mode(body.get("permissions"), name, where),
                 channels=_channels(body.get("channel"), name, where),
                 receipt=_receipt(body, name, where),
+                setu=_setu(body.get("setu"), name, where),
+                setu_accounts=_setu_accounts(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -375,6 +388,33 @@ def _stamp(path: Path | None) -> tuple | None:
     except OSError:
         return None
     return (info.st_mtime_ns, info.st_size)
+
+
+def _setu(value, name: str, where) -> str | None:
+    """``true`` -> a folder of their own; a string -> that folder; false
+    or absent -> none. Anything else is a typo that must not mean yes."""
+    if value is None or value is False:
+        return None
+    if value is True:
+        return OWN_SETU
+    if isinstance(value, str) and value.strip():
+        return str(Path(value.strip()).expanduser())
+    raise ConfigProblem(f"{where}: [actor.{name}] setu must be true, false, or a "
+                        f"path to a Setu folder")
+
+
+def _setu_accounts(body: dict, name: str, where) -> tuple[str, ...] | None:
+    value = body.get("setu_accounts")
+    if value is None:
+        return None
+    if not body.get("setu"):
+        raise ConfigProblem(f"{where}: [actor.{name}] setu_accounts names accounts "
+                            f"but setu is not set, so there are none to name")
+    if (not isinstance(value, list) or not value
+            or not all(isinstance(v, str) and ":" in v for v in value)):
+        raise ConfigProblem(f"{where}: [actor.{name}] setu_accounts must be a list "
+                            f"of accounts like \"gmail:personal\"")
+    return tuple(value)
 
 
 def _agents(value, name: str, where) -> tuple[str, ...] | None:
