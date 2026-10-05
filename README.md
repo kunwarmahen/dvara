@@ -65,6 +65,24 @@ ahead of time, and tells a person something they did not ask about.
 lets a person's agent offer one, made only with their yes on their own
 channel.
 
+New here? [TUTORIAL.md](TUTORIAL.md) walks through it in order, from a
+first turn to a bot that asks you before anything changes.
+
+## Works with
+
+* **[Yantra](https://github.com/kunwarmahen/yantra)** — every agent here is a Yantra package, built fresh
+  for each turn. Tools, skills, permission modes and evals are Yantra's,
+  and [its tutorial](https://github.com/kunwarmahen/yantra/blob/main/TUTORIAL.md) is where they are explained.
+* **[Samay](https://github.com/kunwarmahen/samay)** — runs a person's schedules through this door, as
+  them ([notes/17](notes/17-nobody-wrote-first.md)), and with `--samay`
+  lets their agent offer one in the chat
+  ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)). Samay's
+  own setup is in its README.
+* **[Setu](https://github.com/kunwarmahen/setu)** — not yet. Agents behind this door get no Setu
+  accounts: Setu keeps the owner's sign-ins, and this door serves
+  several people, so whose accounts a person's agent may use has to be
+  decided first.
+
 ## Status
 
 Roster, actors, sessions, budgets, run history, an HTTP surface and
