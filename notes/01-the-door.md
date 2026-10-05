@@ -325,7 +325,10 @@ message; an exception is a reply that silently never arrives.
   turn-shaped, and a bot that streams is a bot that edits the same
   message forty times and gets rate-limited for it.
 * **No web UI, no registry, no scheduling, no second process.** Each of
-  those is a service of its own wearing this one's clothes.
+  those is a service of its own wearing this one's clothes. (Scheduling
+  arrived exactly that way: Samay, a program of its own. What it needed
+  from the door — a turn nobody typed, and a message nobody asked for —
+  is [note 17](17-nobody-wrote-first.md).)
 
 ## What is not here yet
 

@@ -384,6 +384,9 @@ class TelegramBot:
         """
         if self.service.asks is not None:
             self.service.asks.route("telegram", self._deliver_ask)
+        # A notice (notices.py) for somebody with a Telegram entry comes
+        # here too, sent straight to their chat with this bot.
+        self.service.notices.route("telegram", self._deliver_notice)
         me = await self._api("getMe")
         offset = await self._first_offset()
         self._note(f"dvara · telegram · @{me.get('username', '?')} "
@@ -687,6 +690,16 @@ class TelegramBot:
                                 action="typing")
 
     # ---- the question, and the button --------------------------------------
+
+    async def _deliver_notice(self, address: str, text: str) -> None:
+        """Something the person was not asked about, into their chat.
+
+        Split the way an answer is, so a long finding arrives whole
+        rather than cut at Telegram's limit. Raising is left to the desk,
+        which keeps the text for collection rather than losing it."""
+        chat = int(address)
+        for part in split_message(text):
+            await self._send(chat, part)
 
     async def _deliver_ask(self, ask: Ask) -> Withdraw:
         """Put one "may I?" in front of the person it was addressed to.

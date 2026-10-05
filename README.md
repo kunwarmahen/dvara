@@ -58,6 +58,9 @@ puts that allowance under the answer and in `dvara runs`;
 [16 — kept for when you are back](notes/16-kept-for-when-you-are-back.md)
 lets a question nobody answered wait for the person instead of being
 refused, across a restart, and carries the turn on when they answer.
+[17 — nobody wrote first](notes/17-nobody-wrote-first.md) runs a turn
+nobody typed (a schedule's, from Samay) with the answers the person gave
+ahead of time, and tells a person something they did not ask about.
 
 ## Status
 
@@ -74,7 +77,9 @@ a question answered in one place stops asking in all the others. A crash
 mid-answer is owned up to on the next start rather than left as silence,
 a person who stops answering stops being asked for the day, and a
 question they never saw can wait for them to come back instead of being
-refused — covered by 533 tests. The API is not stable.
+refused. A turn nobody typed runs with the yes the person gave ahead of
+time and nothing more, and a finding nobody asked for reaches them on
+their own channels — covered by 556 tests. The API is not stable.
 
 ## The shape of it
 
@@ -392,7 +397,10 @@ your shell history and readable in every `ps` on the box. **A bot token
 is an identity** — a name, a picture, an @handle somebody types — so a
 second agent is a second token and a second process rather than a prefix
 on every message. `/start` is answered here, from what the package says
-about itself, and it is the only command there is.
+about itself, and it is the only command there is. A bot running in
+this process is also where `POST /notify` sends a person something they
+did not ask about — a schedule's finding — straight to their chat
+([notes/17](notes/17-nobody-wrote-first.md)).
 
 The bot runs the service **in its own process** and reaches the ask desk
 directly, which is why a question can be pushed the moment it is raised.
@@ -508,7 +516,19 @@ GET  /asks?actor=                                -> {asks: [{id, tool, summary, 
 POST /asks/{id}    {actor, approve}              -> {answered, approved}
 GET  /holds?actor=                               -> {holds: [{id, calls, age, ...}]}
 POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
+POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
+GET  /notices?channel=                           -> {notices: [{id, to, text, ...}]}
 ```
+
+A program that runs turns for people who are not there — a scheduler —
+adds `"unattended": true` to `/message`, and may add `"allow_tools":
+[globs]`: the questions the person answered ahead of time. They grant
+only what the person could have been asked about (a deny rule still
+refuses), the call is recorded as `[ahead]` in `dvara runs`, and the
+reply carries `needs_person`, `busy` and `refused`. `/notify` sends a
+text to a person's channels from the actors file; a channel with no
+adapter in this process collects from `/notices`, each one once, kept
+in memory ([notes/17](notes/17-nobody-wrote-first.md)).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person**: a caller is a channel adapter
@@ -646,13 +666,14 @@ print(reply.text, reply.cost_usd)
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)) |
-| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)) |
+| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), and which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | seven endpoints and a bearer token (`[http]` extra) |
+| `http.py` | nine endpoints and a bearer token (`[http]` extra) |
+| `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |

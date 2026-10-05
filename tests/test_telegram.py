@@ -763,3 +763,33 @@ def test_a_second_poller_on_one_token_is_fatal_and_says_why(make_bot):
     bot = make_bot(fake)
     with pytest.raises(ConfigProblem, match="split"):
         asyncio.run(bot.run())
+
+
+# ---- a notice nobody asked for (notices.py) --------------------------------
+
+
+def test_a_notice_arrives_in_the_persons_own_chat(make_bot):
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot._deliver_notice(str(KNOWN), "2 new mails from the bank"))
+    assert fake.texts() == ["2 new mails from the bank"]
+    assert fake.sent()[0]["chat_id"] == KNOWN
+    assert "parse_mode" not in fake.sent()[0]
+
+
+def test_a_long_notice_is_split_like_an_answer(make_bot):
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot._deliver_notice(str(KNOWN), "a" * 3000 + "\n\n" + "b" * 3000))
+    assert fake.texts() == ["a" * 3000, "b" * 3000]
+
+
+def test_a_running_bot_is_where_the_service_sends_notices(make_bot):
+    """Registered when the bot starts, the way questions are: a notice
+    for somebody with a telegram entry needs no other wiring."""
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot.run())
+    who, sent = asyncio.run(bot.service.notify(actor="mahen", text="news"))
+    assert sent.sent == ["telegram"]
+    assert fake.texts()[-1] == "news"

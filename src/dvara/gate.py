@@ -56,6 +56,7 @@ package asks for when it ships ``tools/*.py`` at all.
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
@@ -130,6 +131,12 @@ class Decisions:
         if call_id:
             self.by_call[call_id] = f"asked:{via}" if via else "asked"
 
+    def ahead(self, call_id: str) -> None:
+        """The person said yes before the call existed: a schedule they
+        accepted named this tool (``allow_tools`` on the turn)."""
+        if call_id:
+            self.by_call[call_id] = "ahead"
+
     def of(self, call_id: str) -> str | None:
         return self.by_call.get(call_id)
 
@@ -186,7 +193,8 @@ class Policy:
              thread: str = "",
              reach: Sequence[tuple[str, str]] = (),
              decisions: Decisions | None = None,
-             patience: Patience | None = None) -> PermissionFn:
+             patience: Patience | None = None,
+             ahead: Sequence[str] = ()) -> PermissionFn:
         """The ``PermissionFn`` one turn runs under.
 
         Yantra's own two functions where they fit, chosen between rather
@@ -212,6 +220,15 @@ class Policy:
         ``patience`` is this turn's share of the person's day of waiting
         (patience.py), carried to the one place a question is put. None
         means no limit and no tally.
+
+        ``ahead`` is tool-name globs the person answered yes to BEFORE the
+        turn -- a schedule they accepted, which named the browser. Carried
+        to the same one place, ``put``, because that is where it means
+        something: a call that reaches ``put`` is one a person may be
+        asked about, and an answer given ahead of time is that answer.
+        So it grants nothing a question could not have granted -- a deny
+        rule still refuses, and a ``read_only`` person, who is never
+        asked, is never "answered" either.
         """
         # A PACKAGE THAT NAMES NO MODE IS TREATED AS NAMING THE TIGHTEST,
         # which is the one place silence is read as a decision rather than
@@ -229,20 +246,22 @@ class Policy:
         if len(self.rules):
             return ruled(self.rules, mode=mode, desk=desk, actor=actor,
                          agent=agent, thread=thread, reach=reach,
-                         decisions=decisions, patience=patience)
+                         decisions=decisions, patience=patience,
+                         ahead=ahead)
         if mode == "yolo":
             return yolo
         if mode == "ask" and desk is not None:
             return escalating(desk, actor=actor, agent=agent, thread=thread,
                               reach=reach, decisions=decisions,
-                              patience=patience)
+                              patience=patience, ahead=ahead)
         return allow_read_only
 
 
 def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
                reach: Sequence[tuple[str, str]] = (),
                decisions: Decisions | None = None,
-               patience: Patience | None = None) -> PermissionFn:
+               patience: Patience | None = None,
+               ahead: Sequence[str] = ()) -> PermissionFn:
     """A gate that puts the question to a person and waits for the answer.
 
     Read-only tools are approved without asking, exactly as they are
@@ -259,7 +278,8 @@ def escalating(desk: AskDesk, *, actor: str, agent: str, thread: str,
         if request.read_only:
             return True
         return put(desk, request, actor=actor, agent=agent, thread=thread,
-                   reach=reach, decisions=decisions, patience=patience)
+                   reach=reach, decisions=decisions, patience=patience,
+                   ahead=ahead)
 
     return gate
 
@@ -268,7 +288,8 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
               agent: str, thread: str,
               reach: Sequence[tuple[str, str]] = (),
               decisions: Decisions | None = None,
-              patience: Patience | None = None) -> bool:
+              patience: Patience | None = None,
+              ahead: Sequence[str] = ()) -> bool:
     """Ask the person, and write their answer onto the request.
 
     The one place a question is put, so the two gates below cannot come to
@@ -292,6 +313,14 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     under ``deny`` is a refusal and under ``hold`` is a question kept
     for when they are back.
     """
+    # ANSWERED AHEAD OF TIME, which is still a person's answer -- except
+    # for a tool that asks on every call, whose whole point is that a yes
+    # given before the call existed does not count (Yantra's always_ask).
+    if ahead and not request.always_ask and any(
+            fnmatch.fnmatchcase(request.tool_name, g) for g in ahead):
+        if decisions is not None:
+            decisions.ahead(request.call_id)
+        return True
     holds = desk.on_timeout == "hold"
     if holds and patience is not None and patience.holding:
         return hold(request)
@@ -340,7 +369,8 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
           agent: str, thread: str,
           reach: Sequence[tuple[str, str]] = (),
           decisions: Decisions | None = None,
-          patience: Patience | None = None) -> PermissionFn:
+          patience: Patience | None = None,
+          ahead: Sequence[str] = ()) -> PermissionFn:
     """The gate when the owner has written standing answers down.
 
     One function rather than a wrapper around the three above, for note
@@ -398,7 +428,8 @@ def ruled(rules: RuleBook, *, mode: str, desk: AskDesk | None, actor: str,
             # owner is allowed to mean.
             return put(desk, request, actor=actor, agent=agent,
                        thread=thread, reach=reach,
-                       decisions=decisions, patience=patience)
+                       decisions=decisions, patience=patience,
+                       ahead=ahead)
         return refuse(request, _no_route(request, mode, desk),
                       code=REFUSED_UNATTENDED)
 

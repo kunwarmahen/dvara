@@ -84,7 +84,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -107,6 +107,7 @@ from yantra import (
 from yantra.config import guess_provider
 from yantra.errors import ConfigError
 from yantra.hold import check_answers, held_task
+from yantra.unattended import scope as unattended_scope
 
 from dvara import money, patience
 from dvara.actors import Actor, ActorBook, Channel
@@ -117,6 +118,7 @@ from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
                          NotYourHold, Waiting, waiting_text)
 from dvara.keys import session_key, workspace_parts
 from dvara.locks import KeyedLocks
+from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
 
@@ -156,6 +158,14 @@ class Reply:
     #: the queue (holds.py) -- what a channel shows, with the id it
     #: answers by. None for every turn that did not stop.
     held: Hold | None = None
+    #: An UNATTENDED turn's three lists (Yantra's unattended.py), for the
+    #: program that asked for it -- a scheduler: what only a person can
+    #: fix (a sign-in), what another process was using (a browser
+    #: profile), and which tools were refused. Empty on any other turn
+    #: except ``refused``, which is read off the run's own steps.
+    needs: tuple[str, ...] = ()
+    busy: tuple[str, ...] = ()
+    refused: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -210,6 +220,8 @@ class Service:
         # silence holds is a policy for new questions, not a way to
         # strand old ones (holds.py).
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
+        #: Telling a person something nobody asked about (notices.py).
+        self.notices = NoticeDesk()
         # The one seam between this service and the network. Injected so
         # tests exercise the real assembly against a scripted provider,
         # and so an embedder that already holds a provider does not open
@@ -304,6 +316,26 @@ class Service:
         except ConfigProblem as exc:
             self._note(f"{exc}\n  -- keeping the rules already loaded")
 
+    # ---- telling, unasked ----------------------------------------------------
+
+    async def notify(self, *, text: str, actor: str | None = None,
+                     via: Channel | None = None) -> tuple[str, Sent]:
+        """Send ``text`` to a person on their channels (notices.py).
+
+        Who is named the two ways a turn names them, exactly one of the
+        two. Refused for nobody on the roster, and for an empty text --
+        a blank message on somebody's phone at 08:00 is worse than none.
+        """
+        self.refresh()
+        if (actor is None) == (via is None):
+            raise Refused("a notice needs exactly one of an actor or a "
+                          "channel identity")
+        who = (self.actors.get(actor) if actor is not None
+               else self.actors.resolve(via.kind, via.id))
+        if not text.strip():
+            raise Refused("a notice needs some text")
+        return who.id, await self.notices.send(who.id, who.reach(), text)
+
     # ---- the verb ----------------------------------------------------------
 
     def _whom(self, actor: str | None, via: Channel | None,
@@ -328,7 +360,9 @@ class Service:
 
     async def deliver(self, *, agent: str, thread: str, text: str,
                       actor: str | None = None,
-                      via: Channel | None = None) -> Reply:
+                      via: Channel | None = None,
+                      unattended: bool = False,
+                      allow_tools: Sequence[str] = ()) -> Reply:
         """Run one turn for one person, and answer them either way.
 
         Never raises for anything a person could have caused. A refusal is
@@ -354,6 +388,16 @@ class Service:
         path that has a channel to name -- keys made by callers naming an
         actor directly are untouched, and so is every checkpoint already
         written under one.
+
+        UNATTENDED IS A TURN NOBODY STARTED BY TYPING. A program (a
+        scheduler) asked for it, and the person it runs as may be asleep:
+        Yantra is told so for this turn alone (its ``unattended.scope``),
+        so a browser hands nothing to a window nobody is at, and the reply
+        carries what the turn needed from them. A question that CAN reach
+        them still does -- that is what this service is for -- and
+        ``allow_tools`` are the questions they answered ahead of time,
+        when they accepted the schedule (``gate.put`` says what that can
+        and cannot grant).
         """
         started = datetime.now(UTC)
         self.refresh()
@@ -380,7 +424,15 @@ class Service:
             run = Run(actor=actor, agent=agent, thread=thread, message=text,
                       started_at=started, cost_usd=0.0)
             try:
-                return await self._turn(spec=spec, who=who, key=key, run=run)
+                if not unattended:
+                    return await self._turn(spec=spec, who=who, key=key,
+                                            run=run)
+                with unattended_scope() as record:
+                    reply = await self._turn(spec=spec, who=who, key=key,
+                                             run=run,
+                                             ahead=tuple(allow_tools))
+                return replace(reply, needs=tuple(record.needs),
+                               busy=tuple(record.busy))
             except Refused as exc:
                 run.reply, run.stop_reason = str(exc), "refused"
                 self.runs.record(run)
@@ -493,7 +545,8 @@ class Service:
     async def _turn(self, *, spec: AgentSpec, who: Actor, key: str,
                     run: Run, resuming: Hold | None = None,
                     answers: Mapping[str, bool | str] | None = None,
-                    door: str | None = None) -> Reply:
+                    door: str | None = None,
+                    ahead: tuple[str, ...] = ()) -> Reply:
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
@@ -531,6 +584,7 @@ class Service:
                     reach=who.reach(),
                     decisions=decisions,
                     patience=wait,
+                    ahead=ahead,
                 ),
                 cwd=self._workspace(key),
                 provider=provider,
@@ -614,7 +668,10 @@ class Service:
                      detail=run.detail, cost_usd=run.cost_usd,
                      usage=run.usage,
                      receipt=self._receipt(who, run, provider_name),
-                     held=held)
+                     held=held,
+                     refused=tuple(dict.fromkeys(
+                         step.name for step in run.tools
+                         if step.refusal not in (None, HELD))))
 
     def _keep(self, agent, key: str, run: Run,
               decisions: Decisions) -> Hold:

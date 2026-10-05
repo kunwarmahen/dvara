@@ -201,9 +201,25 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=400,
                                 detail=f"missing or empty: {', '.join(missing)}")
         actor, via = _whom(body)
+        unattended = body.get("unattended", False)
+        allow_tools = body.get("allow_tools") or []
+        if not isinstance(unattended, bool):
+            raise HTTPException(status_code=400,
+                                detail="unattended is true or false")
+        if not isinstance(allow_tools, list) or not all(
+                isinstance(g, str) for g in allow_tools):
+            raise HTTPException(status_code=400,
+                                detail="allow_tools is a list of tool-name globs")
+        if allow_tools and not unattended:
+            # An answer given ahead of time is for a turn nobody is at.
+            # A person who IS there answers the question when it comes.
+            raise HTTPException(status_code=400,
+                                detail="allow_tools goes with unattended: true")
         reply = await service.deliver(actor=actor, via=via,
                                       agent=body["agent"],
-                                      thread=body["thread"], text=body["text"])
+                                      thread=body["thread"], text=body["text"],
+                                      unattended=unattended,
+                                      allow_tools=allow_tools)
         return {
             "text": reply.text,
             "ok": reply.ok,
@@ -225,7 +241,43 @@ def create_app(service: Service, *, token: str,
             # The turn stopped for approval nobody gave in time. The id is
             # what POST /holds/{id} answers; the calls are what to show.
             "held": reply.held.as_dict() if reply.held else None,
+            # What only a person can fix, what was busy, what was refused
+            # (Yantra's unattended.py) -- for the program that asked.
+            "needs_person": list(reply.needs),
+            "busy": list(reply.busy),
+            "refused": list(reply.refused),
         }
+
+    @app.post("/notify")
+    async def notify(request: Request,
+                     authorization: str | None = Header(default=None)) -> dict:
+        """Tell a person something, on their own channels (notices.py).
+
+        200 says where it went: ``sent`` now, ``kept`` for an adapter to
+        collect, or neither -- a person with no channel, said as
+        ``nowhere: true`` rather than as an error, because the caller
+        asked a fair question and that is its answer.
+        """
+        check(authorization)
+        body = await request.json()
+        text = body.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise HTTPException(status_code=400, detail="missing or empty: text")
+        actor, via = _whom(body)
+        try:
+            who, sent = await service.notify(text=text, actor=actor, via=via)
+        except Refused as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return {"actor": who, "sent": sent.sent, "kept": sent.kept,
+                "failed": sent.failed, "nowhere": sent.nowhere}
+
+    @app.get("/notices")
+    async def notices(channel: str,
+                      authorization: str | None = Header(default=None)) -> dict:
+        """Notices waiting for a channel adapter in another process --
+        each handed over once, oldest first."""
+        check(authorization)
+        return {"notices": [n.as_dict() for n in service.notices.take(channel)]}
 
     @app.get("/asks")
     async def asks(actor: str | None = None, channel: str | None = None,

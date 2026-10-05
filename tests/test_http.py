@@ -376,3 +376,56 @@ def test_no_job_is_the_ordinary_case(make_service):
     bearer = {"Authorization": f"Bearer {TOKEN}"}
     with TestClient(create_app(service, token=TOKEN)) as client:
         assert client.get("/health", headers=bearer).status_code == 200
+
+
+# ---- a turn nobody typed, and a message nobody asked for --------------------
+
+
+def test_an_unattended_message_reports_its_three_lists(client):
+    response = client.post("/message", headers=auth(), json={
+        "actor": "owner", "agent": "greeter", "thread": "samay-1",
+        "text": "hi", "unattended": True})
+    body = response.json()
+    assert response.status_code == 200 and body["ok"]
+    assert body["needs_person"] == [] and body["busy"] == []
+    assert body["refused"] == []
+
+
+@pytest.mark.parametrize("extra,detail", [
+    ({"unattended": "yes"}, "unattended is true or false"),
+    ({"unattended": True, "allow_tools": "browser_*"}, "a list"),
+    ({"allow_tools": ["browser_*"]}, "goes with unattended"),
+])
+def test_unattended_fields_are_checked(client, extra, detail):
+    response = client.post("/message", headers=auth(), json={
+        "actor": "owner", "agent": "greeter", "thread": "t", "text": "hi",
+        **extra})
+    assert response.status_code == 400 and detail in response.json()["detail"]
+
+
+def test_a_notice_for_a_channel_nobody_serves_here_waits_once(make_service):
+    from dvara.actors import ActorBook
+    people = ActorBook.from_dict({"actor": {"owner": {"channel": [
+        {"kind": "signal", "id": "+15550100"}]}}})
+    service = make_service(actors=people)
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        sent = client.post("/notify", headers=auth(),
+                           json={"actor": "owner", "text": "2 new mails"}).json()
+        assert sent["kept"] == ["signal"] and not sent["nowhere"]
+        waiting = client.get("/notices?channel=signal", headers=auth()).json()
+        assert [n["text"] for n in waiting["notices"]] == ["2 new mails"]
+        again = client.get("/notices?channel=signal", headers=auth()).json()
+        assert again["notices"] == []
+
+
+def test_a_notice_to_nobody_on_the_roster_is_a_404(client):
+    response = client.post("/notify", headers=auth(),
+                           json={"actor": "stranger", "text": "hi"})
+    assert response.status_code == 404
+
+
+def test_a_notice_needs_text_and_a_token(client):
+    assert client.post("/notify", headers=auth(),
+                       json={"actor": "owner"}).status_code == 400
+    assert client.post("/notify", json={"actor": "owner",
+                                        "text": "hi"}).status_code == 401
