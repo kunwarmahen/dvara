@@ -20,7 +20,7 @@ that matter: after a crash, and from another container.
 $ dvara status
 dvara 0.1.0 · state /home/you/dvara/state
 serving at http://127.0.0.1:8765 (dvara serve, since 2026-10-06T02:56:39+00:00)
-agents: greeter, scribe  ·  people: 2
+agents: greeter, minder, scribe  ·  people: 2
 ```
 
 `dvara status --json` prints the same thing as `dvara.status.v1`, the

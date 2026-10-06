@@ -1,0 +1,33 @@
+# The smallest package that can put work on a timer. `scribe` is the one
+# that asks before a write; this one asks before a SCHEDULE, which is a
+# write that keeps happening after everybody has gone to bed.
+#
+# It does nothing on its own. Samay's tools reach it only when the owner
+# starts the service with `--samay` (notes/18), and then only for the
+# person this turn runs as: one server per turn, `--for` that person, so
+# nobody's schedules are one model mistake away from anybody else's.
+[agent]
+name        = "minder"
+description = "Checks a page for you, now or on a schedule you say yes to."
+version     = "0.1.0"
+prompt      = "prompt.md"
+
+[tools]
+# web_fetch is the work itself: a read, so it runs without asking, now
+# and later. The Samay tools are named by pattern, and an allowlist that
+# left them out would hide them however the service was started. Of the
+# seven, only create_schedule, pause_schedule, resume_schedule and
+# delete_schedule change anything, so only those four become a question.
+allow = ["web_fetch", "mcp__samay__*"]
+
+[permissions]
+# THE PACKAGE MUST ASK. Under "read_only" a schedule is refused without
+# asking anybody, which is right for a package that never meant to
+# change anything. "ask" is what turns create_schedule into the card the
+# person reads on their own channel and answers with a button.
+mode = "ask"
+
+[budget]
+# One look at a page and a sentence back. A scheduled run is billed to
+# the same person's allowance as one they typed.
+max_usd_per_turn = 0.05

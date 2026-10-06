@@ -124,6 +124,59 @@ service's environment too, and the server it starts inherits them; this
 service never needs to know its own address. Without them, every
 schedule made here is refused, and the start says so.
 
+## An example to try it with
+
+`examples/agents/minder` is the smallest package that can make a
+schedule here. It fetches a page now (`web_fetch`), and offers to do it
+later. Its allowlist names `mcp__samay__*` and its mode is `ask`, the two
+things above that a package must get right. Its prompt says to preview
+first, read the sentence back, and wait for a yes in the person's own
+words before calling `create_schedule`.
+
+The whole chain, from the chat to a run, on `qwen3.8:latest` through
+Ollama. The person (priya, allowed `minder` and nothing else) talks over
+HTTP, and the card is what her channel shows:
+
+```
+priya: Can you check whether example.com is up once an hour, and only tell me if it's down?
+minder: Here's what it would do: check example.com every hour (next runs around
+        00:05, 01:05, 02:05 in your timezone), and only message you if the site is
+        down or unreachable. Does that sound right? If you say yes, I'll create it.
+
+priya: Yes, that's right, please set it up.
+
+Save a schedule. At each time this agent runs it with NOBODY watching.
+  when:      every hour -- next: Tue 6 Oct 00:05, 01:05, 02:05 (America/New_York)
+  tells you: only when there is something new
+  without asking, it may also use:
+    web_fetch
+  Anything else that changes something is refused while nobody is there.
+  does:      Check whether example.com is up: fetch https://example.com with web_fetch. …
+
+minder: Done — schedule `c9792d27` is set: example.com checked every hour, and
+        you'll only hear from me if it's down.
+```
+
+Then `samay run-now c9792d27`, which went back through this door as
+priya, with `web_fetch` already allowed:
+
+```
+Mon 5 Oct 23:05  quiet  I fetched https://example.com. The request succeeded …
+NOTHING NEW
+
+$ dvara runs
+03:05  priya/minder  end_turn  '(A scheduled run -- every hour. Nobody is watchi'
+                     web_fetch[ahead]
+03:05  priya/minder  end_turn  "Yes, that's right, please set it up."
+                     mcp__samay__create_schedule[asked:http]  [answered from http]
+03:05  priya/minder  end_turn  'Can you check whether example.com is up once an '
+                     mcp__samay__preview_schedule
+```
+
+`samay show` lists it as priya's: `runner: dvara`, `agent: minder`,
+`allowed: web_fetch`. The run was quiet because the site was up, so
+priya heard nothing, which is what she asked for.
+
 ## What was deliberately not built
 
 * **On by default, the way Yantra is at a keyboard.** At a keyboard the

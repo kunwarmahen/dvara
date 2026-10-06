@@ -722,7 +722,7 @@ nothing, because the lock went with the process:
 $ dvara status
 dvara 0.1.0 · state /home/you/dvara/state
 serving at http://127.0.0.1:8765 (dvara serve, since 2026-10-06T02:56:39+00:00)
-agents: greeter, scribe  ·  people: 2
+agents: greeter, minder, scribe  ·  people: 2
 ```
 
 `dvara status --json` is the same for a program, such as Sarathi, that
@@ -848,6 +848,12 @@ export SAMAY_DVARA_URL=http://127.0.0.1:8765 SAMAY_DVARA_TOKEN=$DVARA_TOKEN
 dvara --ask --samay /path/to/samay serve --port 8765 --telegram helper
 #   dvara: schedules through samay 0.1.0 (/path/to/samay); its clock is running
 ```
+
+`examples/agents/minder` is a package built for this: it checks a web
+page now, and offers to check it later or on a repeat. Ask it *"check
+whether example.com is up once an hour and only tell me if it's down"*.
+It previews the schedule, reads it back, and waits for your yes before
+the card comes.
 
 It's off unless the owner turns it on, because it lets everyone the bot
 serves put work on a timer the owner pays for. The package has to ask

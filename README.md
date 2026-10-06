@@ -116,7 +116,7 @@ their own channels; with `--samay`, a person can ask for a schedule in
 the chat and say yes to it there; and each person's agent reaches that
 person's own accounts through Setu, never anybody else's; and a program
 that started it can ask whether it is serving, and a scheduled run's
-conversation is let go a week after it ends — covered by 612 tests. The API is not
+conversation is let go a week after it ends — covered by 613 tests. The API is not
 stable.
 
 ## The shape of it
@@ -570,7 +570,7 @@ after a `kill -9` and from another container
 $ dvara status
 dvara 0.1.0 · state /home/you/dvara/state
 serving at http://127.0.0.1:8765 (dvara serve, since 2026-10-06T02:56:39+00:00)
-agents: greeter, scribe  ·  people: 2
+agents: greeter, minder, scribe  ·  people: 2
 ```
 
 `--json` prints the same as `dvara.status.v1`, for a program that started
@@ -666,6 +666,9 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
 
 * Off unless asked for: it lets every person you serve put work on a
   timer that you pay for.
+* `examples/agents/minder` is a package that can: it checks a page now,
+  and offers to on a schedule. Try it with the owner's actor and
+  `--root examples/agents`.
 * Each turn starts `samay mcp --for <that person> --agent <this agent>
   --runner dvara` and stops it when the turn ends. A scheduled turn gets
   none of it.

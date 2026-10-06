@@ -25,7 +25,7 @@ import pytest
 from dvara.asks import AskDesk
 from dvara.cli import _samay
 from dvara.errors import ConfigProblem
-from tests.conftest import calls, says, write_package
+from tests.conftest import EXAMPLES, calls, says, write_package
 
 FAKE = """\
     import json, sys
@@ -144,6 +144,38 @@ class TestAPersonsTurn:
             asyncio.run(service.deliver(actor="owner", agent="greeter",
                                         thread="t", text=text))
         assert sum(1 for a in logged(samay[1]) if "mcp" in a) == 2
+
+
+class TestTheExample:
+    """examples/agents/minder is the package a person tries this with, so
+    it has to get both things a package can get wrong: an allowlist that
+    names Samay's tools, and a mode that asks."""
+
+    def test_minder_is_offered_the_schedule_tools_and_asks_before_saving(
+            self, make_service, samay, priced_model):
+        desk = AskDesk(timeout=10)
+        service = make_service([calls("mcp__samay__create_schedule", CREATE),
+                                says("set up")], samay=str(samay[0]), asks=desk,
+                               root=EXAMPLES / "agents", model=priced_model)
+
+        async def go():
+            turn = asyncio.create_task(service.deliver(
+                actor="owner", agent="minder", thread="t", text="every 2h"))
+            for _ in range(500):
+                if desk.pending() or turn.done():
+                    break
+                await asyncio.sleep(0.01)
+            assert desk.pending(), f"nothing was asked: {turn.done() and turn.result()}"
+            desk.answer(desk.pending()[0].id, actor="owner", approve=True)
+            return await turn
+
+        reply = asyncio.run(go())
+        offered = tools_sent(service)
+        assert {"web_fetch", "mcp__samay__preview_schedule",
+                "mcp__samay__create_schedule"} <= offered
+        assert "write_file" not in offered
+        assert reply.ok
+        assert ["call", "create_schedule"] in logged(samay[1])
 
 
 class TestWhoGetsNone:
