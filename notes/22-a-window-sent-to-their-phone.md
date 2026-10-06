@@ -118,8 +118,19 @@ phone on Tailscale. ~~Amazon~~ has since been signed in to from a real
 phone, through this door in Sarathi's containers, on home Wi-Fi. Two of
 the window's habits had to change for it: typed text now finds the
 page's empty field without a tap, and Enter in a form the page won't
-submit presses the form's own button. Still not tried: X, and a phone on
-Tailscale.
+submit presses the form's own button.
+
+**X refuses the window.** Tried the same way, X answered *"we have
+temporarily limited your access"*: its own bot detection, turning the
+streamed browser away before any sign-in. Nothing in this door or in Setu
+can talk X out of that, and nothing should try. The road that may work,
+not yet tried, is signing in to X at the computer instead (`setu connect
+x`, an ordinary window nothing drives), since the profile it writes is
+the same one the agents use.
+
+**Later:** a phone on Tailscale, the encrypted road for people away
+from home. Nothing in the window depends on which network the link
+crosses; it simply hasn't been needed yet.
 
 ## What was deliberately not built
 
