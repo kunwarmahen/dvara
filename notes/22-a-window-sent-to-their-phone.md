@@ -36,7 +36,11 @@ your own folder; I'll tell you when it's done.
 
 The page shows a live picture of the browser, sized to their phone and
 looking like a phone to the site, plus a box to type in and buttons for
-Enter, Backspace, Tab, Back, and "I've signed in". Setu watches for the
+Enter, Backspace, Tab, Back, and "I've signed in". Text sent from the box
+goes into the field they tapped on the picture, or, if they tapped none,
+the page's first empty field: the first real phone typed an email and
+pressed Send without tapping, and nothing happened until Setu learned
+that. Setu watches for the
 site's sign-in cookie (by name, as at the machine), closes the browser
 so the cookies are written, saves the connection, and dvara tells them:
 
