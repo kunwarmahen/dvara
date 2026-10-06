@@ -146,6 +146,7 @@ from yantra import HELD, REFUSED_TIMEOUT
 
 from dvara.accounts import is_command, scrub
 from dvara.files import is_file_word
+from dvara.fresh import is_new_word
 from dvara.actors import Channel
 from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
@@ -558,7 +559,8 @@ class TelegramBot:
         # A PASSPHRASE IS KEPT NOWHERE (unlocked.py): not in the outbox's
         # preview, and -- once Setu has it -- not in the chat either.
         secret = (self.service.accounts.keys.expects_passphrase(actor)
-                  and not (is_command(text) or is_file_word(text)))
+                  and not (is_command(text) or is_file_word(text)
+                           or is_new_word(text)))
         row = self.outbox.took(agent=self.agent, chat=str(chat), sender=str(native),
                                text="(a passphrase)" if secret else scrub(text))
 
@@ -703,6 +705,7 @@ class TelegramBot:
         if _writes_files(self.spec):
             lines.append("Send /files to see the files I keep for you, and "
                          "/file NAME to get one.")
+        lines.append("Send /new to start our conversation over.")
         return "\n\n".join(lines)
 
     def _reply_messages(self, text: str, receipt: str | None) -> list[str]:

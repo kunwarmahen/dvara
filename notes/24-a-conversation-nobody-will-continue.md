@@ -112,6 +112,9 @@ person's thread a program wrote into, a held question, and the runs.
 
 ## What is not here yet
 
+* ~~**A person can't let go of their own conversation.**~~ Shipped in
+  [note 28](28-starting-over.md): `/new`, through the same `forget`.
+
 * ~~**A file a scheduled run writes lives in that run's own folder.**~~
   Shipped in [note 25](25-the-persons-folder.md): one folder per person
   per agent, which their chat can read. A

@@ -357,6 +357,18 @@ else. An agent whose package lists `send_file` can send one itself
 asks in a chat, and in a schedule it runs only if the card allowed it
 ([notes/26](notes/26-the-file-itself.md)).
 
+And anyone can start their conversation with an agent over:
+
+```
+/new                           forget this conversation; files, schedules,
+                               accounts and the ledger all stay
+```
+
+A chat is one conversation for as long as it lasts, and a long one can
+teach a small model a habit (an old way of reading a site, kept after a
+better tool arrived). Telegram's own "Clear history" never reaches the
+bot; `/new` does ([notes/28](notes/28-starting-over.md)).
+
 These go to dvara, never to an agent, and the pasted address goes only to
 the waiting sign-in ([notes/20](notes/20-signing-in-from-the-chat.md)).
 Their folder borrows your Google client file; while your Google app is in
@@ -830,6 +842,7 @@ print(reply.text, reply.cost_usd)
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
+| `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |

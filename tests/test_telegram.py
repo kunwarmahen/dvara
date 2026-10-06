@@ -331,7 +331,8 @@ def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
     assert fake.texts() == ["Greeter\n\nsays hello\n\n"
                             "Send me a message and I will answer it.\n\n"
                             "Send /files to see the files I keep for you, "
-                            "and /file NAME to get one."]
+                            "and /file NAME to get one.\n\n"
+                            "Send /new to start our conversation over."]
 
 
 # ---- the reply -------------------------------------------------------------

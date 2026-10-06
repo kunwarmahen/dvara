@@ -110,7 +110,7 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import files, money, patience
+from dvara import files, fresh, money, patience
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -476,6 +476,10 @@ class Service:
             said, found = files.answer(self._workspace(key), text)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="files", files=(found,) if found else ())
+        if not unattended and fresh.is_new_word(text):
+            # Starting over: theirs to ask for, not a turn.
+            return Reply(text=self._start_over(key), run_id=None, agent=agent,
+                         actor=actor, stop_reason="new")
         if not unattended:
             # The person's own accounts: theirs to act on, not a turn.
             # Nothing of it is kept -- no run, no history -- because a
@@ -1041,6 +1045,16 @@ class Service:
             self.runs.mark_tidied(actor, agent, thread)
             gone += 1
         return gone
+
+    def _start_over(self, key: str) -> str:
+        """``/new`` (fresh.py): this conversation forgotten, and anything
+        it was holding for the person with it -- never while a turn is
+        still working on it."""
+        if key in self._locks:
+            return fresh.STILL_ANSWERING
+        self.holds.drop_key(key)
+        gone = self.sessions.forget(key)
+        return fresh.STARTED_OVER if gone else fresh.NOTHING_YET
 
     def _tidy_quietly(self) -> None:
         """``tidy`` after an unattended turn, which is when there is more
