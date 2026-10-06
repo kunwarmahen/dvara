@@ -87,6 +87,9 @@ first turn to a bot that asks you before anything changes.
   ([notes/19](notes/19-their-own-accounts.md)), and they connect them
   from the chat with `/connect gmail`
   ([notes/20](notes/20-signing-in-from-the-chat.md)).
+* **[Sarathi](https://github.com/kunwarmahen/sarathi)** — starts this
+  door beside Yantra's page and Samay's clock, wired to the clock, with
+  a Telegram bot: `sarathi door`, then `sarathi up` (its note 04).
 
 ## Status
 
