@@ -244,7 +244,18 @@ class TestTheActorsFile:
 
     @pytest.mark.parametrize("body", [{"setu": 1}, {"setu": ""},
                                       {"setu_accounts": ["gmail:personal"]},
-                                      {"setu": True, "setu_accounts": ["gmail"]}])
+                                      {"setu": True, "setu_accounts": ["gmail"]},
+                                      {"setu": "~/x", "setu_manage": "yes"},
+                                      {"setu": True, "setu_manage": True},
+                                      {"setu_manage": True},
+                                      {"setu": "~/x", "setu_manage": True,
+                                       "setu_accounts": ["gmail:personal"]}])
     def test_a_typo_is_refused_not_read_as_yes(self, body):
         with pytest.raises(ConfigProblem):
             book(a=body)
+
+    def test_who_changes_accounts_from_the_chat(self):
+        people = book(own={"setu": True}, owner={"setu": "~/x", "setu_manage": True},
+                      guest={"setu": "~/x"}, none={})
+        assert [people.get(n).manages_setu for n in ("own", "owner", "guest", "none")] == [
+            True, True, False, False]

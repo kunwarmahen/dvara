@@ -36,7 +36,10 @@ ONLY INTO A FOLDER OF THEIR OWN. A person with ``setu = true`` signs in
 to their own folder. A person pointed at somebody else's folder (the
 owner's, narrowed by ``setu_accounts``) is told that the owner looks
 after those, at the machine: a chat must never be a way to add accounts
-to the owner's own folder.
+to the owner's own folder. Unless the owner said so for that person
+(``setu_manage``, never with ``setu_accounts``): the owner's own phone on
+the owner's own folder. Even then /lock is the computer's, since a
+folder shared with a desktop and a page would lock them all out.
 
 ONE SIGN-IN AT A TIME PER PERSON, for ten minutes. A new ``/connect``
 replaces one that is waiting. The outcome comes back as the reply to the
@@ -125,11 +128,16 @@ class AccountDesk:
     # ---- the one entry point -------------------------------------------------
 
     async def handle(self, *, actor: str, text: str, home: Path | None, own: bool,
-                     narrowed: tuple[str, ...] | None, needs: dict[str, str]) -> str | None:
+                     narrowed: tuple[str, ...] | None, needs: dict[str, str],
+                     may_lock: bool | None = None) -> str | None:
         """The reply to a message that is the person's to act on, or None
         when it is a message for the agent. ``home`` is their Setu folder
-        (None: no accounts here); ``own`` is whether it is theirs alone;
-        ``needs`` is the package's connectors and levels, for a default."""
+        (None: no accounts here); ``own`` is whether its accounts are
+        theirs to change from here; ``may_lock`` whether its passphrase is
+        (default: ``own``) -- a shared folder the owner lets them manage
+        is not theirs to lock, since everything else using it would be
+        locked out; ``needs`` is the package's connectors and levels, for
+        a default."""
         command = is_command(text)
         if self.keys.expects_passphrase(actor):
             if not command:
@@ -156,6 +164,9 @@ class AccountDesk:
         if not own:
             return ("Your accounts here are looked after by the owner of this service, "
                     "at their computer -- ask them to connect, disconnect or lock one.")
+        if word in ("/lock", "/unlock") and not (own if may_lock is None else may_lock):
+            return ("These accounts are shared with this computer, so their passphrase "
+                    "is set at the computer: `setu lock` there.")
         if word == "/lock":
             return await self.keys.lock(actor, program, home)
         if word == "/unlock":

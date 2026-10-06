@@ -128,7 +128,7 @@ from dvara.gate import LADDER
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
-                        "receipt", "setu", "setu_accounts"})
+                        "receipt", "setu", "setu_accounts", "setu_manage"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -204,6 +204,15 @@ class Actor:
     #: The accounts of that folder they may reach (``gmail:personal``);
     #: None for all of them. Narrowing, for a folder shared with them.
     setu_accounts: tuple[str, ...] | None = None
+    #: A folder the owner pointed them at, theirs to change from the chat
+    #: (/connect, /disconnect) -- the owner's own phone on the owner's own
+    #: folder. Never with ``setu_accounts``: a narrowed folder is a guest's.
+    setu_manage: bool = False
+
+    @property
+    def manages_setu(self) -> bool:
+        """Whether /connect and /disconnect in the chat reach their folder."""
+        return self.setu == OWN_SETU or (self.setu is not None and self.setu_manage)
 
     def may_use(self, agent: str) -> bool:
         return self.agents is None or agent in self.agents
@@ -335,6 +344,7 @@ class ActorBook:
                 receipt=_receipt(body, name, where),
                 setu=_setu(body.get("setu"), name, where),
                 setu_accounts=_setu_accounts(body, name, where),
+                setu_manage=_setu_manage(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -415,6 +425,22 @@ def _setu_accounts(body: dict, name: str, where) -> tuple[str, ...] | None:
         raise ConfigProblem(f"{where}: [actor.{name}] setu_accounts must be a list "
                             f"of accounts like \"gmail:personal\"")
     return tuple(value)
+
+
+def _setu_manage(body: dict, name: str, where) -> bool:
+    """Only a yes that means something: a folder pointed at, all of it."""
+    value = body.get("setu_manage", False)
+    if not isinstance(value, bool):
+        raise ConfigProblem(f"{where}: [actor.{name}] setu_manage must be true or false")
+    if not value:
+        return False
+    if not isinstance(body.get("setu"), str):
+        raise ConfigProblem(f"{where}: [actor.{name}] setu_manage is for a folder named "
+                            f"by its path; setu = true already lets them connect their own")
+    if body.get("setu_accounts") is not None:
+        raise ConfigProblem(f"{where}: [actor.{name}] setu_manage with setu_accounts: a "
+                            f"folder narrowed for someone is not theirs to change")
+    return True
 
 
 def _agents(value, name: str, where) -> tuple[str, ...] | None:

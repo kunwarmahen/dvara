@@ -145,6 +145,11 @@ uv sync                          # dvara + Yantra from the checkout next door
 cp .env.example .env             # then fill in a key, or point at Ollama
 ```
 
+Two extras, when you want them: `--extra http` for `dvara serve`'s HTTP
+side, and `--extra browse` for a package that reads a site through a
+browser (Setu's Amazon or X) -- without it those tools are offered and
+fail for want of Playwright.
+
 Cloud models and local ones are both first-class, and the service decides
 which — not the package. A package authored against a frontier cloud
 model runs on your own Ollama box with `--provider ollama`, with no edit
@@ -243,7 +248,7 @@ An unknown key is an error, not a shrug:
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, channel, max_usd_per_day, max_usd_per_turn,
-max_wait_per_day, permissions, receipt, setu, setu_accounts
+max_wait_per_day, permissions, receipt, setu, setu_accounts, setu_manage
 ```
 
 **How long they may be kept waiting.** `max_wait_per_day` is seconds a
@@ -304,7 +309,9 @@ actor directly keys exactly as it always did.
 [Setu](https://github.com/kunwarmahen/setu) folder of their own
 (`<state>/setu/<name>`, readable by the service alone); a path points at
 an existing one, such as yours. `setu_accounts` narrows a folder to the
-accounts meant. Absent means none.
+accounts meant. Absent means none. `setu_manage = true` lets a person
+change a folder they were pointed at from the chat -- meant for you, on
+your own folder, from your phone ([notes/27](notes/27-your-folder-from-your-phone.md)).
 
 ```toml
 [actor.raj]
@@ -313,6 +320,10 @@ setu = true
 [actor.priya]
 setu = "~/.local/state/setu"         # your own folder...
 setu_accounts = ["gmail:personal"]   # ...but only this account of it
+
+[actor.owner]
+setu = "~/.local/state/setu"         # the folder your desktop and page use
+setu_manage = true                   # ...and /connect, /disconnect reach it
 ```
 
 Each turn reads Setu in that person's folder and starts their
@@ -320,14 +331,16 @@ connections there, so their agent can only open their accounts, and only
 those the package asks for in `[connections] needs`, at the package's
 level.
 
-A person with a folder of their own signs in from the chat:
+A person with a folder of their own -- or one the owner let them manage
+-- signs in from the chat:
 
 ```
 /connect gmail                 they get Google's link, sign in on their phone, and
                                send back the address of the page that won't load
 /accounts                      what's connected for them
 /disconnect gmail:personal     revoke and forget
-/lock, /unlock [days]          a passphrase only they know (notes/21)
+/lock, /unlock [days]          a passphrase only they know (notes/21); a folder of
+                               their own only -- a shared one is locked at the computer
 ```
 
 Anyone can ask for the files their agent keeps for them (a log a
@@ -814,7 +827,7 @@ print(reply.text, reply.cost_usd)
 | module | what it holds |
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
-| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
+| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |

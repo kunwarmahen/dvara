@@ -106,6 +106,12 @@ and `/disconnect` answer that the owner looks after those, at their
 computer. Otherwise a chat would become a way to add accounts to the
 owner's own folder, or remove them.
 
+The owner can say otherwise for one person with `setu_manage = true`:
+that is the owner's own phone on the owner's own folder, which this rule
+otherwise treated as a guest ([note 27](27-your-folder-from-your-phone.md)).
+It is refused alongside `setu_accounts`, so a narrowed folder stays a
+guest's.
+
 `setu_accounts` still holds for a folder of their own: a person limited
 to `gmail:personal` can't `/connect gmail as work`.
 

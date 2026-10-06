@@ -62,6 +62,9 @@ uv sync                          # dvara + Yantra from the checkout next door
 cp .env.example .env
 ```
 
+Add `--extra browse` to `uv sync` if an agent will read Amazon or X
+through a browser (section 16).
+
 An owner needs two things: a directory of agent packages, and a file of
 people.
 
@@ -912,6 +915,23 @@ is safe for what). raj's fresh folder borrows your Google client file;
 while your Google app is in Testing mode, add his address as a test
 user ([notes/20](notes/20-signing-in-from-the-chat.md)).
 
+**Your own phone, your own folder.** If you are an actor too, pointed at
+the folder your desktop uses so the page and the chat share one set of
+sign-ins, you are a guest there by default: `/connect` says the owner
+looks after it. That owner is you, so say so:
+
+```toml
+[actor.owner]
+setu = "~/.local/state/setu"
+setu_manage = true
+```
+
+Now `/connect amazon`, `/disconnect amazon:personal` and `/accounts` work
+from your phone on that folder. `/lock` still doesn't: locking it from a
+chat would lock your desktop and page out of every account, so a shared
+folder's passphrase is set at the computer
+([notes/27](notes/27-your-folder-from-your-phone.md)).
+
 From then on, each of their turns reads Setu in *their* folder
 and starts their connections there, so their agent can open only their
 accounts, and only what the package asks for in `[connections] needs`,
@@ -955,6 +975,7 @@ Each topic, and the note that argues it:
 | `notes/20-signing-in-from-the-chat.md` | `/connect`, `/accounts`, `/disconnect`: a person's own sign-in from their phone, the address pasted back to the sign-in and never to an agent |
 | `notes/22-a-window-sent-to-their-phone.md` | `/connect amazon`: a browser-window sign-in streamed to the person's phone, at an address the owner chooses |
 | `notes/26-the-file-itself.md` | `/files`, `/file NAME`: a person's own file from their folder, sent as itself rather than retold by the agent |
+| `notes/27-your-folder-from-your-phone.md` | `setu_manage`: the owner's phone changes the owner's own folder from the chat; `/lock` stays at the computer |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---

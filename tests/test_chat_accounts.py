@@ -256,6 +256,29 @@ class TestListingAndDisconnecting:
         assert json.loads((shared / "accounts.json").read_text()) == [
             "gmail:personal", "gmail:mine"]
 
+    def test_a_shared_folder_the_owner_lets_them_manage_is_changed_but_not_locked(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        """The owner's phone on the owner's own folder (the one the page on
+        that computer uses): told "looked after by the owner" -- themselves
+        -- they had to walk to the computer to sign Amazon in again."""
+        mailer(agents_root)
+        shared = tmp_path / "owner-setu"
+        shared.mkdir()
+        (shared / "accounts.json").write_text(json.dumps(["gmail:mine", "amazon:personal"]))
+        service = make_service([], actors=book(owner={
+            "setu": str(shared), "setu_manage": True}))
+
+        async def go():
+            return (await turn(service, "owner", "/disconnect amazon:personal"),
+                    await turn(service, "owner", "/accounts"),
+                    await turn(service, "owner", "/lock"))
+        gone, listed, lock = run(go())
+        assert gone.text.startswith("Disconnected amazon:personal")
+        assert "amazon:personal" not in listed.text and "gmail:mine" in listed.text
+        assert "set at the computer" in lock.text
+        assert json.loads((shared / "accounts.json").read_text()) == ["gmail:mine"]
+        assert "lock" not in (shared / "argv.log").read_text()
+
     def test_no_folder_no_accounts_and_a_scheduled_turn_types_no_commands(
             self, make_service, fake_setu, agents_root):
         mailer(agents_root)

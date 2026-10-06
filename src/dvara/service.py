@@ -729,8 +729,9 @@ class Service:
         from yantra.setu_link import needs_allow
 
         return await self.accounts.handle(
-            actor=who.id, text=text, home=self.setu_home(who), own=who.setu == OWN_SETU,
-            narrowed=who.setu_accounts, needs=needs_allow(spec.connections))
+            actor=who.id, text=text, home=self.setu_home(who), own=who.manages_setu,
+            narrowed=who.setu_accounts, needs=needs_allow(spec.connections),
+            may_lock=who.setu == OWN_SETU)
 
     def setu_home(self, who: Actor) -> Path | None:
         """Where this person's sign-ins live, made (yours alone) when it
@@ -781,7 +782,7 @@ class Service:
                 allow[account] = needs[row["connector"]]
         setu = Setu(mode="on", home=home, link=link, allow=allow,
                     package=spec.name, mention=frozenset(needs),
-                    connect_how=CONNECT_HERE if who.setu == OWN_SETU else CONNECT_THERE,
+                    connect_how=CONNECT_HERE if who.manages_setu else CONNECT_THERE,
                     locked_how=LOCKED_HERE, vault_key=key)
         try:
             done = await asyncio.to_thread(setu.sync, manager, agent)
