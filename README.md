@@ -64,7 +64,9 @@ ahead of time, and tells a person something they did not ask about.
 [18 — a schedule asked for in the chat](notes/18-a-schedule-asked-for-in-the-chat.md)
 lets a person's agent offer one, made only with their yes on their own
 channel. [19 — their own accounts](notes/19-their-own-accounts.md) gives
-each person their own Setu sign-ins.
+each person their own Setu sign-ins, and
+[20 — signing in from the chat](notes/20-signing-in-from-the-chat.md)
+lets them connect one from their phone.
 
 New here? [TUTORIAL.md](TUTORIAL.md) walks through it in order, from a
 first turn to a bot that asks you before anything changes.
@@ -82,7 +84,9 @@ first turn to a bot that asks you before anything changes.
 * **[Setu](https://github.com/kunwarmahen/setu)** — each person can have
   a folder of sign-ins of their own (`setu` in the actors file); their
   agent reaches only those accounts, as far as the package asks
-  ([notes/19](notes/19-their-own-accounts.md)).
+  ([notes/19](notes/19-their-own-accounts.md)), and they connect them
+  from the chat with `/connect gmail`
+  ([notes/20](notes/20-signing-in-from-the-chat.md)).
 
 ## Status
 
@@ -304,10 +308,26 @@ setu_accounts = ["gmail:personal"]   # ...but only this account of it
 Each turn reads Setu in that person's folder and starts their
 connections there, so their agent can only open their accounts, and only
 those the package asks for in `[connections] needs`, at the package's
-level. Signing in happens at the machine, for now:
-`SETU_HOME=~/dvara/state/setu/raj setu connect gmail`. A person's tokens
-sit on your disk, where you could read them; say so to anyone you give a
-folder ([notes/19](notes/19-their-own-accounts.md)).
+level.
+
+A person with a folder of their own signs in from the chat:
+
+```
+/connect gmail                 they get Google's link, sign in on their phone, and
+                               send back the address of the page that won't load
+/accounts                      what's connected for them
+/disconnect gmail:personal     revoke and forget
+```
+
+These go to dvara, never to an agent, and the pasted address goes only to
+the waiting sign-in ([notes/20](notes/20-signing-in-from-the-chat.md)).
+Their folder borrows your Google client file; while your Google app is in
+Testing mode, add each person's address as a test user. A folder you
+pointed them at (priya's, above) stays yours to change, at the machine:
+`SETU_HOME=<folder> setu connect gmail`. Sites signed in to through a
+browser window (Amazon, X) are also connected at the machine. A
+person's tokens sit on your disk, where you could read them; say so to
+anyone you give a folder ([notes/19](notes/19-their-own-accounts.md)).
 
 ### The policy file
 
@@ -740,6 +760,7 @@ print(reply.text, reply.cost_usd)
 | module | what it holds |
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)) |
+| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |

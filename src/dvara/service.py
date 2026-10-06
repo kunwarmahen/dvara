@@ -111,6 +111,7 @@ from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
 from dvara import money, patience
+from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
 from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
@@ -129,8 +130,11 @@ SEEN_HERE = ("The person sees their schedules by asking you: list them with "
              "`mcp__samay__list_schedules`, and pause or delete one when they say so.")
 
 
-#: How a person here gets an account connected: they cannot run Setu
-#: from a chat, so the owner does it for them, at the machine.
+#: How a person here gets an account connected: by sending the command
+#: themselves (accounts.py) -- never by an agent, which only says how.
+CONNECT_HERE = ("the person connects it by sending, themselves, /connect followed "
+                "by its name (/connect gmail); you cannot do it for them -- say so")
+#: For a person whose accounts live in a folder the owner looks after.
 CONNECT_THERE = ("the person cannot connect one from here; the owner of this "
                  "service connects it for them -- say so, and say which")
 
@@ -252,6 +256,18 @@ class Service:
         self._provider_factory = provider_factory or _default_provider
         self._providers: dict[str, Provider] = {}
         self._locks: KeyedLocks[str] = KeyedLocks()
+        #: A person's own accounts, from the chat: /connect, /accounts,
+        #: /disconnect and the address pasted back (accounts.py). Handled
+        #: before any turn, and never seen by an agent.
+        self.accounts = AccountDesk(
+            notify=lambda actor, text: self.notify(text=text, actor=actor),
+            log=self._note, client_file=self._owners_client_file)
+        self._client_file: tuple[str | None] | None = None
+
+    def _owners_client_file(self) -> str | None:
+        if self._client_file is None:            # asked once, when first needed
+            self._client_file = (owners_client_file(),)
+        return self._client_file[0]
 
     # ---- lifecycle ---------------------------------------------------------
 
@@ -283,6 +299,7 @@ class Service:
         closes both of its own pools in the right order, and this stays a
         loop over providers rather than a loop over their internals.
         """
+        await self.accounts.aclose()
         for provider in self._providers.values():
             await provider.aclose()
         self._providers.clear()
@@ -436,6 +453,14 @@ class Service:
             return Reply(text="say something and I will answer it",
                          run_id=None, agent=agent, actor=actor,
                          stop_reason="refused")
+        if not unattended:
+            # The person's own accounts: theirs to act on, not a turn.
+            # Nothing of it is kept -- no run, no history -- because a
+            # pasted address carries a sign-in's code (accounts.py).
+            said = await self._account_words(who, spec, text)
+            if said is not None:
+                return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                             stop_reason="accounts")
 
         async with self._locks.hold(key):
             # Costing zero until something is spent. The distinction the
@@ -648,6 +673,17 @@ class Service:
             await self._schedules(agent, manager, who=who, run=run)
         return manager
 
+    async def _account_words(self, who: Actor, spec: AgentSpec, text: str) -> str | None:
+        """``/connect``, ``/accounts``, ``/disconnect`` or a pasted
+        address, answered for this person; None for anything else."""
+        if not (looks_pasted(text) or is_command(text)):
+            return None
+        from yantra.setu_link import needs_allow
+
+        return await self.accounts.handle(
+            actor=who.id, text=text, home=self.setu_home(who), own=who.setu == OWN_SETU,
+            narrowed=who.setu_accounts, needs=needs_allow(spec.connections))
+
     def setu_home(self, who: Actor) -> Path | None:
         """Where this person's sign-ins live, made (yours alone) when it
         is a folder of their own under this service's state."""
@@ -695,7 +731,7 @@ class Service:
                 allow[account] = needs[row["connector"]]
         setu = Setu(mode="on", home=home, link=link, allow=allow,
                     package=spec.name, mention=frozenset(needs),
-                    connect_how=CONNECT_THERE)
+                    connect_how=CONNECT_HERE if who.setu == OWN_SETU else CONNECT_THERE)
         try:
             done = await asyncio.to_thread(setu.sync, manager, agent)
         except MCPError as exc:

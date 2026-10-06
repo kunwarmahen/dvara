@@ -857,13 +857,24 @@ setu = "~/.local/state/setu"         # an existing folder -- yours
 setu_accounts = ["gmail:personal"]   # ...narrowed to one account
 ```
 
-Sign them in at the machine (`SETU_HOME=<their folder> setu connect
-gmail`). From then on, each of their turns reads Setu in *their* folder
+raj signs in from the chat. He sends `/connect gmail`, gets Google's
+link, signs in on his phone, and sends back the address of the page that
+then fails to load (it starts `http://127.0.0.1`). dvara hands that to
+the waiting sign-in, never to an agent, and answers *"Connected
+gmail:personal (raj@example.com) at Read only"*. `/accounts` lists what
+he has; `/disconnect gmail:personal` removes one. priya's folder is
+yours, so hers are connected at the machine (`SETU_HOME=<that folder>
+setu connect gmail`), and so are sites signed in to through a browser
+window, like Amazon. raj's fresh folder borrows your Google client file;
+while your Google app is in Testing mode, add his address as a test
+user ([notes/20](notes/20-signing-in-from-the-chat.md)).
+
+From then on, each of their turns reads Setu in *their* folder
 and starts their connections there, so their agent can open only their
 accounts, and only what the package asks for in `[connections] needs`,
 at the package's level. Scheduled runs get the same. An account the
 package needs that they haven't connected is named to the agent with the
-truth: the owner connects it for them.
+truth: they send `/connect` for it (or, for priya, the owner connects it).
 
 Live, with two people asking *"how many unread emails do I have?"*: priya
 got her count from `gmail-personal` alone, with the owner's other account
@@ -898,6 +909,7 @@ Each topic, and the note that argues it:
 | `notes/17-nobody-wrote-first.md` | a turn nobody typed (a schedule's), the answers given ahead of time, and a message nobody asked for |
 | `notes/18-a-schedule-asked-for-in-the-chat.md` | a person's agent offering a schedule in the chat, made only with their yes on their own channel |
 | `notes/19-their-own-accounts.md` | each person's own Setu sign-ins, and an agent that reaches only those, as far as its package asks |
+| `notes/20-signing-in-from-the-chat.md` | `/connect`, `/accounts`, `/disconnect`: a person's own sign-in from their phone, the address pasted back to the sign-in and never to an agent |
 
 ---
 
@@ -941,9 +953,9 @@ refusals and gaps, and each one is argued in the note that owns it.
   Run, so the change appears in the ledger instead of being guessed at.
   Pinning a version per thread stays refused, because a pinned thread is
   one that does not get the prompt fix you made *because of it*.
-* **No signing in from the chat yet.** Google's sign-in comes back to
-  the machine running Setu, so a person's accounts are connected there,
-  for now. Pasting the failed page's address back to the bot is planned.
+* **No browser-window sites from the chat.** Amazon and X are signed in
+  to in a window on the owner's computer, which a phone can't reach
+  ([notes/20](notes/20-signing-in-from-the-chat.md)).
 * **A person's tokens are readable by the owner.** They sit on the
   owner's disk ([notes/19](notes/19-their-own-accounts.md)).
 

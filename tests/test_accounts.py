@@ -165,8 +165,17 @@ class TestTheirOwnFolder:
         ask(service, "raj")
         system = service.scripted.requests[0]["system"]
         assert "Installed but not connected" in system and "Gmail" in system
-        assert "the owner of this service connects it for them" in system
+        assert "/connect gmail" in system and "you cannot do it for them" in system
         assert "setu connect" not in system
+
+    def test_a_folder_the_owner_pointed_them_at_is_connected_by_the_owner(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        mailer(agents_root)
+        shared = home_with(tmp_path / "homes" / "owner")
+        service = make_service([says("ok")], actors=book(priya={"setu": str(shared)}))
+        ask(service, "priya")
+        system = service.scripted.requests[0]["system"]
+        assert "the owner of this service connects it for them" in system
 
 
 class TestWhoGetsNone:

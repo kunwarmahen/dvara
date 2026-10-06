@@ -101,7 +101,9 @@ channel adapter usually goes wrong.
   an @handle somebody types -- and hanging a roster off one of them means
   a person prefixing every message forever. A second agent is a second
   token from BotFather and a second process, and dvara invents no command
-  dialect.
+  dialect. (The one exception is the person's own accounts --
+  ``/connect``, ``/accounts``, ``/disconnect`` -- which are not for the
+  agent at all: ``accounts.py``.)
 * **An unknown identity gets SILENCE, not a sentence.** The roster's
   refusal is polite and says nothing about who else exists, but saying it
   to every stranger who finds the bot makes a service out of the
@@ -140,6 +142,7 @@ import sys
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
+from dvara.accounts import scrub
 from dvara.actors import Channel
 from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
@@ -546,7 +549,7 @@ class TelegramBot:
         # that dies anywhere past this line leaves a row that says so --
         # see ``outbox.py``. Nothing before it is a turn.
         row = self.outbox.took(agent=self.agent, chat=str(chat),
-                               sender=str(native), text=text)
+                               sender=str(native), text=scrub(text))
 
         # The first action is awaited rather than left to the task: a
         # person who sent a message wants the "typing" the moment they
