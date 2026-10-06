@@ -18,6 +18,7 @@ how the receipts in the notes were produced.
     dvara resume <hold id> --actor mahen --approve
     dvara serve --host 127.0.0.1 --port 8765
     dvara telegram --agent researcher
+    dvara status --json
 
 ``--ask`` is where a front end becomes a channel. The escalating gate
 needs somewhere to put a question and somewhere an answer can land, and
@@ -46,6 +47,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import json
 import os
 import sys
 from datetime import UTC, datetime, timedelta
@@ -138,6 +140,12 @@ def build_parser() -> argparse.ArgumentParser:
     subs = parser.add_subparsers(dest="command", required=True)
 
     subs.add_parser("agents", help="list the agents this service can offer")
+
+    status = subs.add_parser(
+        "status", help="is it serving, where, and what it would serve")
+    status.add_argument("--json", dest="json_out", action="store_true",
+                        help="print dvara.status.v1, for a program that "
+                             "started this one")
 
     say = subs.add_parser("say", help="run one turn, in process, no HTTP")
     say.add_argument("text", help="what to say to the agent")
@@ -309,11 +317,15 @@ def main(argv: list[str] | None = None) -> int:
     # local below is what HOLDS the claim: it has to stay referenced for
     # as long as the command runs, because closing the file releases the
     # lock and CPython closes it the moment nothing points at it.
+    if args.command == "status":
+        return _status(args)
     claim = None
     try:
         if args.command in CLAIMS:
             claim = Claim(Path(args.state))
-            claim.take(f"dvara {args.command}")
+            at = (f"http://{args.host}:{args.port}" if args.command == "serve"
+                  else None)
+            claim.take(f"dvara {args.command}", at=at)
         if args.command == "serve":
             return _serve(args)
         service = _service(args)
@@ -348,6 +360,19 @@ def main(argv: list[str] | None = None) -> int:
         if claim is not None:
             claim.release()
     return 2
+
+
+def _status(args) -> int:
+    """Never claims and never builds a Service: asking is not starting."""
+    from dvara.status import lines, report
+
+    data = report(root=Path(args.root), actors=Path(args.actors),
+                  state=Path(args.state))
+    if args.json_out:
+        print(json.dumps(data))
+    else:
+        print("\n".join(lines(data)))
+    return 0
 
 
 def _agents(service: Service) -> int:

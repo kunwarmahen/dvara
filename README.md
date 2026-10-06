@@ -114,8 +114,8 @@ refused. A turn nobody typed runs with the yes the person gave ahead of
 time and nothing more, and a finding nobody asked for reaches them on
 their own channels; with `--samay`, a person can ask for a schedule in
 the chat and say yes to it there; and each person's agent reaches that
-person's own accounts through Setu, never anybody else's — covered by
-581 tests. The API is not
+person's own accounts through Setu, never anybody else's; and a program
+that started it can ask whether it is serving — covered by 607 tests. The API is not
 stable.
 
 ## The shape of it
@@ -558,8 +558,22 @@ DVARA_TOKEN=… TELEGRAM_TOKEN=… dvara serve --telegram researcher
 ```
 
 Commands that run a turn (`say`, `serve`, `telegram`, `resume`) take the claim.
-Commands that only read (`runs`, `held`, `case`, `agents`) do not — looking at
-your ledger while the bot answers somebody is ordinary. And `Service`
+Commands that only read (`runs`, `held`, `case`, `agents`, `status`) do not — looking at
+your ledger while the bot answers somebody is ordinary.
+
+**Is it serving?** `dvara status` asks the same lock, so the answer is right
+after a `kill -9` and from another container
+([notes/23](notes/23-is-the-door-open.md)):
+
+```
+$ dvara status
+dvara 0.1.0 · state /home/you/dvara/state
+serving at http://127.0.0.1:8765 (dvara serve, since 2026-10-06T02:56:39+00:00)
+agents: greeter, scribe  ·  people: 2
+```
+
+`--json` prints the same as `dvara.status.v1`, for a program that started
+this one. And `Service`
 itself claims nothing, so embedding it in your own process is unaffected.
 
 **Edit the actors and policy files while it runs.** Both are reread when
@@ -790,8 +804,9 @@ print(reply.text, reply.cost_usd)
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
-| `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)) |
-| `cli.py` | `agents`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
+| `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
+| `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
+| `cli.py` | `agents`, `status`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

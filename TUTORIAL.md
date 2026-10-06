@@ -709,9 +709,24 @@ a bot *and* an HTTP surface is one process:
 dvara serve --telegram researcher
 ```
 
-And a command that only *reads* — `runs`, `case`, `agents` — claims
-nothing, because looking at your own ledger while the bot answers
+And a command that only *reads* — `runs`, `case`, `agents`, `status` —
+claims nothing, because looking at your own ledger while the bot answers
 somebody is the most ordinary thing an owner does.
+
+**Is it serving?** The same lock answers that. `dvara status` tries it
+without taking it: if it's held, something is running, and the file
+under it says what and where. A file left behind by a crash says
+nothing, because the lock went with the process:
+
+```
+$ dvara status
+dvara 0.1.0 · state /home/you/dvara/state
+serving at http://127.0.0.1:8765 (dvara serve, since 2026-10-06T02:56:39+00:00)
+agents: greeter, scribe  ·  people: 2
+```
+
+`dvara status --json` is the same for a program, such as Sarathi, that
+started dvara for you ([note 23](notes/23-is-the-door-open.md)).
 
 **Edit the actors file while it runs.** It is reread when it changes, so
 adding the guest standing in front of you holding your bot's @handle is

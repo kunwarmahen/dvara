@@ -297,6 +297,10 @@ column 13)
 
 ## What is not here yet
 
+* ~~**Nobody outside can ask whether a dvara is running.**~~ — shipped in
+  [note 23](23-is-the-door-open.md): `dvara status` reads this lock
+  without taking it.
+
 * **`flock` on a network filesystem does not protect anything.** A state
   directory on NFS is outside what this can see, and nothing checks for
   it — a filesystem-type check that guessed wrong would be worse than the

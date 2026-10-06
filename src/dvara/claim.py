@@ -96,13 +96,15 @@ class Claim:
         self.path = self.state / LOCKFILE
         self._handle = None
 
-    def take(self, what: str) -> None:
+    def take(self, what: str, at: str | None = None) -> None:
         """Claim the directory, or refuse with who is already in it.
 
         ``what`` is the command doing the claiming, written into the file
         so the refusal can say "a telegram bot" rather than "another
         process" -- an owner with one terminal window and a systemd unit
         needs to know which of the two they are about to fight with.
+        ``at`` is the address a served one listens on, for ``dvara
+        status`` to repeat.
 
         The file is opened and locked BEFORE anything is written to it,
         and truncated only once the lock is held. Writing first would let
@@ -129,7 +131,8 @@ class Claim:
         handle.seek(0)
         handle.truncate()
         handle.write(f"pid {os.getpid()}\n{what}\n"
-                     f"since {datetime.now(UTC).isoformat(timespec='seconds')}\n")
+                     f"since {datetime.now(UTC).isoformat(timespec='seconds')}\n"
+                     + (f"at {at}\n" if at else ""))
         handle.flush()
         self._handle = handle
 
@@ -139,6 +142,40 @@ class Claim:
             fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
             self._handle.close()
             self._handle = None
+
+
+def holder(state: Path) -> dict | None:
+    """Who holds ``state`` right now, as the holder wrote it down; None
+    when nobody does.
+
+    ASKED OF THE LOCK, NOT THE FILE. The file outlives a process killed
+    with SIGKILL, and its pid may by then be somebody else's -- in a
+    fresh container, often the asker's own. Whether the lock is held is
+    the kernel's answer, and it is the same from another container that
+    mounts the same folder. A shared lock is tried and given straight
+    back: taking it means nobody holds the claim.
+    """
+    try:
+        handle = open(Path(state).expanduser() / LOCKFILE, encoding="utf-8")  # noqa: SIM115
+    except OSError:
+        return None
+    with handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except OSError:
+            pass                                  # held: something is running
+        else:
+            return None
+        handle.seek(0)
+        lines = [line.strip() for line in handle.read().splitlines() if line.strip()]
+    said: dict = {"pid": None, "command": None, "since": None, "at": None}
+    for line in lines:
+        word, _, rest = line.partition(" ")
+        if word in ("pid", "since", "at"):
+            said[word] = int(rest) if word == "pid" and rest.isdigit() else rest
+        elif said["command"] is None:
+            said["command"] = line
+    return said
 
 
 def _read(handle) -> str:
