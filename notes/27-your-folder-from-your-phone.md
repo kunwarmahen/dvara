@@ -78,6 +78,29 @@ it's a window on that profile. Anywhere else the snapshot names the
 host's own way to sign in again, which here is `/connect amazon`
 (Yantra's note 112).
 
+## Receipt
+
+`qwen3.8-64k:latest` on Ollama, the door in Sarathi's Podman container,
+`dvara say --as` the owner's Telegram id, with the owner pointed at the
+page's folder and `setu_manage = true`. Amazon was asking for its
+password again, as above:
+
+```
+> /accounts
+Connected for you here:
+amazon:personal -- amazon.com -- Read and act
+gmail:mine -- ... -- Read, draft and send
+...
+> /lock
+These accounts are shared with this computer, so their passphrase is set at the computer: `setu lock` there.
+> What were my last three Amazon orders? Just the titles and the dates.
+Your Amazon session has expired — I hit the sign-in page (for ...) and I can't sign
+in myself. To reconnect, send `/connect amazon` and I'll try again.
+```
+
+Before Yantra's change, the same question got an approval card carrying
+Amazon's sign-in address.
+
 ## What was deliberately not built
 
 * **No "this path is the owner's" detection.** Comparing the folder to
