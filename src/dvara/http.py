@@ -246,6 +246,10 @@ def create_app(service: Service, *, token: str,
             "needs_person": list(reply.needs),
             "busy": list(reply.busy),
             "refused": list(reply.refused),
+            # ``/file NAME`` answered: where the file is on this machine.
+            # Named, not sent -- a bridge that wants the bytes is here and
+            # can read it (files.py).
+            "files": [str(f) for f in reply.files],
         }
 
     @app.post("/notify")

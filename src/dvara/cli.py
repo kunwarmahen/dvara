@@ -518,6 +518,9 @@ def _say(service: Service, args) -> int:
 
     reply = asyncio.run(go())
     print(reply.text)
+    for path in reply.files:
+        # What a chat would attach (files.py); here, where it is.
+        print(f"  file: {path}")
     if reply.held is not None:
         # The terminal's way to answer, which the reply itself leaves to
         # the channel (holds.waiting_text).

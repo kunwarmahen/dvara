@@ -135,5 +135,6 @@ nothing. Put back to a folder per conversation, all three fail.
 * **Deleting a schedule doesn't touch its record.** The log stays in the
   person's folder, which is usually what they want, and nothing tidies
   it if they don't.
-* **The person can't download a file.** They read it through the agent.
-  A channel that sends files (Telegram can) would be the next step.
+* ~~**The person can't download a file.**~~ Built: `/files` and
+  `/file NAME`, sent by Telegram as a document
+  ([note 26](26-the-file-itself.md)).

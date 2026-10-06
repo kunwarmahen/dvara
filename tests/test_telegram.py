@@ -86,7 +86,11 @@ class FakeTelegram:
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         method = request.url.path.rsplit("/", 1)[-1]
-        payload = json.loads(request.content or b"{}")
+        if request.headers.get("content-type", "").startswith("multipart/"):
+            # A file: kept whole, for a test to look for the name and bytes.
+            payload = {"multipart": request.read().decode("latin-1")}
+        else:
+            payload = json.loads(request.content or b"{}")
         self.calls.append((method, payload))
         scripted = self.status.get(method)
         if scripted:
@@ -322,8 +326,12 @@ def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
     fake = FakeTelegram([message("/start")])
     bot = make_bot(fake, service=service)
     asyncio.run(bot.run())
+    # No allowlist means every tool, write_file among them -- so the
+    # person is told their files can be asked for (files.py).
     assert fake.texts() == ["Greeter\n\nsays hello\n\n"
-                            "Send me a message and I will answer it."]
+                            "Send me a message and I will answer it.\n\n"
+                            "Send /files to see the files I keep for you, "
+                            "and /file NAME to get one."]
 
 
 # ---- the reply -------------------------------------------------------------
@@ -793,3 +801,47 @@ def test_a_running_bot_is_where_the_service_sends_notices(make_bot):
     who, sent = asyncio.run(bot.service.notify(actor="mahen", text="news"))
     assert sent.sent == ["telegram"]
     assert fake.texts()[-1] == "news"
+
+
+def _folder(service, actor="mahen", agent="greeter"):
+    work = service.state / "work" / actor / agent
+    work.mkdir(parents=True, exist_ok=True)
+    return work
+
+
+# ---- a file, sent as a document (files.py) -------------------------------------------
+
+
+def test_telegram_sends_the_file_itself_with_its_name_as_caption(make_bot, make_service,
+                                                                  actors):
+    service = make_service([], actors=actors)
+    (_folder(service) / "uptime-log.txt").write_text("2026-10-06 07:09 UP\n")
+    fake = FakeTelegram([message("/file uptime-log.txt")])
+    asyncio.run(make_bot(fake, service=service).run())
+    [upload] = fake.of("sendDocument")
+    body = upload["multipart"]
+    assert 'filename="uptime-log.txt"' in body
+    assert "2026-10-06 07:09 UP" in body and str(KNOWN) in body
+    assert fake.texts() == []                     # the caption, not a message
+
+
+def test_a_file_too_big_for_telegram_is_said_not_attempted(make_bot, make_service,
+                                                           actors, monkeypatch):
+    from dvara import telegram
+    monkeypatch.setattr(telegram, "FILE_LIMIT", 4)
+    service = make_service([], actors=actors)
+    (_folder(service) / "big.txt").write_text("more than four")
+    fake = FakeTelegram([message("/file big.txt")])
+    asyncio.run(make_bot(fake, service=service).run())
+    assert fake.of("sendDocument") == []
+    assert "more than Telegram lets a bot send" in fake.texts()[0]
+
+
+def test_start_mentions_files_only_to_an_agent_that_writes_them(make_bot, make_service,
+                                                                 actors, agents_root):
+    from tests.test_unattended_turns import scribe
+    scribe(agents_root)
+    service = make_service([], actors=actors)
+    fake = FakeTelegram([message("/start")])
+    asyncio.run(make_bot(fake, service=service, agent="scribe").run())
+    assert "/files" in fake.texts()[0]

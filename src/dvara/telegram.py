@@ -101,9 +101,10 @@ channel adapter usually goes wrong.
   an @handle somebody types -- and hanging a roster off one of them means
   a person prefixing every message forever. A second agent is a second
   token from BotFather and a second process, and dvara invents no command
-  dialect. (The one exception is the person's own accounts --
-  ``/connect``, ``/accounts``, ``/disconnect`` -- which are not for the
-  agent at all: ``accounts.py``.)
+  dialect. (The exceptions are the person's own accounts --
+  ``/connect``, ``/accounts``, ``/disconnect`` -- and their own files --
+  ``/files``, ``/file NAME`` -- which are not for the agent at all:
+  ``accounts.py``, ``files.py``.)
 * **An unknown identity gets SILENCE, not a sentence.** The roster's
   refusal is polite and says nothing about who else exists, but saying it
   to every stranger who finds the bot makes a service out of the
@@ -138,11 +139,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
+from fnmatch import fnmatch
 
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
 from dvara.accounts import is_command, scrub
+from dvara.files import is_file_word
 from dvara.actors import Channel
 from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
@@ -173,6 +176,10 @@ POLL_SECONDS = 25
 #: publishes one per second and tolerates bursts; the margin is for the
 #: split reply, which is the only thing here that ever sends four.
 SEND_GAP = 1.05
+
+#: The largest file the Bot API lets a bot send, and the longest caption.
+FILE_LIMIT = 50 * 1024 * 1024
+CAPTION_LIMIT = 1024
 
 #: A typing indicator lasts five seconds at Telegram's end, so it has to
 #: be renewed. The only feedback a turn-shaped medium has while a model
@@ -551,7 +558,7 @@ class TelegramBot:
         # A PASSPHRASE IS KEPT NOWHERE (unlocked.py): not in the outbox's
         # preview, and -- once Setu has it -- not in the chat either.
         secret = (self.service.accounts.keys.expects_passphrase(actor)
-                  and not is_command(text))
+                  and not (is_command(text) or is_file_word(text)))
         row = self.outbox.took(agent=self.agent, chat=str(chat), sender=str(native),
                                text="(a passphrase)" if secret else scrub(text))
 
@@ -582,6 +589,9 @@ class TelegramBot:
             # The channel gets the polite sentence; the owner, who is the
             # one person who can fix a bad base URL, gets the reason.
             self._note(f"telegram: {reply.stop_reason}: {reply.detail}")
+        if reply.files:
+            await self._answer_with_file(chat, row, reply.text, reply.files[0])
+            return
         parts = self._reply_messages(reply.text, reply.receipt)
         self.outbox.answered(row, parts)
         for count, chunk in enumerate(parts, start=1):
@@ -590,6 +600,27 @@ class TelegramBot:
                      if last and reply.held is not None else {})
             await self._send(chat, chunk, **extra)
             self.outbox.sent(row, count)
+        self.outbox.settled(row)
+
+    async def _answer_with_file(self, chat: int, row: int, text: str,
+                                path) -> None:
+        """``/file NAME``: the file itself, with the words as its caption.
+
+        Owed as a sentence, not as the file. A crash between taking the
+        message and sending the document leaves the name to be sent on
+        the next boot, never the bytes: the person can ask again, and
+        a file read later may not be the file they asked for.
+        """
+        size = path.stat().st_size
+        if size > FILE_LIMIT:
+            text = (f"{text} is {size // (1024 * 1024)} MB, more than Telegram "
+                    f"lets a bot send ({FILE_LIMIT // (1024 * 1024)} MB).")
+            self.outbox.answered(row, [text])
+            await self._send(chat, text)
+        else:
+            self.outbox.answered(row, [text])
+            await self._send_file(chat, path, caption=elide(text, CAPTION_LIMIT))
+        self.outbox.sent(row, 1)
         self.outbox.settled(row)
 
     async def _pay_what_is_owed(self) -> None:
@@ -661,6 +692,9 @@ class TelegramBot:
         if self.spec.description:
             lines.append(self.spec.description)
         lines.append("Send me a message and I will answer it.")
+        if _writes_files(self.spec):
+            lines.append("Send /files to see the files I keep for you, and "
+                         "/file NAME to get one.")
         return "\n\n".join(lines)
 
     def _reply_messages(self, text: str, receipt: str | None) -> list[str]:
@@ -904,7 +938,18 @@ class TelegramBot:
             finally:
                 self._pacer.sent(chat)
 
-    async def _api(self, method: str, **payload):
+    async def _send_file(self, chat: int, path, *, caption: str):
+        """One file into one chat, as a document, paced like a message."""
+        async with self._pacer.lock(chat):
+            await self._pacer.wait(chat)
+            try:
+                return await self._api("sendDocument", upload=(
+                    "document", (path.name, path.read_bytes())),
+                    chat_id=chat, caption=caption)
+            finally:
+                self._pacer.sent(chat)
+
+    async def _api(self, method: str, *, upload=None, **payload):
         """One Bot API call, with the two failures that are not ours.
 
         ``retry_after`` is obeyed as an instruction and only up to
@@ -920,9 +965,17 @@ class TelegramBot:
         remembers starting.
         """
         url = f"{self._url}/{method}"
+        fields = {k: v for k, v in payload.items() if v is not None}
         for attempt in (1, 2):
-            response = await self._client.post(
-                url, json={k: v for k, v in payload.items() if v is not None})
+            if upload is None:
+                response = await self._client.post(url, json=fields)
+            else:
+                # A file is the one thing JSON cannot carry: multipart, with
+                # every other field as a form value.
+                field, content = upload
+                response = await self._client.post(
+                    url, data={k: str(v) for k, v in fields.items()},
+                    files={field: content})
             if response.status_code == 429 and attempt == 1:
                 wait = _retry_after(response)
                 if wait <= MAX_RETRY_AFTER:
@@ -968,6 +1021,14 @@ def ending(answer: Answer | None) -> str:
         return decided
     place = {"terminal": "at the terminal", "http": "over HTTP"}
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
+
+
+def _writes_files(spec) -> bool:
+    """Whether this agent can leave a file in the person's folder -- the
+    only kind worth telling them ``/files`` exists."""
+    allowed = spec.tool_allow is None or any(fnmatch("write_file", p)
+                                             for p in spec.tool_allow)
+    return allowed and not any(fnmatch("write_file", p) for p in spec.tool_deny)
 
 
 def _hold_buttons(hold: Hold) -> dict:

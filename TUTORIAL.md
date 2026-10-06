@@ -508,7 +508,10 @@ instead means "never mind", and the waiting calls are set aside.
   directory is read-only input; each person gets a folder per agent under
   the service's state, shared by all their conversations with it, so a
   file a schedule wrote is one their chat can read
-  ([note 25](notes/25-the-persons-folder.md)). An agent that edits the folder you
+  ([note 25](notes/25-the-persons-folder.md)). They can have a file
+  from it sent to them: `/files` lists it, `/file NAME` sends one, on
+  Telegram as a document, and no agent is involved
+  ([note 26](notes/26-the-file-itself.md)). An agent that edits the folder you
   review and commit is an agent whose package has stopped being
   reviewable — and being reviewable is the one property the whole format
   exists to have.
@@ -950,6 +953,7 @@ Each topic, and the note that argues it:
 | `notes/19-their-own-accounts.md` | each person's own Setu sign-ins, and an agent that reaches only those, as far as its package asks |
 | `notes/20-signing-in-from-the-chat.md` | `/connect`, `/accounts`, `/disconnect`: a person's own sign-in from their phone, the address pasted back to the sign-in and never to an agent |
 | `notes/22-a-window-sent-to-their-phone.md` | `/connect amazon`: a browser-window sign-in streamed to the person's phone, at an address the owner chooses |
+| `notes/26-the-file-itself.md` | `/files`, `/file NAME`: a person's own file from their folder, sent as itself rather than retold by the agent |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---
@@ -1022,5 +1026,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 581 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 627 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*

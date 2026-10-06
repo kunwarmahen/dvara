@@ -110,7 +110,7 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import money, patience
+from dvara import files, money, patience
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -196,6 +196,9 @@ class Reply:
     needs: tuple[str, ...] = ()
     busy: tuple[str, ...] = ()
     refused: tuple[str, ...] = ()
+    #: Files from the person's folder to send with the words (files.py):
+    #: ``/file NAME`` answered. Each channel decides how a file looks.
+    files: tuple[Path, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -468,6 +471,11 @@ class Service:
             return Reply(text="say something and I will answer it",
                          run_id=None, agent=agent, actor=actor,
                          stop_reason="refused")
+        if not unattended and files.is_file_word(text):
+            # The person's own files: theirs to ask for, not a turn.
+            said, found = files.answer(self._workspace(key), text)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="files", files=(found,) if found else ())
         if not unattended:
             # The person's own accounts: theirs to act on, not a turn.
             # Nothing of it is kept -- no run, no history -- because a
