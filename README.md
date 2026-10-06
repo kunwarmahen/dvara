@@ -118,7 +118,7 @@ person's own accounts through Setu, never anybody else's; and a program
 that started it can ask whether it is serving, and a scheduled run's
 conversation is let go a week after it ends while what it wrote stays
 where the person's chat can read it, and sent to them as a file when
-they ask — covered by 627 tests. The API is not
+they ask — covered by 635 tests. The API is not
 stable.
 
 ## The shape of it
@@ -339,7 +339,10 @@ schedule writes, a report), whether or not they have accounts:
 ```
 
 These are answered by dvara too, from that person's folder and nowhere
-else ([notes/26](notes/26-the-file-itself.md)).
+else. An agent whose package lists `send_file` can send one itself
+("send me the log", or a schedule's weekly report). It's a write, so it
+asks in a chat, and in a schedule it runs only if the card allowed it
+([notes/26](notes/26-the-file-itself.md)).
 
 These go to dvara, never to an agent, and the pasted address goes only to
 the waiting sign-in ([notes/20](notes/20-signing-in-from-the-chat.md)).
@@ -617,7 +620,7 @@ serving yet, so there is nothing to lose.
 ### The HTTP surface
 
 ```
-POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, receipt, ...}
+POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, receipt, files, ...}
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
@@ -625,7 +628,7 @@ POST /asks/{id}    {actor, approve}              -> {answered, approved}
 GET  /holds?actor=                               -> {holds: [{id, calls, age, ...}]}
 POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
-GET  /notices?channel=                           -> {notices: [{id, to, text, ...}]}
+GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 ```
 
 A program that runs turns for people who are not there — a scheduler —
@@ -813,7 +816,7 @@ print(reply.text, reply.cost_usd)
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
-| `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn ([notes/26](notes/26-the-file-itself.md)) |
+| `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |
@@ -828,7 +831,7 @@ print(reply.text, reply.cost_usd)
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), and which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | nine endpoints and a bearer token (`[http]` extra) |
-| `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)) |
+| `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |

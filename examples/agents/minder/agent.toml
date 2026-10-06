@@ -25,7 +25,11 @@ prompt      = "prompt.md"
 # schedules alike -- so a log a schedule keeps is one they can ask about
 # from their phone. Writing in a chat is a question; in a schedule it
 # runs only if the card they approved listed it.
-allow = ["web_fetch", "read_file", "write_file", "mcp__samay__*"]
+#
+# send_file sends them the record itself, on Telegram as a document
+# (dvara's notes/26). Something leaving for their phone is a write too:
+# asked in a chat, and in a schedule only if the card listed it.
+allow = ["web_fetch", "read_file", "write_file", "send_file", "mcp__samay__*"]
 
 [env]
 # The date and time, from this machine. A record is only as good as its

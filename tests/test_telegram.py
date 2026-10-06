@@ -845,3 +845,25 @@ def test_start_mentions_files_only_to_an_agent_that_writes_them(make_bot, make_s
     fake = FakeTelegram([message("/start")])
     asyncio.run(make_bot(fake, service=service, agent="scribe").run())
     assert "/files" in fake.texts()[0]
+
+
+def test_a_file_the_agent_sent_follows_its_answer(make_bot, make_service, actors,
+                                                  agents_root):
+    from dvara.asks import AskDesk
+    from dvara.gate import Policy
+    from dvara.rules import Rule, RuleBook
+    from tests.conftest import calls
+    write_package(agents_root, "courier", body=(
+        '[agent]\nname = "courier"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["send_file"]\n[permissions]\nmode = "ask"\n'))
+    service = make_service(
+        [calls("send_file", {"path": "report.md"}), says("Here's this week's report.")],
+        actors=actors, asks=AskDesk(timeout=5),
+        policy=Policy(rules=RuleBook([Rule(tool="send_file", verdict="allow")])))
+    (_folder(service, agent="courier") / "report.md").write_text("# week 40\nall up\n")
+    fake = FakeTelegram([message("send me the report")])
+    asyncio.run(make_bot(fake, service=service, agent="courier").run())
+    order = [m for m, _ in fake.calls if m in ("sendMessage", "sendDocument")]
+    assert order == ["sendMessage", "sendDocument"]
+    assert fake.texts() == ["Here's this week's report."]
+    assert 'filename="report.md"' in fake.of("sendDocument")[0]["multipart"]

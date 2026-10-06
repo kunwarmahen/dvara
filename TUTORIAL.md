@@ -510,7 +510,8 @@ instead means "never mind", and the waiting calls are set aside.
   file a schedule wrote is one their chat can read
   ([note 25](notes/25-the-persons-folder.md)). They can have a file
   from it sent to them: `/files` lists it, `/file NAME` sends one, on
-  Telegram as a document, and no agent is involved
+  Telegram as a document, and no agent is involved. An agent that lists
+  `send_file` can send one too, asked like any write
   ([note 26](notes/26-the-file-itself.md)). An agent that edits the folder you
   review and commit is an agent whose package has stopped being
   reviewable — and being reviewable is the one property the whole format
@@ -1026,5 +1027,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 627 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 635 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*

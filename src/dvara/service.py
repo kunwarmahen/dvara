@@ -105,7 +105,7 @@ from yantra import (
     session_cost,
 )
 from yantra.config import guess_provider
-from yantra.errors import ConfigError
+from yantra.errors import ConfigError, ToolError
 from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
@@ -669,15 +669,38 @@ class Service:
             # a sentence, or a channel adapter gets a traceback.
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
+        sent = self._send_file_tool(agent, who)
         servers = await self._servers(agent, who=who, run=run, key=key, spec=spec)
         try:
-            return await self._run_turn(
+            reply = await self._run_turn(
                 agent, key=key, run=run, resuming=resuming, answers=answers,
                 door=door, decisions=decisions, wait=wait, ceiling=ceiling,
                 provider_name=provider_name, who=who)
+            return replace(reply, files=tuple(sent)) if sent else reply
         finally:
             if servers is not None:
                 await asyncio.to_thread(servers.shutdown)
+
+    def _send_file_tool(self, agent, who: Actor) -> list[Path]:
+        """``send_file`` for this turn (files.py), admitted or dropped by
+        the package's tool list like any other tool. Returns the list a
+        chat turn's files collect in, to go out with its answer. A
+        scheduled run's file goes at once, as a notice: nobody is waiting
+        on that run's answer, and the scheduler sends only its text."""
+        sent: list[Path] = []
+        unattended = is_unattended()
+
+        async def deliver(path: Path, note: str) -> str:
+            if not unattended:
+                sent.append(path)
+                return f"{path.name} will be sent to them with your answer"
+            result = await self.notices.send(who.id, who.reach(), note, file=path)
+            if result.nowhere:
+                raise ToolError("they have no channel a file can be sent to")
+            return f"sent {path.name} to them"
+
+        agent.registry.register(files.SendFile(deliver))
+        return sent
 
     async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec):
         """The MCP servers this turn gets, all stopped when it ends: the

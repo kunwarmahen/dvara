@@ -29,16 +29,34 @@ the ``Reply`` carries the path and each channel decides how a file looks
 in its medium. Telegram sends it as a document. HTTP names it in the
 reply and sends nothing, because a bridge that wants the bytes is on
 this machine and can read the folder itself.
+
+AND THE AGENT MAY OFFER ONE: ``send_file``. "Send me the log" in plain
+words, or a weekly report a schedule writes and sends, is the agent's to
+do -- so it is a tool too, with the same walls. IT IS A WRITE TO THE
+GATE: something leaves the machine for a person's phone. In a chat it is
+asked about like any write; in a schedule it runs only when the card the
+person approved listed it. A package lists it like any other tool
+(``allow = [..., "send_file"]``), and a package that does not, does not
+get it. In a chat the file goes with the answer; in a scheduled run,
+which nobody is waiting on, it goes at once as a notice.
 """
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any, ClassVar
+
+from yantra.errors import ToolError
+from yantra.tools.base import Tool, ToolContext
 
 WORDS = ("/files", "/file")
 
 #: The most names ``/files`` lists, so one busy folder is still one message.
 LIST_AT_MOST = 40
+#: The largest file sent: the Bot API's limit for a bot, and a sane one
+#: for any channel a phone is on the other end of.
+FILE_LIMIT = 50 * 1024 * 1024
 
 
 def is_file_word(text: str) -> bool:
@@ -102,3 +120,56 @@ def answer(folder: Path, text: str) -> tuple[str, Path | None]:
     if found.stat().st_size == 0:
         return f"{name} is empty, so there is nothing to send.", None
     return name, found
+
+
+#: Hands one file (and a line to go with it) to whoever delivers it.
+Deliver = Callable[[Path, str], Awaitable[str]]
+
+
+class SendFile(Tool):
+    """The agent sends the person a file from their folder."""
+
+    name = "send_file"
+    description = (
+        "Send the person a file from your folder, as the file itself (on "
+        "Telegram, a document they can open or forward). Use it when they "
+        "ask for a file, or when a job's result is a file they asked to "
+        "receive. The path is relative to your folder.")
+    parameters: ClassVar[dict] = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string",
+                     "description": "The file, relative to your folder."},
+            "note": {"type": "string",
+                     "description": "One short line to send with it (optional)."},
+        },
+        "required": ["path"],
+    }
+    read_only = False
+
+    def __init__(self, deliver: Deliver) -> None:
+        self._deliver = deliver
+
+    def summary(self, args: dict[str, Any], ctx: ToolContext) -> str:
+        return f"send you the file {args.get('path', '?')}"
+
+    def _found(self, args: dict[str, Any], ctx: ToolContext) -> Path:
+        name = str(args.get("path") or "").strip()
+        found = pick(ctx.cwd, name)
+        if found is None:
+            raise ToolError(f"there is no file called {name!r} in the folder")
+        size = found.stat().st_size
+        if size == 0:
+            raise ToolError(f"{name} is empty; there is nothing to send")
+        if size > FILE_LIMIT:
+            raise ToolError(f"{name} is {size // (1024 * 1024)} MB, more than "
+                            f"{FILE_LIMIT // (1024 * 1024)} MB can be sent")
+        return found
+
+    def run(self, args: dict[str, Any], ctx: ToolContext) -> str:
+        raise ToolError("send_file runs only in the async loop")
+
+    async def arun(self, args: dict[str, Any], ctx: ToolContext) -> str:
+        found = self._found(args, ctx)
+        note = str(args.get("note") or "").strip() or found.name
+        return await self._deliver(found, note)

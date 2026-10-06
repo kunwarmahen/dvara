@@ -589,7 +589,7 @@ class TelegramBot:
             # The channel gets the polite sentence; the owner, who is the
             # one person who can fix a bad base URL, gets the reason.
             self._note(f"telegram: {reply.stop_reason}: {reply.detail}")
-        if reply.files:
+        if reply.files and reply.stop_reason == "files":
             await self._answer_with_file(chat, row, reply.text, reply.files[0])
             return
         parts = self._reply_messages(reply.text, reply.receipt)
@@ -600,6 +600,14 @@ class TelegramBot:
                      if last and reply.held is not None else {})
             await self._send(chat, chunk, **extra)
             self.outbox.sent(row, count)
+        # What the agent sent with send_file, after the words that
+        # explain it. Not owed: a crash here loses the file, and the
+        # answer already said it was sent -- the person can ask again.
+        for path in reply.files:
+            try:
+                await self._send_file(chat, path, caption=path.name)
+            except (TelegramError, httpx.HTTPError, OSError) as exc:
+                self._note(f"telegram: sending {path.name} failed: {exc}")
         self.outbox.settled(row)
 
     async def _answer_with_file(self, chat: int, row: int, text: str,
@@ -736,13 +744,18 @@ class TelegramBot:
 
     # ---- the question, and the button --------------------------------------
 
-    async def _deliver_notice(self, address: str, text: str) -> None:
+    async def _deliver_notice(self, address: str, text: str, file=None) -> None:
         """Something the person was not asked about, into their chat.
 
         Split the way an answer is, so a long finding arrives whole
         rather than cut at Telegram's limit. Raising is left to the desk,
-        which keeps the text for collection rather than losing it."""
+        which keeps the text for collection rather than losing it. A
+        notice carrying a file (a scheduled run's ``send_file``) is the
+        file, with the text as its caption."""
         chat = int(address)
+        if file is not None:
+            await self._send_file(chat, file, caption=elide(text, CAPTION_LIMIT))
+            return
         for part in split_message(text):
             await self._send(chat, part)
 

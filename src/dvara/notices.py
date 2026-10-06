@@ -25,6 +25,10 @@ an adapter in another process -- finds its notices waiting at ``GET
 sender that raises falls back to the same queue rather than losing the
 text.
 
+A NOTICE MAY CARRY A FILE: what a scheduled run's ``send_file`` sends
+(files.py). A sender is then called with ``file=`` the path, and a
+collected notice names the path, the way a reply over HTTP does.
+
 KEPT IN MEMORY, AND SAID SO. Unlike the outbox (outbox.py), which owes
 a reply to somebody who wrote, a notice is owed to nobody yet: a
 restart drops the queue, and the cap on it (the newest
@@ -39,9 +43,11 @@ from collections import deque
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
-#: Sends one text to one address on one channel kind.
-Sender = Callable[[str, str], Awaitable[None]]
+#: Sends one text to one address on one channel kind -- and, for a notice
+#: that carries one, a file (``file=`` the path).
+Sender = Callable[..., Awaitable[None]]
 
 #: Notices kept per channel kind for an adapter that has not collected
 #: them. A person away for a week of hourly checks is not owed all 168.
@@ -56,10 +62,11 @@ class Notice:
     to: str
     text: str
     at: datetime
+    file: str | None = None
 
     def as_dict(self) -> dict:
         return {"id": self.id, "actor": self.actor, "channel": self.kind,
-                "to": self.to, "text": self.text,
+                "to": self.to, "text": self.text, "file": self.file,
                 "at": self.at.isoformat(timespec="seconds")}
 
 
@@ -88,15 +95,19 @@ class NoticeDesk:
         self._routes[kind] = sender
 
     async def send(self, actor: str, reach: Sequence[tuple[str, str]],
-                   text: str) -> Sent:
+                   text: str, file: Path | None = None) -> Sent:
         result = Sent()
         for kind, address in reach:
             notice = Notice(id=secrets.token_hex(4), actor=actor, kind=kind,
-                            to=address, text=text, at=datetime.now(UTC))
+                            to=address, text=text, at=datetime.now(UTC),
+                            file=str(file) if file else None)
             sender = self._routes.get(kind)
             if sender is not None:
                 try:
-                    await sender(address, text)
+                    if file is None:
+                        await sender(address, text)
+                    else:
+                        await sender(address, text, file=file)
                     result.sent.append(kind)
                     continue
                 except Exception as exc:     # a channel down is not a crash

@@ -17,6 +17,9 @@ one a model had retold.
 
 Telegram can send a file. Nothing here asked it to.
 
+Two roads lead to the file: two words the person types, and a tool the
+agent calls. Each is right for a different moment.
+
 ## Two words, and they are the person's
 
 ```
@@ -28,13 +31,46 @@ Telegram can send a file. Nothing here asked it to.
 settled that), so asking for one works like `/accounts`
 ([note 20](20-signing-in-from-the-chat.md)): answered by dvara before any
 turn, never seen by the agent, costing nothing, and the same whichever
-model is behind the door. The other design was a tool the agent calls to
-attach a file. It would put a model between a person and their own file,
-one more thing that has to go right before they get it. On a small local
-model, that's a real cost.
+model is behind the door. The tool below puts a model between a person
+and their own file, one more thing that has to go right before they get
+it. On a small local model that's a real cost, so the words don't depend
+on it.
 
 This isn't dvara growing a command language for talking to agents. Note
 07 refused that, and still does. These words never reach an agent.
+
+## A tool, and it is a write
+
+The words cover a person who knows the file's name. Most people will say
+*"send me the log"*, and a schedule that writes a weekly report should
+be able to send it without anyone asking. That's the agent's to do, so
+there is a tool too:
+
+```
+send_file(path, note?)     a file from the folder, sent to the person
+```
+
+**SOMETHING LEAVING FOR A PHONE IS A WRITE.** `send_file` isn't
+read-only, so it goes through the gate like `write_file`. In a chat the
+person is asked (*"minder wants to run send_file: send you the file
+uptime-log.txt"*). In a schedule it runs only if the card they approved
+listed it ([note 17](17-nobody-wrote-first.md)). A package gets the tool
+only by listing it: `allow = [..., "send_file"]`. A package with no list
+gets every tool, this one included, and its permission mode decides
+the rest. A read-only package can't send.
+
+**THE SAME WALLS.** The tool looks names up exactly as `/file` does
+(`files.pick`): inside the folder or not found, no dot names, empty and
+oversized files refused, each with a sentence the model can repeat.
+
+**IN A CHAT, WITH THE ANSWER. IN A SCHEDULE, AT ONCE.** In a chat turn
+the file joins the reply (`Reply.files`). Telegram sends the answer's
+words first and then the document, so the words that explain the file
+come before it. A scheduled run's answer goes back to Samay, which sends
+only text, so the file goes out straight away as a notice carrying it
+([note 17](17-nobody-wrote-first.md)'s `notices.py`). With a bot in the
+process it's sent at once. Otherwise it waits at `GET /notices`, with
+its path, like any notice.
 
 **THE FOLDER'S WALLS ARE THE ONLY WALLS.** A name is looked up inside the
 person's folder or it isn't found:
@@ -79,7 +115,7 @@ at it would only confuse people.
 ## Live receipt
 
 `qwen3.8:latest` through Ollama, the `minder` example, `dvara say` with
-the write approved at the keyboard:
+each write approved at the keyboard. First the words:
 
 ```
 $ dvara say --actor owner --agent minder "Check https://example.com and write one
@@ -103,6 +139,35 @@ $ dvara say --actor owner --agent minder "/file .yantra/mcp.json"
 There's no file called .yantra/mcp.json in your folder. Send /files to see them.
 ```
 
+Then the tool, in a chat:
+
+```
+$ dvara say --actor owner --agent minder "send me my uptime-log.txt"
+minder wants to run send_file:
+  send you the file uptime-log.txt
+approve? [y/N] y
+Here you go.
+  file: .../state/work/owner/minder/uptime-log.txt
+```
+
+And in a scheduled run over HTTP (`unattended: true`, `allow_tools:
+["send_file"]`, a door started with `--ask` as Sarathi starts it), for a
+person whose actors entry lists a Telegram id and with no bot in that
+process, so the notice is kept:
+
+```
+POST /message  -> "Sent uptime-log.txt to the person with a note that it is
+                   this week's record."   refused: []
+GET /notices?channel=telegram
+  {"actor": "priya", "to": "42", "text": "This week's uptime-log.txt record is here.",
+   "file": ".../state/work/priya/minder/uptime-log.txt", ...}
+```
+
+The same run on a door started *without* `--ask` was refused: answers
+given ahead of time need a door that can ask in the first place. That
+is how every write works, not something special to this one, and
+Sarathi's door always has `--ask`.
+
 The Telegram upload was checked against the real Bot API without
 sending anything to anybody: `sendDocument` to a chat that doesn't exist.
 Telegram reads the upload before it looks for the chat, so a well-formed
@@ -116,19 +181,22 @@ without a file   -> sendDocument: 400 Bad Request: there is no document in the r
 Not yet tried from a real phone with a real bot.
 
 The tests are in `tests/test_files.py`: the walls (climbing out, a link
-out, the dot folder, another person), and that the words never reach a
-model, since every service there has an empty script and a model call
-would raise. The Telegram tests (`tests/test_telegram.py`) check that the
-file goes out as a multipart document carrying its name and its bytes,
-and that one over the limit gets a sentence instead.
+out, the dot folder, another person); that the words never reach a model
+(every service there has an empty script, so a model call would raise);
+and the tool: sent with a chat's answer, not sent when nobody answers,
+absent from a package that doesn't list it, refused outside the folder,
+sent at once as a notice in a schedule that allowed it, refused in one
+that didn't. The Telegram tests (`tests/test_telegram.py`) check the
+multipart document with its name and bytes, a file over the limit, and
+that the agent's file comes after its words.
 
 ## What was deliberately not built
 
-* **A tool for the agent to attach a file.** A weekly report a schedule
-  writes would be nicer arriving as a file with the notice than as
-  `/file report.md` typed afterwards. That's the agent deciding to send
-  something, and it belongs with notices, as a channel feature for
-  messages nobody asked for. Not here.
+* **Owing a file across a crash.** A reply's words are owed
+  ([note 13](13-a-reply-that-is-owed.md)); a file the agent sent after
+  them isn't. If the process dies in between, the answer said the file
+  was sent and it wasn't. The person asks again, and the owner's log
+  says what failed.
 * **A download address over HTTP.** It would be a second way into the
   folder with its own token rules. A bridge on this machine can read the
   path.

@@ -98,3 +98,112 @@ def test_another_persons_file_is_not_theirs_to_ask_for(make_service):
     reply = say(service, "/file log.txt", actor="guest")
     assert reply.stop_reason == "files" and reply.files == ()
     assert say(service, "/file ../../mahen/greeter/log.txt", actor="guest").files == ()
+
+
+# ---- send_file: the agent sends one --------------------------------------------
+
+from dvara.actors import ActorBook  # noqa: E402
+from dvara.asks import AskDesk  # noqa: E402
+from dvara.gate import Policy  # noqa: E402
+from dvara.rules import Rule, RuleBook  # noqa: E402
+from tests.conftest import calls, says, write_package  # noqa: E402
+
+#: Somebody a notice can reach: a scheduled run's file goes that way.
+REACHABLE = ActorBook.from_dict({"actor": {"owner": {
+    "channel": [{"kind": "telegram", "id": 42}]}}})
+
+
+def courier(agents_root, allow='["read_file", "write_file", "send_file"]'):
+    write_package(agents_root, "courier", body=(
+        '[agent]\nname = "courier"\nprompt = "prompt.md"\n'
+        f'[tools]\nallow = {allow}\n[permissions]\nmode = "ask"\n'))
+
+
+def sends(path="log.txt"):
+    return calls("send_file", {"path": path})
+
+
+def chat(service, agent="courier", **kw):
+    return asyncio.run(service.deliver(actor="owner", agent=agent, thread="chat",
+                                       text="send me the log", **kw))
+
+
+def answered_yes():
+    return Policy(rules=RuleBook([Rule(tool="send_file", verdict="allow")]))
+
+
+def test_in_a_chat_the_file_goes_with_the_answer(make_service, agents_root):
+    courier(agents_root)
+    service = make_service([sends(), says("here it is")], policy=answered_yes(),
+                           asks=AskDesk(timeout=5))
+    (folder(service, "owner", "courier") / "log.txt").write_text("up\n")
+    reply = chat(service)
+    assert reply.ok and reply.text == "here it is"
+    assert [f.name for f in reply.files] == ["log.txt"]
+
+
+def test_it_is_a_write_so_nobody_answering_means_it_is_not_sent(make_service,
+                                                                agents_root):
+    courier(agents_root)
+    service = make_service([sends(), says("could not")], asks=AskDesk(timeout=0.2))
+    (folder(service, "owner", "courier") / "log.txt").write_text("up\n")
+    assert chat(service).files == ()
+
+
+def test_a_package_that_does_not_list_it_does_not_get_it(make_service, agents_root):
+    courier(agents_root, allow='["read_file", "write_file"]')
+    service = make_service([sends(), says("no such tool")], policy=answered_yes(),
+                           asks=AskDesk(timeout=5))
+    (folder(service, "owner", "courier") / "log.txt").write_text("up\n")
+    assert chat(service).files == ()
+    last = service.scripted.requests[-1]
+    assert "send_file" not in {t["name"] if isinstance(t, dict) else t.name
+                               for t in last.get("tools") or []}
+
+
+def test_the_agent_cannot_send_from_outside_the_folder(make_service, agents_root,
+                                                       tmp_path):
+    courier(agents_root)
+    (tmp_path / "secret.txt").write_text("x")
+    service = make_service([sends("../../../../secret.txt"), says("no")],
+                           policy=answered_yes(), asks=AskDesk(timeout=5))
+    assert chat(service).files == ()
+
+
+def test_a_scheduled_run_sends_it_at_once_as_a_notice(make_service, agents_root):
+    courier(agents_root)
+    service = make_service([sends(), says("sent the report")], actors=REACHABLE,
+                           asks=AskDesk(timeout=5))
+    (folder(service, "owner", "courier") / "log.txt").write_text("weekly\n")
+    got = []
+
+    async def telegram(address, text, file=None):
+        got.append((address, text, file and file.name))
+    service.notices.route("telegram", telegram)
+    reply = asyncio.run(service.deliver(actor="owner", agent="courier",
+                                        thread="samay-s1-1", text="go",
+                                        unattended=True, allow_tools=["send_file"]))
+    assert got == [("42", "log.txt", "log.txt")]
+    assert reply.files == ()          # gone already; the answer is text
+
+
+def test_a_scheduled_run_not_allowed_it_ahead_is_refused(make_service, agents_root):
+    courier(agents_root)
+    service = make_service([sends(), says("refused")], actors=REACHABLE,
+                           asks=AskDesk(timeout=5))
+    (folder(service, "owner", "courier") / "log.txt").write_text("x\n")
+    reply = asyncio.run(service.deliver(actor="owner", agent="courier",
+                                        thread="samay-s1-1", text="go",
+                                        unattended=True))
+    assert reply.refused == ("send_file",)
+
+
+def test_a_collected_notice_names_its_file(make_service, agents_root):
+    courier(agents_root)
+    service = make_service([sends(), says("ok")], actors=REACHABLE,
+                           asks=AskDesk(timeout=5))
+    (folder(service, "owner", "courier") / "log.txt").write_text("x\n")
+    asyncio.run(service.deliver(actor="owner", agent="courier", thread="samay-s1-1",
+                                text="go", unattended=True, allow_tools=["send_file"]))
+    [kept] = service.notices.take("telegram")
+    assert kept.as_dict()["file"].endswith("owner/courier/log.txt")
