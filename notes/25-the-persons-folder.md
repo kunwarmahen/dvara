@@ -108,6 +108,11 @@ and could have refused. The test driver approved every card, so the
 schedule was made; in the next turn qwen replaced it with a better one.
 A prompt asks a model to wait; the gate is what makes it.
 
+The same from a real phone, through a Telegram bot in front of this door
+in Sarathi's containers: the schedule asked for in the chat, the card
+approved with its buttons, runs appending to the record, and the bot
+reading the record back when asked.
+
 The tests (`tests/test_one_folder.py`) write from a scheduled run and
 read from a chat, then check that another person and another agent find
 nothing. Put back to a folder per conversation, all three fail.
