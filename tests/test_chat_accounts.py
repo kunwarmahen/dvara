@@ -41,7 +41,8 @@ SETU = """\
             "setup": {"google_client_file": None},
             "connections": [{"ref": r, "connector": r.split(":")[0], "email": "me@example.com",
                              "level_label": "Read only", "installed": True} for r in have],
-            "connectors": []}))
+            "connectors": [{"id": "gmail", "name": "Gmail", "auth": "google"},
+                           {"id": "amazon", "name": "Amazon", "auth": "browser"}]}))
     elif cmd == "disconnect":
         ref = sys.argv[2]
         if ref not in have:
@@ -52,7 +53,17 @@ SETU = """\
         args = sys.argv[2:]
         ref = args[0] + ":" + args[args.index("--as") + 1]
         if args[0] == "amazon":
-            emit(event="error", message="Amazon is signed in to in a window"); sys.exit(2)
+            if "--remote" not in args:
+                emit(event="error", message="Amazon is signed in to in a window"); sys.exit(2)
+            import time
+            emit(event="started", ref=ref, level="read", level_label="Read only")
+            emit(event="link", url="http://192.168.1.44:8767/w/TOKEN", expires_at=0)
+            emit(event="opened")
+            time.sleep(0.3)
+            json.dump(have + [ref], open(path, "w"))
+            emit(event="connected", ref=ref, email="amazon.com", level="read",
+                 level_label="Read only", asked_level="read")
+            sys.exit(0)
         emit(event="started", ref=ref, level="read", level_label="Read only")
         emit(event="url", url="https://accounts.google.com/o/oauth2/auth?state=GOOD", paste=True)
         for line in sys.stdin:
@@ -169,12 +180,40 @@ class TestSigningInFromTheChat:
         assert "no sign-in waiting" in run(go()).text
         assert not (service.state / "setu" / "raj" / "accounts.json").exists()
 
-    def test_a_site_signed_in_through_a_window_says_why_not(self, make_service,
-                                                            fake_setu, agents_root):
+    def test_a_window_site_with_no_window_address_says_how_one_is_set(
+            self, make_service, fake_setu, agents_root, monkeypatch):
+        monkeypatch.delenv("SETU_WINDOW_HOST", raising=False)
+        monkeypatch.delenv("SETU_WINDOW_URL", raising=False)
         mailer(agents_root)
         service = make_service([], actors=book(raj={"setu": True}))
         reply = run(turn(service, "raj", "/connect amazon"))
-        assert "couldn't start" in reply.text and "window" in reply.text
+        assert "browser window on the owner's computer" in reply.text
+        assert "SETU_WINDOW_HOST" in reply.text
+
+    def test_a_window_site_is_streamed_and_its_end_is_told(self, make_service, fake_setu,
+                                                           agents_root, monkeypatch):
+        monkeypatch.setenv("SETU_WINDOW_HOST", "192.168.1.44")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        told: list[str] = []
+
+        async def notify(actor, text):
+            told.append(text)
+        service.accounts.notify = notify
+
+        async def go():
+            reply = await turn(service, "raj", "/connect amazon")
+            await asyncio.sleep(1.0)
+            await service.accounts.aclose()
+            return reply
+        reply = run(go())
+        assert "open this on your phone" in reply.text
+        assert "http://192.168.1.44:8767/w/TOKEN" in reply.text
+        assert told == ["Connected amazon:personal (amazon.com) at Read only. Your agents "
+                        "that need it can use it from your next message."]
+        argv = json.loads((service.state / "setu" / "raj" / "argv.log")
+                          .read_text().splitlines()[-1])
+        assert "--remote" in argv and "--client-file" not in argv
 
 
 class TestListingAndDisconnecting:

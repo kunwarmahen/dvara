@@ -867,8 +867,11 @@ folder with a passphrase only he knows, and `/unlock` opens it for a
 week at a time, so his schedules keep running
 ([notes/21](notes/21-a-passphrase-only-they-know.md)). priya's folder is
 yours, so hers are connected at the machine (`SETU_HOME=<that folder>
-setu connect gmail`), and so are sites signed in to through a browser
-window, like Amazon. raj's fresh folder borrows your Google client file;
+setu connect gmail`). A site signed in to through a browser window,
+like Amazon, is streamed to raj's phone if you give the service a window
+address (`SETU_WINDOW_HOST`; see
+[notes/22](notes/22-a-window-sent-to-their-phone.md) for which address
+is safe for what). raj's fresh folder borrows your Google client file;
 while your Google app is in Testing mode, add his address as a test
 user ([notes/20](notes/20-signing-in-from-the-chat.md)).
 
@@ -913,6 +916,7 @@ Each topic, and the note that argues it:
 | `notes/18-a-schedule-asked-for-in-the-chat.md` | a person's agent offering a schedule in the chat, made only with their yes on their own channel |
 | `notes/19-their-own-accounts.md` | each person's own Setu sign-ins, and an agent that reaches only those, as far as its package asks |
 | `notes/20-signing-in-from-the-chat.md` | `/connect`, `/accounts`, `/disconnect`: a person's own sign-in from their phone, the address pasted back to the sign-in and never to an agent |
+| `notes/22-a-window-sent-to-their-phone.md` | `/connect amazon`: a browser-window sign-in streamed to the person's phone, at an address the owner chooses |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---
@@ -957,9 +961,10 @@ refusals and gaps, and each one is argued in the note that owns it.
   Run, so the change appears in the ledger instead of being guessed at.
   Pinning a version per thread stays refused, because a pinned thread is
   one that does not get the prompt fix you made *because of it*.
-* **No browser-window sites from the chat.** Amazon and X are signed in
-  to in a window on the owner's computer, which a phone can't reach
-  ([notes/20](notes/20-signing-in-from-the-chat.md)).
+* **Browser-window sites need a window address.** Amazon and X are
+  streamed to the person's phone only when the owner says where that
+  page listens; it's served from the owner's computer, which sees what
+  they type ([notes/22](notes/22-a-window-sent-to-their-phone.md)).
 * **A person's tokens are readable by the owner** unless they lock them.
   With `/lock` they're sealed with the person's passphrase while not in
   use; while unlocked, the key is in the service's memory, which the

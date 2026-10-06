@@ -68,7 +68,9 @@ each person their own Setu sign-ins, and
 [20 — signing in from the chat](notes/20-signing-in-from-the-chat.md)
 lets them connect one from their phone;
 [21 — a passphrase only they know](notes/21-a-passphrase-only-they-know.md)
-lets them lock it.
+lets them lock it; and
+[22 — a window sent to their phone](notes/22-a-window-sent-to-their-phone.md)
+lets them sign in to Amazon or X from wherever they are.
 
 New here? [TUTORIAL.md](TUTORIAL.md) walks through it in order, from a
 first turn to a bot that asks you before anything changes.
@@ -331,7 +333,10 @@ Their folder borrows your Google client file; while your Google app is in
 Testing mode, add each person's address as a test user. A folder you
 pointed them at (priya's, above) stays yours to change, at the machine:
 `SETU_HOME=<folder> setu connect gmail`. Sites signed in to through a
-browser window (Amazon, X) are also connected at the machine. A
+browser window (Amazon, X) are streamed to their phone when you give
+the service a window address (`SETU_WINDOW_HOST`, and `SETU_WINDOW_URL`
+behind a tunnel); without one they're connected at the machine
+([notes/22](notes/22-a-window-sent-to-their-phone.md)). A
 person's tokens sit on your disk, where you could read them; say so to
 anyone you give a folder ([notes/19](notes/19-their-own-accounts.md)).
 
@@ -767,6 +772,7 @@ print(reply.text, reply.cost_usd)
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
+| `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |

@@ -230,19 +230,35 @@ class AccountDesk:
             return (f"The owner set your accounts here to {', '.join(narrowed) or 'none'}; "
                     f"{ref} isn't one of them.")
         level = level or needs.get(connector)
-        argv = [program, "connect", connector, "--as", account, "--json", "--paste",
+        try:
+            status = await self._status(program, home)
+        except (RuntimeError, ValueError):
+            status = {}
+        card = next((c for c in status.get("connectors") or [] if c.get("id") == connector),
+                    {})
+        in_a_window = card.get("auth") == "browser"
+        if in_a_window and not window_set():
+            return (f"{card.get('name') or connector} is signed in to in a browser window on "
+                    "the owner's computer. They can sign you in there, or give this service a "
+                    "window address (SETU_WINDOW_HOST) so it can be streamed to your phone.")
+        road = "--remote" if in_a_window else "--paste"
+        argv = [program, "connect", connector, "--as", account, "--json", road,
                 "--timeout", str(int(self.sign_in_for))]
         if level:
             argv += ["--level", level]
         if url:
             argv += ["--url", url]
         client = self._client_file() if self._client_file else None
-        if client and not await self._has_client_file(program, home):
+        if not in_a_window and client and not \
+                (status.get("setup") or {}).get("google_client_file"):
             argv += ["--client-file", client]
         await self._forget(actor)                  # a new sign-in replaces a waiting one
         proc = await asyncio.create_subprocess_exec(
             *argv, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, env=_env(home))
+            stderr=asyncio.subprocess.DEVNULL,
+            # an unlocked folder stays unlocked: the new sign-in is not sealed
+            # away under them (Setu seals it when nobody holds the key)
+            env=_env(home, self.keys.key_for(actor)))
         waiting = _Waiting(ref=ref, proc=proc)
         self._waiting[actor] = waiting
         waiting.reader = asyncio.create_task(self._read(actor, waiting))
@@ -255,24 +271,25 @@ class AccountDesk:
                 return "Setu didn't answer in time; nothing was started."
             if event.get("event") == "started":
                 started = event
-            elif event.get("event") == "url":
+            elif event.get("event") in ("url", "link"):
                 break
             elif event.get("event") == "error":
                 await _settle(waiting)
                 return f"I couldn't start that sign-in: {event.get('message')}"
         minutes = int(self.sign_in_for // 60)
         what = started.get("level_label") or level or "the least access"
+        if event.get("event") == "link":
+            return (f"To connect {ref} ({what}), open this on your phone:\n\n{event['url']}"
+                    f"\n\nYou'll see {card.get('name') or connector}'s sign-in page, running "
+                    "in a browser on this service's computer: tap and type as you would on "
+                    "the page. It opens on the first device only and works for "
+                    f"{minutes} minutes. Your sign-in stays in your own folder; I'll tell you "
+                    "when it's done.")
         return (f"To connect {ref} ({what}), open this and sign in:\n\n{event['url']}\n\n"
                 "After you allow it, your browser will try to open a page starting with "
                 "http://127.0.0.1 and fail to load it. That's expected. Copy that page's "
                 f"whole address and send it to me here. It works once, within {minutes} "
                 "minutes, and it goes to the sign-in, not to any agent.")
-
-    async def _has_client_file(self, program: str, home: Path) -> bool:
-        with contextlib.suppress(RuntimeError, ValueError):
-            return bool((await self._status(program, home)).get("setup", {})
-                        .get("google_client_file"))
-        return False
 
     # ---- the address, pasted back ------------------------------------------------
 
@@ -323,7 +340,7 @@ class AccountDesk:
                 kind = event.get("event")
                 if not linked:
                     await waiting.events.put(event)
-                    linked = kind == "url"
+                    linked = kind in ("url", "link")
                     if kind == "error":
                         return
                     continue
@@ -403,6 +420,13 @@ def _outcome(ref: str, event: dict[str, Any]) -> str:
     if kind == "paste_refused":
         return f"That didn't work: {event.get('message')}. The sign-in is still waiting."
     return f"The sign-in for {ref} didn't finish: {event.get('message')}"
+
+
+def window_set() -> bool:
+    """Whether the owner said where a streamed sign-in window listens
+    (Setu's SETU_WINDOW_HOST or SETU_WINDOW_URL, in this service's own
+    environment)."""
+    return bool(os.environ.get("SETU_WINDOW_HOST") or os.environ.get("SETU_WINDOW_URL"))
 
 
 def _env(home: Path, key: str | None = None) -> dict[str, str]:
