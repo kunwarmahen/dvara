@@ -49,11 +49,12 @@ the separator and the mapping is one-to-one. It stays readable on purpose
 rather than being hashed: `select distinct session_id from checkpoints`
 should answer your question without a decoder ring.
 
-The same escaping gives each conversation a scratch directory —
-`state/work/mahen/greeter/chat-42` — and there is one hole escaping does
+The same escaping names the folder an agent works in —
+`state/work/mahen/greeter`, one per person per agent since
+[note 25](25-the-persons-folder.md) — and there is one hole escaping does
 not close. `quote()` leaves `.` alone, because a dot is perfectly legal
-in a URL path. So a thread named `..` survives escaping intact, and a
-scratch directory becomes its own parent. The dot segments are
+in a URL path. So a name `..` survives escaping intact, and a folder
+becomes its own parent. The dot segments are
 neutralised explicitly. A test names each of them.
 
 ## An actor is assigned, never asserted

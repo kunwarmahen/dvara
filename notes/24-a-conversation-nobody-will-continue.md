@@ -44,7 +44,9 @@ looked at again next time.
 (`--keep-unattended DAYS`), so an owner who wants to see what a run left
 in its folder still can. `0` lets it go at the next chance.
 
-**THE RECORD STAYS.** Only the conversation and the workspace go. Every
+**THE RECORD STAYS.** Only the conversation and the workspace go (the
+workspace no longer: since [note 25](25-the-persons-folder.md) a run
+works in the person's folder, and its files stay). Every
 run stays in the ledger: `dvara runs` still lists it, `dvara case` can
 still turn it into an eval case, and a day's spending still counts it.
 The ledger also notes which threads were tidied, so none is looked at
@@ -110,7 +112,9 @@ person's thread a program wrote into, a held question, and the runs.
 
 ## What is not here yet
 
-* **A file a scheduled run writes lives in that run's own folder.** A
+* ~~**A file a scheduled run writes lives in that run's own folder.**~~
+  Shipped in [note 25](25-the-persons-folder.md): one folder per person
+  per agent, which their chat can read. A
   schedule that "appends a line to log.txt every six hours" writes a
   different `log.txt` each time, and after the keep window each one goes
   with its thread. What a person wants kept from a run should reach them

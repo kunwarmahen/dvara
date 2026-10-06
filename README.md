@@ -116,7 +116,8 @@ their own channels; with `--samay`, a person can ask for a schedule in
 the chat and say yes to it there; and each person's agent reaches that
 person's own accounts through Setu, never anybody else's; and a program
 that started it can ask whether it is serving, and a scheduled run's
-conversation is let go a week after it ends — covered by 613 tests. The API is not
+conversation is let go a week after it ends while what it wrote stays
+where the person's chat can read it — covered by 616 tests. The API is not
 stable.
 
 ## The shape of it
@@ -667,7 +668,7 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
 * Off unless asked for: it lets every person you serve put work on a
   timer that you pay for.
 * `examples/agents/minder` is a package that can: it checks a page now,
-  and offers to on a schedule. Try it with the owner's actor and
+  offers to on a schedule, and keeps a record in a file if asked. Try it with the owner's actor and
   `--root examples/agents`.
 * Each turn starts `samay mcp --for <that person> --agent <this agent>
   --runner dvara` and stops it when the turn ends. A scheduled turn gets
@@ -682,8 +683,11 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
   with `samay list`
   ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)).
 * Each run is a conversation of its own, and nothing continues it. A week
-  after it ends (`--keep-unattended DAYS`), its history and workspace
-  folder are let go; its runs stay in `dvara runs`. Only a thread a
+  after it ends (`--keep-unattended DAYS`), its history is let go; its
+  runs stay in `dvara runs`, and its files stay in the person's folder
+  with that agent, shared by all their conversations with it, so a log a
+  schedule keeps is one they can ask about from the chat
+  ([notes/25](notes/25-the-persons-folder.md)). Only a thread a
   program started goes, never one a person did, and never one with a
   question still waiting
   ([notes/24](notes/24-a-conversation-nobody-will-continue.md)).
@@ -794,7 +798,7 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |

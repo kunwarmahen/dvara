@@ -83,7 +83,6 @@ happened and the gate knows why, and neither of them knows both.
 from __future__ import annotations
 
 import asyncio
-import shutil
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -980,21 +979,23 @@ class Service:
         Samay starts a fresh thread for every scheduled run, so a run's
         history never drags the last four hundred answers into its
         prompt. Nothing ever writes to that thread again, and without
-        this its checkpoints and its workspace stay for good: one more of
-        each per run, for as long as the schedule runs.
+        this its checkpoints stay for good: one more per run, for as long
+        as the schedule runs.
 
         ONLY A THREAD NOBODY STARTED. The ledger's first run on a thread
         decides (``RunStore.finished_unattended``); a person's own
         conversation is never touched, even if a program later wrote into
         it. KEPT A WHILE FIRST: ``keep_unattended`` after its last turn,
-        so the owner can still look at what a run left behind. NEVER
+        so the owner can still read what a run was told and said. NEVER
         WHILE IT COULD GO ON: a thread with a question still waiting for
         its person (a hold), or a turn running on it now, is skipped and
         looked at again next time.
 
-        THE RECORD STAYS. Every run stays in the ledger -- ``dvara runs``,
-        ``dvara case`` and the day's spending read it -- and only the
-        conversation (sessions.sqlite3) and the workspace folder go.
+        THE RECORD STAYS, AND SO DO THE FILES. Every run stays in the
+        ledger -- ``dvara runs``, ``dvara case`` and the day's spending
+        read it -- and the files it wrote are in the person's folder with
+        this agent (``_workspace``), where their chat can find them. Only
+        the conversation (sessions.sqlite3) goes.
         """
         now = now or datetime.now(UTC)
         before = now - timedelta(seconds=self.keep_unattended)
@@ -1005,8 +1006,6 @@ class Service:
             if key in waiting or key in self._locks:
                 continue
             self.sessions.forget(key)
-            shutil.rmtree(self.state / "work" / Path(*workspace_parts(key)),
-                          ignore_errors=True)
             self.runs.mark_tidied(actor, agent, thread)
             gone += 1
         return gone
@@ -1021,16 +1020,24 @@ class Service:
                        f"{type(exc).__name__}: {exc}")
 
     def _workspace(self, key: str) -> Path:
-        """Where this conversation's agent may write.
+        """Where this person's agent may write: one folder per person per
+        agent, whichever conversation the turn is in.
 
         NOT the package directory. An agent that edits the folder you
         review and commit is an agent whose package stops being
         reviewable, which is the one property the whole format exists to
         have. The key's components are already percent-escaped, so a
-        thread id somebody else chose cannot climb out of here.
+        name somebody else chose cannot climb out of here.
+
+        THE PERSON'S, NOT THE CONVERSATION'S. Conversations keep separate
+        histories and share files, as sessions do on a desktop. A person
+        on their phone sees a file only by asking the agent, in their
+        chat; a scheduled run starts a conversation of its own every
+        time. So the log a schedule keeps has to be in the folder the chat
+        works in, or nobody but the owner could ever read it.
         """
-        actor, agent, thread = workspace_parts(key)
-        work = self.state / "work" / actor / agent / thread
+        actor, agent, _ = workspace_parts(key)
+        work = self.state / "work" / actor / agent
         work.mkdir(parents=True, exist_ok=True)
         return work
 

@@ -128,7 +128,8 @@ schedule made here is refused, and the start says so.
 
 `examples/agents/minder` is the smallest package that can make a
 schedule here. It fetches a page now (`web_fetch`), and offers to do it
-later. Its allowlist names `mcp__samay__*` and its mode is `ask`, the two
+later. (It also keeps a record in a file when asked, which needed the
+folder [note 25](25-the-persons-folder.md) gives each person.) Its allowlist names `mcp__samay__*` and its mode is `ask`, the two
 things above that a package must get right. Its prompt says to preview
 first, read the sentence back, and wait for a yes in the person's own
 words before calling `create_schedule`.

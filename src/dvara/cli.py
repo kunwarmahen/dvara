@@ -94,8 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
                              f"{DEFAULT_POLICY} if it exists)")
     parser.add_argument("--state", default=os.environ.get("DVARA_STATE",
                                                           DEFAULT_STATE),
-                        help="where sessions, run history and per-conversation "
-                             "workspaces live")
+                        help="where sessions, run history and each person's "
+                             "folder per agent live")
     parser.add_argument("--provider", default=None,
                         help="override every package's provider (anthropic | "
                              "openai | responses | ollama)")
@@ -136,8 +136,9 @@ def build_parser() -> argparse.ArgumentParser:
                         default=KEEP_UNATTENDED / 86400, metavar="DAYS",
                         help=f"how long a finished conversation a program "
                              f"started (each scheduled run is one) keeps its "
-                             f"history and workspace before they are let go; "
-                             f"its runs stay in `dvara runs` (default "
+                             f"history before it is let go; its runs stay in "
+                             f"`dvara runs`, and its files in the person's "
+                             f"folder with that agent (default "
                              f"{KEEP_UNATTENDED / 86400:g})")
     parser.add_argument("--hold-for", type=float, default=DEFAULT_KEEP,
                         metavar="SECONDS",

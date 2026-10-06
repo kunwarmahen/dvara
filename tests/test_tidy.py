@@ -35,13 +35,14 @@ def kept(service, thread, agent="greeter"):
 def test_a_finished_scheduled_run_goes_once_it_is_old_enough(make_service):
     service = make_service([says("checked")] * 2)
     deliver(service, "samay-1-100")
-    work = service.state / "work" / "owner" / "greeter" / "samay-1-100"
-    assert kept(service, "samay-1-100") and work.is_dir()
+    work = service.state / "work" / "owner" / "greeter"
+    (work / "log.txt").write_text("what the run kept\n")
+    assert kept(service, "samay-1-100")
 
     assert service.tidy() == 0                     # still inside the week
     assert service.tidy(now=LATER) == 1
     assert kept(service, "samay-1-100") is None
-    assert not work.exists()
+    assert (work / "log.txt").read_text() == "what the run kept\n"   # the files stay
     assert len(service.runs.recent()) == 1         # the record stays
     assert service.tidy(now=LATER) == 0            # and it is not done twice
 

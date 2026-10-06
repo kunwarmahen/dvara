@@ -173,7 +173,7 @@ class TestTheExample:
         offered = tools_sent(service)
         assert {"web_fetch", "mcp__samay__preview_schedule",
                 "mcp__samay__create_schedule"} <= offered
-        assert "write_file" not in offered
+        assert "bash" not in offered
         assert reply.ok
         assert ["call", "create_schedule"] in logged(samay[1])
 

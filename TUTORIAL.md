@@ -109,9 +109,9 @@ the same key as actor `a` in thread `b/c` — one person's conversation
 opening inside another's because of how they happened to be named. It
 stays readable rather than hashed on purpose, so
 `select distinct session_id from checkpoints` answers your question
-without a decoder ring. The same escaping gives each conversation its own
-scratch directory, and the dot segments (`..`) are neutralised explicitly,
-because `quote()` leaves a dot alone and a scratch directory that becomes
+without a decoder ring. The same escaping names the folder an agent works in,
+one per person per agent, and the dot segments (`..`) are neutralised
+explicitly, because `quote()` leaves a dot alone and a folder that becomes
 its own parent is a bad afternoon.
 
 ## 3 · An actor is assigned, never asserted
@@ -505,8 +505,10 @@ instead means "never mind", and the waiting calls are set aside.
   Interleaving them would put two user messages into one history with a
   single assistant reply between them.
 * **An agent writes in a workspace, not in its package.** The package
-  directory is read-only input; each conversation gets its own scratch
-  directory under the service's state. An agent that edits the folder you
+  directory is read-only input; each person gets a folder per agent under
+  the service's state, shared by all their conversations with it, so a
+  file a schedule wrote is one their chat can read
+  ([note 25](notes/25-the-persons-folder.md)). An agent that edits the folder you
   review and commit is an agent whose package has stopped being
   reviewable — and being reviewable is the one property the whole format
   exists to have.
@@ -865,9 +867,11 @@ Samay itself is set up — its clock, its page, keeping it running — is in
 
 Every run starts a fresh conversation, so the hundredth run doesn't
 drag the last ninety-nine answers into its prompt. Nothing continues
-those conversations, so a week after one ends, its history and its
-workspace folder are let go (`--keep-unattended DAYS` changes the week).
-The runs stay in `dvara runs`. Only a conversation a program started is
+those conversations, so a week after one ends, its history is let go
+(`--keep-unattended DAYS` changes the week). The runs stay in `dvara
+runs`, and anything a run wrote stays in your folder with that agent,
+where you can ask about it from the chat
+([note 25](notes/25-the-persons-folder.md)). Only a conversation a program started is
 ever let go: yours, and one with a question still waiting for you, are
 not ([note 24](notes/24-a-conversation-nobody-will-continue.md)).
 

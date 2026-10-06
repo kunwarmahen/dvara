@@ -52,14 +52,14 @@ DOT_SEGMENTS = frozenset({"", ".", ".."})
 def workspace_parts(key: str) -> tuple[str, str, str]:
     """The key's components as path segments that are only ever names.
 
-    A conversation's scratch directory nests as ``work/actor/agent/thread``,
-    so these segments are chosen by whoever is talking and have to be
-    inert. Escaping gets most of the way: the separator, NUL and every
+    The folder an agent works in nests as ``work/actor/agent`` (one per
+    person per agent, notes/25), and these segments must be inert
+    whoever chose them. Escaping gets most of the way: the separator, NUL and every
     control character are gone.
 
     IT DOES NOT GET ALL THE WAY. ``quote`` leaves ``.`` alone, because a
-    dot is legal in a URL path, so a thread named ``..`` survives
-    escaping intact and a scratch directory becomes its own parent. The
+    dot is legal in a URL path, so a name ``..`` survives escaping
+    intact and a folder becomes its own parent. The
     dot segments are neutralised here explicitly -- the one case where
     percent-escaping is not enough, and the reason this function exists
     instead of the caller splitting the key itself.

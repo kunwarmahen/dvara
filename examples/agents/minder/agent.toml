@@ -8,8 +8,8 @@
 # nobody's schedules are one model mistake away from anybody else's.
 [agent]
 name        = "minder"
-description = "Checks a page for you, now or on a schedule you say yes to."
-version     = "0.1.0"
+description = "Checks a page for you, now or on a schedule you say yes to, and keeps a record if you ask."
+version     = "0.2.0"
 prompt      = "prompt.md"
 
 [tools]
@@ -18,7 +18,22 @@ prompt      = "prompt.md"
 # left them out would hide them however the service was started. Of the
 # seven, only create_schedule, pause_schedule, resume_schedule and
 # delete_schedule change anything, so only those four become a question.
-allow = ["web_fetch", "mcp__samay__*"]
+#
+# read_file and write_file are for a record the person asks it to keep
+# ("note each time it was down"). Every turn this person has with this
+# agent works in ONE folder -- their chat and every run of their
+# schedules alike -- so a log a schedule keeps is one they can ask about
+# from their phone. Writing in a chat is a question; in a schedule it
+# runs only if the card they approved listed it.
+allow = ["web_fetch", "read_file", "write_file", "mcp__samay__*"]
+
+[env]
+# The date and time, from this machine. A record is only as good as its
+# timestamps, and an agent that is not told the date makes one up. LOCAL
+# ONLY: the clock and the time zone, never the one-off location lookup
+# "full" does. Read fresh each turn, since every turn here builds the
+# agent again.
+context = "local"
 
 [permissions]
 # THE PACKAGE MUST ASK. Under "read_only" a schedule is refused without
