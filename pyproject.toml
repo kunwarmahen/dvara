@@ -22,6 +22,9 @@ http = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
 ]
+# A package that needs a browser-road account (Amazon, X) gets its tools
+# from Yantra's browser side; without this they are offered and fail.
+browse = ["yantra[browse]"]
 
 [dependency-groups]
 # Optional for users, mandatory for contributors: tests/test_http.py
