@@ -112,6 +112,7 @@ from yantra.unattended import scope as unattended_scope
 
 from dvara import money, patience
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
+from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
 from dvara.asks import AskDesk
 from dvara.errors import ConfigProblem, Refused
@@ -134,6 +135,9 @@ SEEN_HERE = ("The person sees their schedules by asking you: list them with "
 #: themselves (accounts.py) -- never by an agent, which only says how.
 CONNECT_HERE = ("the person connects it by sending, themselves, /connect followed "
                 "by its name (/connect gmail); you cannot do it for them -- say so")
+#: How a locked folder opens here: by the person, from the chat.
+LOCKED_HERE = ("their accounts are locked with their own passphrase; they open them by "
+               "sending /unlock themselves, and you cannot")
 #: For a person whose accounts live in a folder the owner looks after.
 CONNECT_THERE = ("the person cannot connect one from here; the owner of this "
                  "service connects it for them -- say so, and say which")
@@ -263,6 +267,9 @@ class Service:
             notify=lambda actor, text: self.notify(text=text, actor=actor),
             log=self._note, client_file=self._owners_client_file)
         self._client_file: tuple[str | None] | None = None
+        # a crash while somebody's folder was open must not leave their
+        # browser sign-ins on disk: seal them again before serving anyone
+        seal_loose(self.accounts._program(), self.state / "setu", log=self._note)
 
     def _owners_client_file(self) -> str | None:
         if self._client_file is None:            # asked once, when first needed
@@ -676,7 +683,8 @@ class Service:
     async def _account_words(self, who: Actor, spec: AgentSpec, text: str) -> str | None:
         """``/connect``, ``/accounts``, ``/disconnect`` or a pasted
         address, answered for this person; None for anything else."""
-        if not (looks_pasted(text) or is_command(text)):
+        if not (looks_pasted(text) or is_command(text)
+                or self.accounts.keys.expects_passphrase(who.id)):
             return None
         from yantra.setu_link import needs_allow
 
@@ -717,13 +725,15 @@ class Service:
 
         needs = needs_allow(spec.connections)
         home = str(self.setu_home(who))
+        key = self.accounts.keys.key_for(who.id)
         try:
-            link = await asyncio.to_thread(load, "on", None, home)
+            link = await asyncio.to_thread(load, "on", None, home, key)
         except SetuLinkError as exc:
             self._note(f"dvara: {who.id}'s accounts are off for this turn -- setu: {exc}")
             return
         allow = {}
-        for row in (link.connections if link is not None else []):
+        # locked ones too: named to the agent, never started (setu_link)
+        for row in (link.connections + link.locked if link is not None else []):
             account = f"{row.get('connector')}:{account_of(row)}"
             if who.setu_accounts is not None and account not in who.setu_accounts:
                 continue
@@ -731,7 +741,8 @@ class Service:
                 allow[account] = needs[row["connector"]]
         setu = Setu(mode="on", home=home, link=link, allow=allow,
                     package=spec.name, mention=frozenset(needs),
-                    connect_how=CONNECT_HERE if who.setu == OWN_SETU else CONNECT_THERE)
+                    connect_how=CONNECT_HERE if who.setu == OWN_SETU else CONNECT_THERE,
+                    locked_how=LOCKED_HERE, vault_key=key)
         try:
             done = await asyncio.to_thread(setu.sync, manager, agent)
         except MCPError as exc:

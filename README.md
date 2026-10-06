@@ -66,7 +66,9 @@ lets a person's agent offer one, made only with their yes on their own
 channel. [19 — their own accounts](notes/19-their-own-accounts.md) gives
 each person their own Setu sign-ins, and
 [20 — signing in from the chat](notes/20-signing-in-from-the-chat.md)
-lets them connect one from their phone.
+lets them connect one from their phone;
+[21 — a passphrase only they know](notes/21-a-passphrase-only-they-know.md)
+lets them lock it.
 
 New here? [TUTORIAL.md](TUTORIAL.md) walks through it in order, from a
 first turn to a bot that asks you before anything changes.
@@ -320,6 +322,7 @@ A person with a folder of their own signs in from the chat:
                                send back the address of the page that won't load
 /accounts                      what's connected for them
 /disconnect gmail:personal     revoke and forget
+/lock, /unlock [days]          a passphrase only they know (notes/21)
 ```
 
 These go to dvara, never to an agent, and the pasted address goes only to
@@ -764,6 +767,7 @@ print(reply.text, reply.cost_usd)
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
+| `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |

@@ -862,7 +862,10 @@ link, signs in on his phone, and sends back the address of the page that
 then fails to load (it starts `http://127.0.0.1`). dvara hands that to
 the waiting sign-in, never to an agent, and answers *"Connected
 gmail:personal (raj@example.com) at Read only"*. `/accounts` lists what
-he has; `/disconnect gmail:personal` removes one. priya's folder is
+he has; `/disconnect gmail:personal` removes one. `/lock` seals his
+folder with a passphrase only he knows, and `/unlock` opens it for a
+week at a time, so his schedules keep running
+([notes/21](notes/21-a-passphrase-only-they-know.md)). priya's folder is
 yours, so hers are connected at the machine (`SETU_HOME=<that folder>
 setu connect gmail`), and so are sites signed in to through a browser
 window, like Amazon. raj's fresh folder borrows your Google client file;
@@ -910,6 +913,7 @@ Each topic, and the note that argues it:
 | `notes/18-a-schedule-asked-for-in-the-chat.md` | a person's agent offering a schedule in the chat, made only with their yes on their own channel |
 | `notes/19-their-own-accounts.md` | each person's own Setu sign-ins, and an agent that reaches only those, as far as its package asks |
 | `notes/20-signing-in-from-the-chat.md` | `/connect`, `/accounts`, `/disconnect`: a person's own sign-in from their phone, the address pasted back to the sign-in and never to an agent |
+| `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---
 
@@ -956,8 +960,11 @@ refusals and gaps, and each one is argued in the note that owns it.
 * **No browser-window sites from the chat.** Amazon and X are signed in
   to in a window on the owner's computer, which a phone can't reach
   ([notes/20](notes/20-signing-in-from-the-chat.md)).
-* **A person's tokens are readable by the owner.** They sit on the
-  owner's disk ([notes/19](notes/19-their-own-accounts.md)).
+* **A person's tokens are readable by the owner** unless they lock them.
+  With `/lock` they're sealed with the person's passphrase while not in
+  use; while unlocked, the key is in the service's memory, which the
+  machine's owner could still reach
+  ([notes/21](notes/21-a-passphrase-only-they-know.md)).
 
 ---
 

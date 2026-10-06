@@ -142,7 +142,7 @@ import sys
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
-from dvara.accounts import scrub
+from dvara.accounts import is_command, scrub
 from dvara.actors import Channel
 from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
@@ -525,7 +525,7 @@ class TelegramBot:
         if not chat or native is None:
             return
         try:
-            self.service.actors.resolve("telegram", native)
+            actor = self.service.actors.resolve("telegram", native).id
         except Refused:
             # SILENCE, NOT A SENTENCE. To the owner, who can fix it; not
             # to the stranger, who would learn that something is here.
@@ -548,8 +548,12 @@ class TelegramBot:
         # OWED FROM HERE. Written before the turn starts, so a process
         # that dies anywhere past this line leaves a row that says so --
         # see ``outbox.py``. Nothing before it is a turn.
-        row = self.outbox.took(agent=self.agent, chat=str(chat),
-                               sender=str(native), text=scrub(text))
+        # A PASSPHRASE IS KEPT NOWHERE (unlocked.py): not in the outbox's
+        # preview, and -- once Setu has it -- not in the chat either.
+        secret = (self.service.accounts.keys.expects_passphrase(actor)
+                  and not is_command(text))
+        row = self.outbox.took(agent=self.agent, chat=str(chat), sender=str(native),
+                               text="(a passphrase)" if secret else scrub(text))
 
         # The first action is awaited rather than left to the task: a
         # person who sent a message wants the "typing" the moment they
@@ -566,6 +570,10 @@ class TelegramBot:
             typing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await typing
+        if secret and message.get("message_id"):
+            with contextlib.suppress(Exception):
+                await self._api("deleteMessage", chat_id=chat,
+                                message_id=message["message_id"])
         await self._answer(chat, row, reply)
 
     async def _answer(self, chat: int, row: int, reply) -> None:

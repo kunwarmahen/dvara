@@ -12,6 +12,7 @@ THREE WORDS, AND THEY ARE THE PERSON'S, NOT THE MODEL'S.
     /connect homeassistant http://ha.local:8123
     /accounts                      what is connected here, for you
     /disconnect gmail:work         revoke it and forget it
+    /lock, /unlock [days]          a passphrase only they know (unlocked.py)
 
 dvara invents no command language for talking to agents, and this is
 not one: an agent never sees these messages, never starts a sign-in and
@@ -57,8 +58,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from dvara.unlocked import KeyHolder
+
 #: The three words, and nothing else, are the person's to type.
-COMMANDS = ("/connect", "/accounts", "/disconnect")
+COMMANDS = ("/connect", "/accounts", "/disconnect", "/lock", "/unlock")
 #: How long a sign-in waits for its address to come back.
 SIGN_IN_FOR = 600.0
 #: How long a reply waits on Setu (the link; the outcome of a paste).
@@ -113,6 +116,8 @@ class AccountDesk:
         self.notify, self.setu, self.sign_in_for, self.log = notify, setu, sign_in_for, log
         self._client_file = client_file
         self._waiting: dict[str, _Waiting] = {}
+        #: Folders their people locked, and the keys they opened them with.
+        self.keys = KeyHolder(notify=notify, program=self._program, log=log)
 
     def _program(self) -> str | None:
         return self.setu or shutil.which("setu")
@@ -125,9 +130,18 @@ class AccountDesk:
         when it is a message for the agent. ``home`` is their Setu folder
         (None: no accounts here); ``own`` is whether it is theirs alone;
         ``needs`` is the package's connectors and levels, for a default."""
+        command = is_command(text)
+        if self.keys.expects_passphrase(actor):
+            if not command:
+                program = self._program()
+                if program is None or home is None:
+                    self.keys.cancel(actor)
+                    return "Accounts aren't available here right now."
+                return await self.keys.passphrase(actor, program, home, text)
+            self.keys.cancel(actor)              # a command instead: never mind
         if looks_pasted(text):
             return await self._pasted(actor, text)
-        if not is_command(text):
+        if not command:
             return None
         word, *rest = text.strip().split()
         word = word.split("@")[0].lower()
@@ -138,26 +152,31 @@ class AccountDesk:
         if program is None:
             return "Accounts aren't available here right now (no Setu on this computer)."
         if word == "/accounts":
-            return await self._list(program, home, narrowed)
+            return await self._list(program, home, narrowed, self.keys.key_for(actor))
         if not own:
             return ("Your accounts here are looked after by the owner of this service, "
-                    "at their computer -- ask them to connect or disconnect one.")
+                    "at their computer -- ask them to connect, disconnect or lock one.")
+        if word == "/lock":
+            return await self.keys.lock(actor, program, home)
+        if word == "/unlock":
+            return self.keys.unlock(actor, program, home, rest)
         if word == "/disconnect":
             return await self._disconnect(program, home, rest)
         return await self._connect(actor, program, home, rest, narrowed, needs)
 
     # ---- /accounts ------------------------------------------------------------
 
-    async def _status(self, program: str, home: Path) -> dict[str, Any]:
-        done = await _run([program, "status", "--json"], home)
+    async def _status(self, program: str, home: Path, key: str | None = None
+                      ) -> dict[str, Any]:
+        done = await _run([program, "status", "--json"], home, key)
         if done[0] != 0:
             raise RuntimeError(done[2].strip().splitlines()[-1:] or "setu status failed")
         return json.loads(done[1])
 
     async def _list(self, program: str, home: Path,
-                    narrowed: tuple[str, ...] | None) -> str:
+                    narrowed: tuple[str, ...] | None, key: str | None = None) -> str:
         try:
-            data = await self._status(program, home)
+            data = await self._status(program, home, key)
         except (RuntimeError, ValueError) as exc:
             self.log(f"dvara: accounts: {exc}")
             return "I couldn't read your accounts just now."
@@ -168,7 +187,12 @@ class AccountDesk:
                     "connect one.")
         lines = [f"{r['ref']} -- {r.get('email') or ''} -- {r.get('level_label') or ''}"
                  for r in rows]
-        return "Connected for you here:\n" + "\n".join(lines)
+        lock = data.get("lock") or {}
+        state = ("" if not lock.get("locked") else
+                 "\nLocked with your passphrase" + (", and open now (/lock closes it)."
+                                                     if lock.get("open")
+                                                     else ": send /unlock to open it."))
+        return "Connected for you here:\n" + "\n".join(lines) + state
 
     # ---- /disconnect ------------------------------------------------------------
 
@@ -355,6 +379,7 @@ class AccountDesk:
     async def aclose(self) -> None:
         for actor in list(self._waiting):
             await self._forget(actor)
+        await self.keys.aclose()
 
 
 async def _settle(waiting: _Waiting) -> None:
@@ -380,8 +405,11 @@ def _outcome(ref: str, event: dict[str, Any]) -> str:
     return f"The sign-in for {ref} didn't finish: {event.get('message')}"
 
 
-def _env(home: Path) -> dict[str, str]:
-    return {**os.environ, "SETU_HOME": str(home)}
+def _env(home: Path, key: str | None = None) -> dict[str, str]:
+    env = {**os.environ, "SETU_HOME": str(home)}
+    if key:
+        env["SETU_VAULT_KEY"] = key
+    return env
 
 
 def owners_client_file(program: str | None = None) -> str | None:
@@ -404,9 +432,10 @@ def owners_client_file(program: str | None = None) -> str | None:
         return None
 
 
-async def _run(argv: list[str], home: Path) -> tuple[int, str, str]:
+async def _run(argv: list[str], home: Path, key: str | None = None
+               ) -> tuple[int, str, str]:
     proc = await asyncio.create_subprocess_exec(
         *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.DEVNULL, env=_env(home))
+        stdin=asyncio.subprocess.DEVNULL, env=_env(home, key))
     out, err = await proc.communicate()
     return proc.returncode or 0, out.decode(), err.decode()
