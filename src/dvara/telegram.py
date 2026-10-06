@@ -399,6 +399,7 @@ class TelegramBot:
         # here too, sent straight to their chat with this bot.
         self.service.notices.route("telegram", self._deliver_notice)
         me = await self._api("getMe")
+        await self._show_menu()
         offset = await self._first_offset()
         self._note(f"dvara · telegram · @{me.get('username', '?')} "
                    f"→ {self.agent}")
@@ -688,6 +689,22 @@ class TelegramBot:
         for count, chunk in enumerate(debt.unsent, start=debt.sent + 1):
             await self._send(chat, chunk)
             self.outbox.sent(debt.id, count)
+
+    async def _show_menu(self) -> None:
+        """The person's words, in the menu Telegram shows when they type /.
+
+        ONLY WHAT THIS AGENT ANSWERS. The menu belongs to the bot, and the
+        bot is one agent: ``/files`` for one that writes them, the account
+        words for one whose package asks for accounts, ``/new`` for all.
+        Sent at every start, so a package that changed is a menu that
+        changed. A menu Telegram refuses costs the menu, never the bot.
+        """
+        try:
+            await self._api("setMyCommands", commands=[
+                {"command": word, "description": said}
+                for word, said in _menu(self.spec)])
+        except Exception as exc:  # noqa: BLE001 -- the bot still answers
+            self._note(f"telegram: the / menu was not set: {exc}")
 
     def _introduction(self) -> str:
         """The one command Telegram itself defines, answered here.
@@ -1037,6 +1054,21 @@ def ending(answer: Answer | None) -> str:
         return decided
     place = {"terminal": "at the terminal", "http": "over HTTP"}
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
+
+
+def _menu(spec) -> list[tuple[str, str]]:
+    """``/`` menu entries for this agent, in the order a person needs them."""
+    words = [("new", "Start our conversation over")]
+    if _writes_files(spec):
+        words += [("files", "What I keep for you"),
+                  ("file", "Send one of them: /file NAME")]
+    if spec.connections:
+        words += [("accounts", "Your connected accounts"),
+                  ("connect", "Connect one: /connect NAME"),
+                  ("disconnect", "Remove one: /disconnect NAME"),
+                  ("lock", "Lock your accounts with a passphrase"),
+                  ("unlock", "Unlock them for a while")]
+    return words
 
 
 def _writes_files(spec) -> bool:

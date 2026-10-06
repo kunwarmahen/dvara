@@ -108,8 +108,17 @@ turn, and the three turns that were are all still there.
   what was said and done. A second, archived copy would be a store that
   nothing reads.
 
+## The `/` menu
+
+Typing `/` in Telegram shows the words a bot has registered, and the bot
+used to register none, so people had to remember them from `/start`. It
+now sends them (`setMyCommands`) each time it starts: **ONLY WHAT THIS
+AGENT ANSWERS.** `/new` for every agent, `/files` and `/file` for one
+that writes files, and the account words for one whose package asks for
+accounts. The menu belongs to the bot, and each bot serves one agent, so
+it can't list words that agent wouldn't answer. A menu Telegram refuses
+costs the menu, never the bot.
+
 ## What is not here yet
 
-* **Telegram's command menu.** The bot doesn't register its words with
-  Telegram (`setMyCommands`), so typing `/` shows no list. `/start` names
-  them instead.
+* ~~**Telegram's command menu.**~~ Above.

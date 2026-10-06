@@ -868,3 +868,38 @@ def test_a_file_the_agent_sent_follows_its_answer(make_bot, make_service, actors
     assert order == ["sendMessage", "sendDocument"]
     assert fake.texts() == ["Here's this week's report."]
     assert 'filename="report.md"' in fake.of("sendDocument")[0]["multipart"]
+
+
+# ---- the / menu ------------------------------------------------------------
+
+
+def menu_of(fake):
+    return [c["command"] for m, p in fake.calls if m == "setMyCommands"
+            for c in p["commands"]]
+
+
+def test_the_menu_offers_new_and_files_to_an_agent_that_writes_them(make_bot):
+    fake = FakeTelegram([])
+    asyncio.run(make_bot(fake).run())
+    assert menu_of(fake) == ["new", "files", "file"]
+
+
+def test_the_account_words_are_offered_only_where_the_package_asks_for_accounts(
+        make_bot, make_service, actors, agents_root):
+    write_package(agents_root, "reader", body=(
+        '[agent]\nname = "reader"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["web_fetch"]\n'
+        '[connections]\nneeds = ["gmail:read"]\n'))
+    fake = FakeTelegram([])
+    asyncio.run(make_bot(fake, service=make_service([], actors=actors),
+                         agent="reader").run())
+    assert menu_of(fake) == ["new", "accounts", "connect", "disconnect",
+                             "lock", "unlock"]
+
+
+def test_a_menu_telegram_refuses_costs_the_menu_never_the_bot(make_bot):
+    fake = FakeTelegram([message("hi")])
+    fake.status["setMyCommands"] = [httpx.Response(
+        400, json={"ok": False, "description": "Bad Request"})]
+    asyncio.run(make_bot(fake, script=[says("hello back")]).run())
+    assert "hello back" in fake.texts()
