@@ -113,8 +113,12 @@ log                → dvara: raj connected testshop:personal from the chat
 In Setu's own run of the same window: a second device opening the link
 got 409, a frame arrived as JPEG, and no Chrome was left running after.
 
-**Not tried live:** Amazon or X themselves (they'll be the real test of
-robot checks and two-step sign-in on a small screen), and a phone on
+**Not tried live** when this was written: Amazon or X themselves, and a
+phone on Tailscale. ~~Amazon~~ has since been signed in to from a real
+phone, through this door in Sarathi's containers, on home Wi-Fi. Two of
+the window's habits had to change for it: typed text now finds the
+page's empty field without a tap, and Enter in a form the page won't
+submit presses the form's own button. Still not tried: X, and a phone on
 Tailscale.
 
 ## What was deliberately not built
