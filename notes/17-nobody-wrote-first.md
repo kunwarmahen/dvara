@@ -147,3 +147,6 @@ lVxSFx5_…  owner/scribe  thread samay-678740c0-1791163084  run 58b8c388a0a9
   would let one program stop another person's turn, and that needs
   its own argument.
 * **Durable notices**, as above.
+
+Each scheduled run's conversation is let go a while after it ends, and
+its runs stay in the ledger: [note 24](24-a-conversation-nobody-will-continue.md).

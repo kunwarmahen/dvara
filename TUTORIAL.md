@@ -857,6 +857,14 @@ service ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)). How
 Samay itself is set up — its clock, its page, keeping it running — is in
 [Samay's README](https://github.com/kunwarmahen/samay).
 
+Every run starts a fresh conversation, so the hundredth run doesn't
+drag the last ninety-nine answers into its prompt. Nothing continues
+those conversations, so a week after one ends, its history and its
+workspace folder are let go (`--keep-unattended DAYS` changes the week).
+The runs stay in `dvara runs`. Only a conversation a program started is
+ever let go: yours, and one with a question still waiting for you, are
+not ([note 24](notes/24-a-conversation-nobody-will-continue.md)).
+
 ## 16 · Their own accounts
 
 At a keyboard, Setu's accounts are whoever is typing. Behind a door there

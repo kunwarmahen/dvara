@@ -83,10 +83,11 @@ happened and the gate knows why, and neither of them knows both.
 from __future__ import annotations
 
 import asyncio
+import shutil
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from yantra import (
@@ -124,6 +125,10 @@ from dvara.locks import KeyedLocks
 from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
+
+#: How long a finished conversation that a program started is kept
+#: before ``Service.tidy`` lets it go: a week to look at what it did.
+KEEP_UNATTENDED = 7 * 24 * 3600.0
 
 
 #: Where a person on a channel sees their schedules: by asking.
@@ -210,6 +215,7 @@ class Service:
                  log=None,
                  hold_for: float = DEFAULT_KEEP,
                  samay: str | None = None,
+                 keep_unattended: float = KEEP_UNATTENDED,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -241,6 +247,9 @@ class Service:
         #: (``--samay``): each person's turn gets Samay's tools, for
         #: that person, on this road (``_schedules``). None: no turn does.
         self.samay = samay
+        #: How long a conversation a program started is kept once it is
+        #: over, before ``tidy`` lets its history and workspace go.
+        self.keep_unattended = keep_unattended
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
@@ -477,7 +486,7 @@ class Service:
             # reached a model is the store admitting to a doubt it does
             # not have.
             run = Run(actor=actor, agent=agent, thread=thread, message=text,
-                      started_at=started, cost_usd=0.0)
+                      started_at=started, cost_usd=0.0, unattended=unattended)
             try:
                 if not unattended:
                     return await self._turn(spec=spec, who=who, key=key,
@@ -486,6 +495,7 @@ class Service:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
                                              ahead=tuple(allow_tools))
+                self._tidy_quietly()
                 return replace(reply, needs=tuple(record.needs),
                                busy=tuple(record.busy))
             except Refused as exc:
@@ -962,6 +972,53 @@ class Service:
         if name not in self._providers:
             self._providers[name] = self._provider_factory(name)
         return self._providers[name]
+
+    def tidy(self, now: datetime | None = None) -> int:
+        """Let go of conversations a program started and nobody will
+        continue; how many went.
+
+        Samay starts a fresh thread for every scheduled run, so a run's
+        history never drags the last four hundred answers into its
+        prompt. Nothing ever writes to that thread again, and without
+        this its checkpoints and its workspace stay for good: one more of
+        each per run, for as long as the schedule runs.
+
+        ONLY A THREAD NOBODY STARTED. The ledger's first run on a thread
+        decides (``RunStore.finished_unattended``); a person's own
+        conversation is never touched, even if a program later wrote into
+        it. KEPT A WHILE FIRST: ``keep_unattended`` after its last turn,
+        so the owner can still look at what a run left behind. NEVER
+        WHILE IT COULD GO ON: a thread with a question still waiting for
+        its person (a hold), or a turn running on it now, is skipped and
+        looked at again next time.
+
+        THE RECORD STAYS. Every run stays in the ledger -- ``dvara runs``,
+        ``dvara case`` and the day's spending read it -- and only the
+        conversation (sessions.sqlite3) and the workspace folder go.
+        """
+        now = now or datetime.now(UTC)
+        before = now - timedelta(seconds=self.keep_unattended)
+        waiting = {hold.key for hold in self.holds.pending(now=now)}
+        gone = 0
+        for actor, agent, thread in self.runs.finished_unattended(before):
+            key = session_key(actor, agent, thread)
+            if key in waiting or key in self._locks:
+                continue
+            self.sessions.forget(key)
+            shutil.rmtree(self.state / "work" / Path(*workspace_parts(key)),
+                          ignore_errors=True)
+            self.runs.mark_tidied(actor, agent, thread)
+            gone += 1
+        return gone
+
+    def _tidy_quietly(self) -> None:
+        """``tidy`` after an unattended turn, which is when there is more
+        to tidy. A failure is the owner's to read, never the turn's."""
+        try:
+            self.tidy()
+        except Exception as exc:  # noqa: BLE001 -- the reply still goes out
+            self._note(f"dvara: could not tidy finished scheduled runs: "
+                       f"{type(exc).__name__}: {exc}")
 
     def _workspace(self, key: str) -> Path:
         """Where this conversation's agent may write.

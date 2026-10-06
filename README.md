@@ -115,7 +115,8 @@ time and nothing more, and a finding nobody asked for reaches them on
 their own channels; with `--samay`, a person can ask for a schedule in
 the chat and say yes to it there; and each person's agent reaches that
 person's own accounts through Setu, never anybody else's; and a program
-that started it can ask whether it is serving — covered by 607 tests. The API is not
+that started it can ask whether it is serving, and a scheduled run's
+conversation is let go a week after it ends — covered by 612 tests. The API is not
 stable.
 
 ## The shape of it
@@ -677,6 +678,12 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
 * The person sees their schedules by asking; the owner sees all of them
   with `samay list`
   ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)).
+* Each run is a conversation of its own, and nothing continues it. A week
+  after it ends (`--keep-unattended DAYS`), its history and workspace
+  folder are let go; its runs stay in `dvara runs`. Only a thread a
+  program started goes, never one a person did, and never one with a
+  question still waiting
+  ([notes/24](notes/24-a-conversation-nobody-will-continue.md)).
 
 ## Asking a person
 
@@ -784,7 +791,7 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
@@ -798,7 +805,7 @@ print(reply.text, reply.cost_usd)
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
-| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), and which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
+| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), and which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | nine endpoints and a bearer token (`[http]` extra) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)) |

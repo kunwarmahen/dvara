@@ -65,7 +65,7 @@ from dvara.gate import Policy
 from dvara.holds import DEFAULT_KEEP, age_text
 from dvara.roster import Roster
 from dvara.rules import RuleBook
-from dvara.service import Service
+from dvara.service import KEEP_UNATTENDED, Service
 from dvara.telegram import POLL_SECONDS, TelegramBot
 
 DEFAULT_ROOT = "~/dvara/agents"
@@ -132,6 +132,13 @@ def build_parser() -> argparse.ArgumentParser:
                              "(PATH names the samay program; also DVARA_SAMAY). "
                              "Set SAMAY_DVARA_URL and SAMAY_DVARA_TOKEN here "
                              "too: Samay checks each schedule against them")
+    parser.add_argument("--keep-unattended", type=float,
+                        default=KEEP_UNATTENDED / 86400, metavar="DAYS",
+                        help=f"how long a finished conversation a program "
+                             f"started (each scheduled run is one) keeps its "
+                             f"history and workspace before they are let go; "
+                             f"its runs stay in `dvara runs` (default "
+                             f"{KEEP_UNATTENDED / 86400:g})")
     parser.add_argument("--hold-for", type=float, default=DEFAULT_KEEP,
                         metavar="SECONDS",
                         help=f"how long a held turn may wait for its answer "
@@ -266,6 +273,8 @@ def _service(args) -> Service:
     named = bool(args.policy)
     rules = RuleBook.from_toml(Path(args.policy or DEFAULT_POLICY),
                                required=named)
+    if args.keep_unattended < 0:
+        raise ConfigProblem("--keep-unattended is a number of days, 0 or more")
     samay = _samay(args.samay or os.environ.get("DVARA_SAMAY"))
     try:
         return Service(
@@ -278,6 +287,7 @@ def _service(args) -> Service:
             model=args.model,
             hold_for=args.hold_for,
             samay=samay,
+            keep_unattended=args.keep_unattended * 86400,
         )
     except ValueError as exc:
         raise ConfigProblem(str(exc)) from None

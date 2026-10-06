@@ -83,7 +83,17 @@ CREATE TABLE IF NOT EXISTS runs (
     answered_from TEXT,           -- ["telegram"]; a summary of tools
     agent_version TEXT,           -- the package's own version, that turn
     waited_seconds REAL,          -- how long it waited on a person
-    resumes      TEXT             -- the held Run this one carried on
+    resumes      TEXT,            -- the held Run this one carried on
+    unattended   INTEGER          -- 1: a program asked for it, nobody typed it
+);
+-- Conversations a program started and nobody will continue, whose
+-- history and workspace were let go (Service.tidy). The runs stay.
+CREATE TABLE IF NOT EXISTS tidied (
+    actor  TEXT NOT NULL,
+    agent  TEXT NOT NULL,
+    thread TEXT NOT NULL,
+    at     TEXT NOT NULL,
+    PRIMARY KEY (actor, agent, thread)
 );
 -- The daily-allowance query, which runs before EVERY turn: one actor,
 -- one time window. Without this index it is a table scan that grows for
@@ -100,7 +110,8 @@ CREATE INDEX IF NOT EXISTS runs_actor_started
 COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
-           "answered_from, agent_version, waited_seconds, resumes")
+           "answered_from, agent_version, waited_seconds, resumes, "
+           "unattended")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -110,7 +121,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 #: rows honest -- they have no trajectory, and NULL is what that means.
 ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
          ("agent_version", "TEXT"), ("waited_seconds", "REAL"),
-         ("resumes", "TEXT"))
+         ("resumes", "TEXT"), ("unattended", "INTEGER"))
 
 
 @dataclass(frozen=True)
@@ -195,6 +206,11 @@ class Run:
     #: two rows, because they are two turns -- different budgets,
     #: different hours, possibly a different day -- and this is the link.
     resumes: str | None = None
+    #: A program asked for this turn and nobody typed it (notes/17). The
+    #: first run of a thread decides whether the whole thread was one
+    #: nobody started (``finished_unattended``). False on every row
+    #: written before this was kept, which tidies nothing.
+    unattended: bool = False
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -280,8 +296,8 @@ class RunStore:
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
                 "cost_usd, stop_reason, detail, tools, answered_from, "
-                "agent_version, waited_seconds, resumes) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "agent_version, waited_seconds, resumes, unattended) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
@@ -291,7 +307,7 @@ class RunStore:
                  _dump([[step.name, step.refusal, step.decided_by]
                         for step in run.tools]),
                  _dump(list(run.answered_from)), run.agent_version,
-                 run.waited_seconds, run.resumes),
+                 run.waited_seconds, run.resumes, int(run.unattended)),
             )
             self._db.commit()
         return run.id
@@ -365,6 +381,40 @@ class RunStore:
                         counts[name] = counts.get(name, 0) + 1
         return counts
 
+    def finished_unattended(self, before: datetime
+                            ) -> list[tuple[str, str, str]]:
+        """``(actor, agent, thread)`` for every conversation a program
+        started, nobody has touched since ``before``, and nothing has
+        tidied yet.
+
+        THE FIRST RUN DECIDES. A thread whose first turn was unattended
+        was started by a program -- Samay starts a fresh one for every
+        run -- and a person answering a question it held later does not
+        make it theirs. A thread a PERSON started is never in this list,
+        even if a program wrote into it afterwards: that is their
+        conversation, and it stays. (SQLite returns the bare column from
+        the row that MIN picked.)
+        """
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT r.actor, r.agent, r.thread, r.unattended, "
+                "MIN(r.started_at), MAX(r.ended_at) FROM runs r "
+                "LEFT JOIN tidied t ON t.actor = r.actor AND "
+                "t.agent = r.agent AND t.thread = r.thread "
+                "WHERE t.at IS NULL GROUP BY r.actor, r.agent, r.thread",
+            ).fetchall()
+        cutoff = _stamp(before)
+        return [(a, g, t) for a, g, t, first, _, last in rows
+                if first == 1 and last <= cutoff]
+
+    def mark_tidied(self, actor: str, agent: str, thread: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT OR IGNORE INTO tidied (actor, agent, thread, at) "
+                "VALUES (?, ?, ?, ?)",
+                (actor, agent, thread, _stamp(datetime.now(UTC))))
+            self._db.commit()
+
     def recent(self, *, actor: str | None = None, agent: str | None = None,
                limit: int = 20) -> list[Run]:
         """The last ``limit`` runs, newest first."""
@@ -413,6 +463,7 @@ def _row_to_run(row: tuple) -> Run:
         agent_version=row[18],
         waited_seconds=row[19],
         resumes=row[20],
+        unattended=bool(row[21]),
     )
 
 
