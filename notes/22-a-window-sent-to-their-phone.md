@@ -40,7 +40,10 @@ Enter, Backspace, Tab, Back, and "I've signed in". Text sent from the box
 goes into the field they tapped on the picture, or, if they tapped none,
 the page's first empty field: the first real phone typed an email and
 pressed Send without tapping, and nothing happened until Setu learned
-that. Setu watches for the
+that. On Amazon's password page the window's Enter did nothing either;
+now, when Enter is pressed in a form and nothing submits, Setu presses
+the form's own button (once: never if the page submitted, or moved on).
+Setu watches for the
 site's sign-in cookie (by name, as at the machine), closes the browser
 so the cookies are written, saves the connection, and dvara tells them:
 
