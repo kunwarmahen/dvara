@@ -961,6 +961,12 @@ against their allowance, the agents and who may use them, and every turn,
 newest first, with its tools. A refused call is red. Pick a person or an
 agent to narrow the list.
 
+At the top, **Waiting for you** shows what your agents are asking you
+right now, with **Allow** and **Refuse**. Pressing one is the same as
+pressing the button in your chat. Start the page with the door's token
+(`DVARA_TOKEN=... dvara page --as owner`) so it can pass your answer to
+the running door. Only your own questions are shown.
+
 Two lines are drawn, and both are about other people. **Their words stay
 theirs**: your own turns show what you said and what the agent answered,
 and everyone else's show only the agent, the cost and the tools. **How to

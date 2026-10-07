@@ -11,6 +11,12 @@ wrong one, and the door's own token offered instead of the page's.
 
 And the money rule from money.py: a turn with no price is counted, never
 added as $0.00.
+
+ANSWERING is the page's one write, and its bias is AN ANSWER IN SOMEBODY
+ELSE'S NAME. The page answers through the running door as the owner; the
+tests have the door hold a question for somebody else, send a body that
+names somebody else, and send "yes" where only true approves -- and run
+one answer through dvara's real HTTP app, with a real turn waiting on it.
 """
 
 from __future__ import annotations
@@ -25,7 +31,7 @@ from yantra import Usage
 
 from dvara.cli import main
 from dvara.errors import ConfigProblem
-from dvara.page import ENV_TOKEN, TOKEN_FILE, Api, PageServer, page_token
+from dvara.page import ENV_TOKEN, TOKEN_FILE, Api, Door, PageServer, page_token
 from dvara.runs import Run, RunStore, ToolStep
 
 GOOD = "the-page-token-long-enough"
@@ -55,7 +61,7 @@ def _run(actor, message, reply, *, cost=0.10, when=NOW, tools=()):
 def door(tmp_path, agents_root):
     actors = tmp_path / "actors.toml"
     actors.write_text(ACTORS)
-    state = tmp_path / "state"
+    state = tmp_path / "page-state"
     state.mkdir()
     store = RunStore(state / "runs.sqlite3")
     store.record(_run("priya", "my bank pin is 4321", "noted, Priya",
@@ -178,3 +184,161 @@ def test_the_command_refuses_an_owner_not_in_the_file(door, capsys):
     code = main(["--root", str(door["root"]), "--actors", str(door["actors"]),
                  "--state", str(door["state"]), "page", "--as", "nobody", "--port", "0"])
     assert code == 2 and "nobody" in capsys.readouterr().err
+
+
+# ---- answering, through the door -------------------------------------------
+
+
+class FakeDoor:
+    """The door's /asks and /holds, recording what the page sent it."""
+
+    def __init__(self):
+        self.sent = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.headers.get("authorization") != "Bearer door-token":
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        path = request.url.path
+        if request.method == "GET" and path == "/asks":
+            return httpx.Response(200, json={"asks": [
+                {"id": "a1", "actor": "owner", "agent": "scribe", "tool": "write_file",
+                 "summary": "write notes.txt", "asked_at": "2026-10-07T09:00:00+00:00"},
+                {"id": "a2", "actor": "priya", "agent": "greeter", "tool": "send",
+                 "summary": "send priya's secret", "asked_at": "2026-10-07T09:00:00+00:00"},
+            ]})
+        if request.method == "GET" and path == "/holds":
+            return httpx.Response(200, json={"holds": []})
+        self.sent.append((path, json.loads(request.content)))
+        if path == "/holds/h1":
+            return httpx.Response(200, json={"text": "done, as you said", "ok": True})
+        return httpx.Response(200, json={"answered": True, "approved": True})
+
+
+@pytest.fixture
+def fake(door):
+    seen = FakeDoor()
+    made = Api(**door, owner="owner", now=lambda: NOW,
+               door=Door("owner", "http://door", "door-token",
+                         transport=httpx.MockTransport(seen)))
+    made.seen = seen
+    yield made
+    made.close()
+
+
+def test_only_the_owners_questions_reach_the_page(fake):
+    waiting = fake.handle("GET", "/api/waiting", {})[1]
+    assert [a["id"] for a in waiting["asks"]] == ["a1"]
+    assert "priya" not in json.dumps(waiting)
+
+
+def test_an_answer_is_sent_as_the_owner_whatever_the_browser_says(fake):
+    fake.handle("POST", "/api/asks/a1", {}, {"approve": True, "actor": "priya"})
+    assert fake.seen.sent == [("/asks/a1", {"actor": "owner", "approve": True})]
+
+
+def test_only_a_json_boolean_approves(fake):
+    from dvara.page import ApiError
+    for said in ("yes", 1, None):
+        with pytest.raises(ApiError) as caught:
+            fake.handle("POST", "/api/asks/a1", {}, {"approve": said})
+        assert caught.value.code == 400
+    assert fake.seen.sent == []
+
+
+def test_a_held_turn_carries_on_and_its_reply_comes_back(fake):
+    code, reply = fake.handle("POST", "/api/holds/h1", {},
+                              {"answers": {"c1": True, "c2": "not that file"}})
+    assert code == 200 and reply["text"] == "done, as you said"
+    assert fake.seen.sent == [("/holds/h1", {"actor": "owner",
+                                             "answers": {"c1": True, "c2": "not that file"}})]
+
+
+def test_with_no_door_running_there_is_nothing_to_answer(door, monkeypatch):
+    from dvara.page import ApiError
+    monkeypatch.delenv("DVARA_URL", raising=False)
+    api = Api(**door, owner="owner", now=lambda: NOW)
+    try:
+        waiting = api.handle("GET", "/api/waiting", {})[1]
+        assert waiting["door"]["reachable"] is False and "isn't running" in waiting["door"]["why"]
+        with pytest.raises(ApiError) as caught:
+            api.handle("POST", "/api/asks/a1", {}, {"approve": True})
+        assert caught.value.code == 409
+    finally:
+        api.close()
+
+
+def test_without_the_doors_token_the_page_says_what_to_set(door):
+    api = Api(**door, owner="owner", door=Door("owner", "http://door", None))
+    try:
+        assert "DVARA_TOKEN" in api.handle("GET", "/api/waiting", {})[1]["door"]["why"]
+    finally:
+        api.close()
+
+
+def test_a_wrong_door_token_is_said_not_shown_as_nothing_waiting(door):
+    seen = FakeDoor()
+    api = Api(**door, owner="owner", door=Door("owner", "http://door", "not-the-token",
+                                                 transport=httpx.MockTransport(seen)))
+    try:
+        why = api.handle("GET", "/api/waiting", {})[1]["door"]["why"]
+        assert "refused" in why
+    finally:
+        api.close()
+
+
+def test_an_answer_from_another_site_is_refused(served):
+    res = httpx.post(served.url + "api/asks/a1", json={"approve": True},
+                     headers={"Authorization": f"Bearer {GOOD}",
+                              "Origin": "https://evil.example"}, timeout=5)
+    assert res.status_code == 403
+
+
+def test_the_doors_refusal_reaches_the_page_as_its_own_status(door):
+    from dvara.page import ApiError
+
+    def refuses(request):
+        return httpx.Response(403, json={"detail": "that question was put to somebody else"})
+    api = Api(**door, owner="owner", door=Door("owner", "http://door", "t",
+                                                 transport=httpx.MockTransport(refuses)))
+    try:
+        with pytest.raises(ApiError) as caught:
+            api.handle("POST", "/api/asks/a1", {}, {"approve": True})
+        assert caught.value.code == 403 and "somebody else" in caught.value.detail
+    finally:
+        api.close()
+
+
+fastapi = pytest.importorskip("fastapi")
+from tests.test_http import TOKEN as DOOR_TOKEN  # noqa: E402
+from tests.test_http import asking  # noqa: E402,F401,F811  (the fixture)
+
+
+def test_an_answer_from_the_page_releases_a_real_waiting_turn(asking, door):  # noqa: F811
+    """Through dvara's own HTTP app, with a turn parked on a real question."""
+    api = Api(**door, owner="owner",
+              door=Door("owner", "http://testserver", DOOR_TOKEN,
+                        transport=asking._transport))
+    try:
+        waiting = api.handle("GET", "/api/waiting", {})[1]
+        assert [a["tool"] for a in waiting["asks"]] == ["write_file"]
+        ask = waiting["asks"][0]
+        assert api.handle("POST", f"/api/asks/{ask['id']}", {},
+                          {"approve": True})[1]["answered"] is True
+        asking.turn.join(timeout=5)
+        assert asking.done and asking.done[0].ok
+    finally:
+        api.close()
+
+
+def test_the_pages_script_parses():
+    # The Python tests never run page.js; a redeclared name in it broke the
+    # whole page while every test here passed.
+    import shutil
+    import subprocess
+    from importlib.resources import files
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    script = files("dvara").joinpath("static", "page.js")
+    done = subprocess.run([node, "--check", str(script)], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr

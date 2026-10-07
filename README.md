@@ -651,7 +651,7 @@ serving yet, so there is nothing to lose.
 only reads, so it runs whether or not `dvara serve` does:
 
 ```
-$ dvara page --as owner
+$ DVARA_TOKEN=... dvara page --as owner
 dvara's page for owner:
   http://127.0.0.1:8785/#token=…
 ```
@@ -666,8 +666,14 @@ refused ones in red.
   `owner`). Everyone else's turns show their shape (agent, cost, tools,
   outcome) but not their words. Channels show by kind (`telegram`), never
   by id.
-* **It changes nothing.** To change who is served or what they may
-  spend, edit the actors file as before.
+* **Your own questions, answered.** **Waiting for you** at the top shows
+  what your agents are asking you now, and turns held for you, with
+  Allow and Refuse. Answers go to the running door as you, the same as
+  the button in your chat. Start the page with `DVARA_TOKEN` set (the
+  door's token, kept server-side) and, if the door isn't where `dvara
+  status` says, `DVARA_URL`. Nobody else's questions appear.
+* **Nothing else changes from it.** To change who is served or what
+  they may spend, edit the actors file as before.
 * **Its own token.** Every `/api` call needs `$DVARA_PAGE_TOKEN`, or the one
   the page makes once in the state folder (`page.token`, 0600). It isn't
   `DVARA_TOKEN`, which can speak as anyone and never goes to a browser.
@@ -895,7 +901,7 @@ print(reply.text, reply.cost_usd)
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
-| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; its own token ([notes/29](notes/29-the-owners-page.md)) |
+| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; the owner's own questions and held turns answered through the running door; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

@@ -89,12 +89,82 @@ marked refused. The door itself was running in Sarathi's containers on
 their own state folder, so this one said *door not running*, which was
 right for this folder.
 
+## Answering your own, through the door
+
+The page has one kind of write: **Waiting for you**, at the top. It shows
+the questions your agents are asking you now (*"scribe asks to use
+write_file: NEW FILE owner-rain.txt (2 lines)"*), with **Allow** and
+**Refuse**. It also shows turns that stopped because nobody answered in
+time, each waiting call with Allow or Refuse (and an optional reason),
+and **Carry on**.
+
+**THE ANSWER GOES THROUGH THE DOOR.** A question waiting for you lives in
+`dvara serve`'s memory ([note 02](02-a-question-that-can-wait.md)), and a
+held turn is carried on by running the rest of it
+([note 16](16-kept-for-when-you-are-back.md)). Neither can be done from
+another process. So the page asks the running door, over the same
+`/asks` and `/holds` every adapter uses, with `DVARA_TOKEN` held in the
+page's process. Your answer is then the same as pressing the button in
+your chat: the copies on your other channels are taken down
+([note 12](12-taken-down-everywhere-it-went.md)).
+
+**YOURS ONLY, AND THE DOOR STILL CHECKS.** The page asks the door for
+`--as`'s questions, filters the answer again for `--as`, and sends every
+answer as `--as`. A name in the browser's request is ignored. Somebody
+else's question never reaches the page, not even to be shown. And the
+door's own rule ([note 02](02-a-question-that-can-wait.md)) is unchanged:
+an answer must name the person asked, so a page started with the wrong
+`--as` gets *"that question was put to somebody else"*. As in `http.py`,
+**only a JSON `true` approves**: `"yes"` is refused before it reaches
+the door.
+
+**NO DOOR, NOTHING TO ANSWER.** With no door running, nothing is
+waiting, and the page says so. Held turns stay on disk until the door is
+back. The page doesn't open the holds file itself, because listing it
+drops the expired ones, and that's the door's job. Without
+`DVARA_TOKEN`, the page says what to set.
+
+A held turn carried on can run for minutes on a slow model, so the page
+has no lock of its own around requests (the ledger has its own). The
+rest of the page keeps working while one turn runs. A write must also
+come from the page itself (`Origin`), on top of the token.
+
+## Live receipt: an answer from the page
+
+A scratch door (`dvara serve --ask --ask-timeout 300`, `qwen3.8:latest`
+through Ollama), two people each asking scribe to *"Write a two-line poem
+about rain into <name>-rain.txt"*:
+
+```
+$ curl -s -H "Authorization: Bearer $DVARA_TOKEN" localhost:8799/asks
+priya write_file NEW FILE priya-rain.txt (2 lines)
+owner write_file NEW FILE owner-rain.txt (2 lines)
+
+$ curl -s -H "Authorization: Bearer $PAGE" localhost:8786/api/waiting
+{"door": {"reachable": true, "why": null}, "asks": [{"actor": "owner",
+ "agent": "scribe", "tool": "write_file", "summary": "NEW FILE owner-rain.txt (2 lines)", …}],
+ "holds": []}
+```
+
+In a browser, the page showed one card. Priya's question wasn't on it.
+**Allow** released the turn:
+
+```
+owner reply: True end_turn 'Done — owner-rain.txt now holds the two-line rain poem.'
+$ cat owner-rain.txt
+Grey fingers tap the window's glass, and the sky leans low to borrow light.
+By noon the gutters wear the whole sky's silver, and the rain has gone home.
+```
+
+The first try found a bug the Python tests couldn't: a name declared
+twice in `page.js`, which stopped the whole script from loading. A test
+now runs `node --check` on it.
+
 ## What was deliberately not built
 
-* **Answering from the page.** That's next ([below](#what-is-not-here-yet)),
-  and it will be the owner's own questions only. A question is addressed
-  to one person ([note 02](02-a-question-that-can-wait.md)), and the page
-  doesn't speak for anyone else, not even read-only.
+* **Answering for somebody else.** A question is addressed to one person
+  ([note 02](02-a-question-that-can-wait.md)), and the page doesn't speak
+  for anyone else, not even read-only.
 * **Editing the actors file.** Above: one place to change the household,
   and it's the file.
 * **Inside `dvara serve`.** In-process would answer live questions more
@@ -104,10 +174,8 @@ right for this folder.
 
 ## What is not here yet
 
-* **The owner's approvals and held turns, answered in the browser.** The
-  page will send them to the running door's `/asks` and `/holds` as the
-  owner. It holds `DVARA_TOKEN` server-side and never takes an actor from
-  the browser.
+* ~~**The owner's approvals and held turns, answered in the browser.**~~
+  Above: [answering your own](#answering-your-own-through-the-door).
 * **Each person's files and schedules**: names, sizes and dates for
   everyone; contents only for the owner's own.
 * **Started by Sarathi** beside the door, and linked from Sarathi's home

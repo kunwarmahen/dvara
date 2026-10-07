@@ -42,11 +42,16 @@ function h(spec, attrs, ...kids) {
 
 class Unauthorized extends Error {}
 
-async function api(path) {
+async function api(path, payload) {
   let res;
+  const init = { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" };
+  if (payload !== undefined) {
+    init.method = "POST";
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(payload);
+  }
   try {
-    res = await fetch(path, { headers: { Authorization: `Bearer ${token}` },
-                              cache: "no-store" });
+    res = await fetch(path, init);
   } catch (_) {
     throw new Error("the browser couldn't reach the page's server. Is dvara page " +
                     "still running? An ad blocker can also stop its requests.");
@@ -203,6 +208,94 @@ async function drawRuns() {
     ? data.runs.map(runCard) : [h("p.empty", {}, "No turns recorded yet.")]));
 }
 
+// -- waiting for you ----------------------------------------------------------
+//
+// Redrawn only when what is waiting changes: a choice half made on a held
+// turn must survive the next refresh.
+
+let waitingKey = null;
+
+function askCard(a) {
+  const say = h("div.meta", {});
+  const yes = h("button.btn.go", { type: "button" }, "Allow");
+  const no = h("button.btn", { type: "button" }, "Refuse");
+  const decide = async (approve) => {
+    yes.disabled = no.disabled = true;
+    say.textContent = approve ? "Allowing…" : "Refusing…";
+    try {
+      await api(`/api/asks/${encodeURIComponent(a.id)}`, { approve });
+      say.textContent = approve ? "Allowed. The turn carries on." : "Refused.";
+    } catch (err) {
+      say.textContent = `Couldn't: ${err.message}`;
+      yes.disabled = no.disabled = false;
+    }
+    waitingKey = null;
+  };
+  yes.addEventListener("click", () => decide(true));
+  no.addEventListener("click", () => decide(false));
+  return h("article.run.ask", {},
+    h("div.run-head", {}, h("span.run-who", {}, `${a.agent} asks to use ${a.tool}`),
+      h("span.run-meta", { title: a.asked_at }, ago(a.asked_at))),
+    h("div.cmd", {}, a.summary),
+    h("div.actions", {}, yes, no), say);
+}
+
+function holdCard(hd) {
+  const choice = {};
+  const say = h("div.meta", {});
+  const go = h("button.btn.go", { type: "button" }, "Carry on");
+  const rows = hd.calls.map((c) => {
+    const name = `hold-${hd.id}-${c.id}`;
+    const allow = h("input", { type: "radio", name, value: "allow" });
+    const refuse = h("input", { type: "radio", name, value: "refuse" });
+    const why = h("input.reason", { type: "text", placeholder: "why not (optional)",
+                                     "aria-label": `why not ${c.tool}`, hidden: "" });
+    allow.addEventListener("change", () => { choice[c.id] = true; why.hidden = true; });
+    refuse.addEventListener("change", () => { choice[c.id] = false; why.hidden = false; });
+    why.addEventListener("input", () => { choice[c.id] = why.value.trim() || false; });
+    return h("div.call", {},
+      h("div.cmd", {}, `${c.tool}: ${c.summary}`),
+      h("div.choices", {}, h("label", {}, allow, " Allow"), h("label", {}, refuse, " Refuse"),
+        why));
+  });
+  go.addEventListener("click", async () => {
+    const missing = hd.calls.filter((c) => !(c.id in choice));
+    if (missing.length) { say.textContent = "Choose Allow or Refuse for each one first."; return; }
+    go.disabled = true;
+    say.textContent = "Carrying on… (this runs the rest of the turn)";
+    try {
+      const r = await api(`/api/holds/${encodeURIComponent(hd.id)}`, { answers: choice });
+      say.replaceChildren(h("b", {}, "Agent: "), r.text || "(no reply)");
+    } catch (err) {
+      say.textContent = `Couldn't: ${err.message}`;
+      go.disabled = false;
+    }
+    waitingKey = null;
+  });
+  return h("article.run.ask", {},
+    h("div.run-head", {}, h("span.run-who", {}, `${hd.agent} stopped to ask you`),
+      h("span.run-meta", { title: hd.held_at }, `held ${ago(hd.held_at)}`)),
+    ...rows, h("div.actions", {}, go), say);
+}
+
+async function drawWaiting() {
+  const data = await api("/api/waiting");
+  const items = [...data.asks.map((a) => `a${a.id}`), ...data.holds.map((x) => `h${x.id}`)];
+  const key = JSON.stringify([data.door.reachable, data.door.why, items]);
+  const count = items.length;
+  document.getElementById("n-waiting").textContent = count ? `${count}` : "";
+  if (key === waitingKey) return;
+  waitingKey = key;
+  const box = document.getElementById("waiting");
+  if (!data.door.reachable) {
+    box.replaceChildren(h("p.empty", {}, `Nothing to answer here: ${data.door.why}.`));
+    return;
+  }
+  box.replaceChildren(...(count
+    ? [...data.asks.map(askCard), ...data.holds.map(holdCard)]
+    : [h("p.empty", {}, "Nothing is waiting for you.")]));
+}
+
 // -- the loop -------------------------------------------------------------------
 
 async function refresh() {
@@ -216,6 +309,7 @@ async function refresh() {
     drawPeople(people.people);
     drawAgents(agents.agents);
     await drawRuns();
+    await drawWaiting();
     document.getElementById("updated").textContent =
       `Updated ${new Date().toLocaleTimeString()}`;
   } catch (err) {
@@ -230,5 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   refresh();
   setInterval(() => { if (!document.hidden) refresh(); }, EVERY);
+  // a question gives up after two minutes (by default): look more often
+  setInterval(() => { if (!document.hidden && token) drawWaiting().catch(() => {}); }, 5000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 });

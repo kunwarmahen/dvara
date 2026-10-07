@@ -189,3 +189,18 @@ select {
          max-height: 160px; overflow: auto; border-top: 1px dashed var(--line); padding-top: 6px; }
 .words b { color: var(--ink); }
 .private { font-size: 12px; color: var(--ink-3); font-style: italic; }
+
+.run.ask { border-left: 3px solid var(--accent); }
+.actions { display: flex; gap: 8px; margin-top: 4px; }
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--sheet); color: var(--ink); cursor: pointer;
+}
+.btn.go { background: var(--accent); border-color: var(--accent); color: var(--sheet); }
+.btn:disabled { opacity: .55; cursor: default; }
+.call { display: grid; gap: 4px; }
+.choices { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; }
+.reason {
+  font: inherit; font-size: 13px; flex: 1 1 180px; min-width: 0; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); color: var(--ink);
+}

@@ -158,7 +158,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     page = subs.add_parser(
         "page", help="the owner's page: people, agents, runs and spending, "
-                     "in a browser")
+                     "and your own questions answered, in a browser. Answers go "
+                     "to the running door: set DVARA_TOKEN (and DVARA_URL if it "
+                     "is not where `dvara status` says)")
     page.add_argument("--as", dest="owner", default="owner",
                       help="your id in the actors file: your own runs show what "
                            "was said, everyone else's only their shape "

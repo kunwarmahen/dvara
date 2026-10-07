@@ -9,6 +9,9 @@ those at a time, in a terminal. This page shows them together:
     GET /api/people          everyone in the actors file, with today's spend
     GET /api/agents          the agents in the root
     GET /api/runs?actor=&agent=&limit=N   newest first
+    GET  /api/waiting        the owner's questions and held turns, from the door
+    POST /api/asks/ID        {approve: true|false}
+    POST /api/holds/ID       {answers: {call id: true|false|"reason"}}
 
 A SEPARATE PROCESS, AND IT ONLY READS. ``dvara page`` reads what ``dvara
 serve`` writes -- the actors file, the runs ledger -- and claims nothing
@@ -16,6 +19,21 @@ serve`` writes -- the actors file, the runs ledger -- and claims nothing
 the most ordinary thing an owner does. Nothing on the page changes who
 is served or what they may spend; that stays the actors file, which the
 door re-reads without a restart.
+
+ITS ONE KIND OF ANSWER GOES THROUGH THE DOOR. A question waiting for the
+owner lives in the serving process's memory (asks.py), and a held turn
+is carried on by running a turn (holds.py), so neither can be answered
+from here. The page asks the running door instead, over the HTTP surface
+every adapter uses (``GET /asks``, ``POST /asks/ID``, ``GET /holds``,
+``POST /holds/ID``), with ``DVARA_TOKEN`` held in this process and never
+sent to a browser. The door still checks the answer is from the person
+asked; this page only ever names the owner (``--as``), and never takes a
+name from the browser. So it shows, and answers, THE OWNER'S OWN
+QUESTIONS ONLY -- somebody else's never reach the page at all. With no
+door running there is nothing to answer: the page says so, and held
+turns stay on disk for when it is back. The page does not open the
+holds file itself, because listing it drops the expired ones, and that
+is the door's to do.
 
 THE OWNER'S WORDS ON THE OWNER'S PAGE, NOBODY ELSE'S. Every run is
 listed -- who, which agent, when, what it cost, which tools it called
@@ -30,7 +48,8 @@ UNPRICED IS COUNTED, NOT ROUNDED. A turn on a local model has no price,
 and spending says how many such turns there were rather than adding
 them as $0.00 (runs.py, money.py).
 
-A TOKEN, ALWAYS, and it is not ``DVARA_TOKEN``. Every ``/api`` call
+A TOKEN, ALWAYS, and it is not ``DVARA_TOKEN``. A write also has to say
+it comes from the page itself (``Origin``), on top of the token. Every ``/api`` call
 carries the page's own token: ``$DVARA_PAGE_TOKEN``, or one made once
 and kept in the state folder (readable by you alone), printed after a
 ``#`` in the address -- the part a browser never sends to a server. The
@@ -60,7 +79,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
+
+import httpx
 
 from dvara import money
 from dvara.actors import OWN_SETU, Actor, ActorBook
@@ -73,6 +94,10 @@ DEFAULT_PORT = 8785
 ENV_TOKEN = "DVARA_PAGE_TOKEN"
 TOKEN_FILE = "page.token"
 MAX_RUNS = 500
+MAX_BODY = 64 * 1024
+ENV_DOOR = "DVARA_URL"
+#: A held turn answered runs the rest of the turn: minutes, on a slow model.
+RESUME_TIMEOUT = 600.0
 
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"),
           "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -113,14 +138,80 @@ class ApiError(Exception):
         self.detail = detail
 
 
+class Door:
+    """The running ``dvara serve``, asked as the owner and as nobody else.
+
+    ``url`` is where it answers (``--door``, ``$DVARA_URL``, or what
+    ``dvara status`` says it is serving at); ``token`` is ``DVARA_TOKEN``.
+    Either missing is a reason, said on the page, not an error.
+    """
+
+    def __init__(self, owner: str, url: str | None, token: str | None,
+                 *, transport: httpx.BaseTransport | None = None) -> None:
+        self.owner = owner
+        self.url = url.rstrip("/") if url else None
+        self.token = token or None
+        self._transport = transport
+
+    def why_not(self) -> str | None:
+        if self.url is None:
+            return "the door isn't running, so nothing is waiting on an answer now"
+        if self.token is None:
+            return "to answer from here, start dvara page with DVARA_TOKEN set (the door's token)"
+        return None
+
+    def _call(self, method: str, path: str, *, body: dict | None = None,
+              timeout: float = 10.0) -> tuple[int, dict]:
+        with httpx.Client(transport=self._transport, timeout=timeout) as http:
+            res = http.request(method, f"{self.url}{path}", json=body,
+                               headers={"Authorization": f"Bearer {self.token}"})
+        try:
+            data = res.json()
+        except ValueError:
+            data = {"detail": res.text[:200]}
+        return res.status_code, data if isinstance(data, dict) else {}
+
+    def waiting(self) -> dict[str, Any]:
+        why = self.why_not()
+        if why is not None:
+            return {"door": {"reachable": False, "why": why}, "asks": [], "holds": []}
+        try:
+            who = quote(self.owner, safe="")
+            code_a, asks = self._call("GET", f"/asks?actor={who}")
+            code_h, holds = self._call("GET", f"/holds?actor={who}")
+        except httpx.HTTPError as exc:
+            return {"door": {"reachable": False,
+                             "why": f"the door at {self.url} didn't answer ({type(exc).__name__})"},
+                    "asks": [], "holds": []}
+        if code_a == 401 or code_h == 401:
+            return {"door": {"reachable": False,
+                             "why": "the door refused DVARA_TOKEN: it isn't the door's token"},
+                    "asks": [], "holds": []}
+        # the door was asked for the owner; it is checked again here, since
+        # somebody else's question must never reach this page
+        return {"door": {"reachable": True, "why": None},
+                "asks": [a for a in asks.get("asks", []) if a.get("actor") == self.owner],
+                "holds": [h for h in holds.get("holds", []) if h.get("actor") == self.owner]}
+
+    def answer(self, ask_id: str, approve: bool) -> tuple[int, dict]:
+        return self._call("POST", f"/asks/{quote(ask_id, safe='')}",
+                          body={"actor": self.owner, "approve": approve})
+
+    def carry_on(self, hold_id: str, answers: dict[str, bool | str]) -> tuple[int, dict]:
+        return self._call("POST", f"/holds/{quote(hold_id, safe='')}",
+                          body={"actor": self.owner, "answers": answers},
+                          timeout=RESUME_TIMEOUT)
+
+
 class Api:
     """What each endpoint does, apart from HTTP -- so tests can call it
     straight, and the handler below stays a thin skin."""
 
     def __init__(self, *, root: Path, actors: Path, state: Path, owner: str,
-                 now=None) -> None:
+                 now=None, door: Door | None = None) -> None:
         self.root, self.actors, self.state = root, actors, state
         self.owner = owner
+        self._door = door
         self._now = now or (lambda: datetime.now(UTC))
         self._runs: RunStore | None = None
         # an owner who is not in the file is a typo, said at start
@@ -143,11 +234,26 @@ class Api:
         if self._runs is not None:
             self._runs.close()
 
-    def handle(self, method: str, path: str, query: dict[str, list[str]]
-               ) -> tuple[int, dict[str, Any]]:
-        if method != "GET":
-            raise ApiError(405, "this page only reads")
+    @property
+    def door(self) -> Door:
+        """The door to answer through: the one given, or the one serving
+        now (asked each time: it may have started since the page did)."""
+        if self._door is not None:
+            return self._door
+        url = os.environ.get(ENV_DOOR, "").strip() or None
+        if url is None:
+            url = report(root=self.root, actors=self.actors, state=self.state)["url"]
+        return Door(self.owner, url, os.environ.get("DVARA_TOKEN", "").strip())
+
+    def handle(self, method: str, path: str, query: dict[str, list[str]],
+               body: dict | None = None) -> tuple[int, dict[str, Any]]:
         parts = [p for p in path.split("/") if p][1:]      # after "api"
+        if method == "POST" and len(parts) == 2 and parts[0] in ("asks", "holds"):
+            return self._answer(parts[0], parts[1], body or {})
+        if method != "GET":
+            raise ApiError(405, "the page changes nothing but your own answers")
+        if parts == ["waiting"]:
+            return 200, self.door.waiting()
         if parts == ["status"]:
             return 200, self.status()
         if parts == ["people"]:
@@ -160,6 +266,29 @@ class Api:
             limit = _int((query.get("limit") or ["50"])[0], "limit")
             return 200, {"runs": self.recent(actor, agent, max(1, min(limit, MAX_RUNS)))}
         raise ApiError(404, f"no such endpoint: GET /api/{'/'.join(parts)}")
+
+    def _answer(self, kind: str, item: str, body: dict) -> tuple[int, dict[str, Any]]:
+        if not item.replace("-", "").replace("_", "").isalnum():
+            raise ApiError(400, "that is not an id")
+        door = self.door
+        if (why := door.why_not()) is not None:
+            raise ApiError(409, why)
+        approve, answers = body.get("approve"), body.get("answers")
+        # ONLY A JSON BOOLEAN APPROVES (http.py): "no" is not a yes
+        if kind == "asks" and not isinstance(approve, bool):
+            raise ApiError(400, "approve must be true or false")
+        if kind == "holds" and (not isinstance(answers, dict) or not answers or not all(
+                isinstance(v, bool | str) for v in answers.values())):
+            raise ApiError(400, "answers maps each waiting call's id to true, false, "
+                                "or a reason")
+        try:
+            code, data = (door.answer(item, approve) if kind == "asks"
+                          else door.carry_on(item, answers))
+        except httpx.HTTPError as exc:
+            raise ApiError(502, f"the door didn't answer ({type(exc).__name__})") from None
+        if code >= 400:
+            raise ApiError(code, str(data.get("detail") or "the door refused it"))
+        return 200, data
 
     def status(self) -> dict[str, Any]:
         data = report(root=self.root, actors=self.actors, state=self.state)
@@ -277,7 +406,8 @@ class PageServer:
 
 
 def _handler(server: PageServer):
-    lock = threading.Lock()      # one sqlite connection, many request threads
+    # no lock here: the ledger holds its own, and a held turn carried on can
+    # take minutes -- the rest of the page must not wait behind it
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "dvara-page"
@@ -310,9 +440,22 @@ def _handler(server: PageServer):
             offered = self.headers.get("Authorization", "")
             if not hmac.compare_digest(offered.encode(), f"Bearer {server.token}".encode()):
                 return self._json(401, {"detail": "missing or wrong token"})
+            body: dict = {}
+            if method == "POST":
+                origin = self.headers.get("Origin")
+                if origin is not None and urlparse(origin).netloc != self.headers.get("Host"):
+                    return self._json(403, {"detail": "an answer comes from this page only"})
+                size = int(self.headers.get("Content-Length") or 0)
+                if size > MAX_BODY:
+                    return self._json(413, {"detail": "request too large"})
+                try:
+                    body = json.loads(self.rfile.read(size) or b"{}")
+                except json.JSONDecodeError:
+                    return self._json(400, {"detail": "the body is not JSON"})
+                if not isinstance(body, dict):
+                    return self._json(400, {"detail": "the body is a JSON object"})
             try:
-                with lock:
-                    code, data = server.api.handle(method, url.path, parse_qs(url.query))
+                code, data = server.api.handle(method, url.path, parse_qs(url.query), body)
             except ApiError as exc:
                 return self._json(exc.code, {"detail": exc.detail})
             except (ConfigProblem, ValueError) as exc:     # a broken actors file, said
