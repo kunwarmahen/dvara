@@ -217,6 +217,7 @@ class Service:
                  log=None,
                  hold_for: float = DEFAULT_KEEP,
                  samay: str | None = None,
+                 sparsh: str | None = None,
                  keep_unattended: float = KEEP_UNATTENDED,
                  ) -> None:
         self.roster = roster
@@ -249,6 +250,10 @@ class Service:
         #: (``--samay``): each person's turn gets Samay's tools, for
         #: that person, on this road (``_schedules``). None: no turn does.
         self.samay = samay
+        #: The sparsh program, when the owner turned the phone on
+        #: (``--sparsh``): the turns of the one person marked ``phone`` get
+        #: its tools (``_phone``). None: no turn does.
+        self.sparsh = sparsh
         #: How long a conversation a program started is kept once it is
         #: over, before ``tidy`` lets its history and workspace go.
         self.keep_unattended = keep_unattended
@@ -708,11 +713,13 @@ class Service:
 
     async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec):
         """The MCP servers this turn gets, all stopped when it ends: the
-        person's own accounts (``_accounts``) and Samay's tools
-        (``_schedules``). None when there are none to start."""
+        person's own accounts (``_accounts``), Samay's tools
+        (``_schedules``) and the phone (``_phone``). None when there are
+        none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
-        if not (accounts or schedules):
+        phone = self.sparsh is not None and who.phone and not is_unattended()
+        if not (accounts or schedules or phone):
             return None
         from yantra.mcp import MCPManager
 
@@ -722,6 +729,8 @@ class Service:
             await self._accounts(agent, manager, who=who, spec=spec)
         if schedules:
             await self._schedules(agent, manager, who=who, run=run)
+        if phone:
+            await self._phone(agent, manager, who=who)
         return manager
 
     async def _account_words(self, who: Actor, spec: AgentSpec, text: str) -> str | None:
@@ -825,6 +834,37 @@ class Service:
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
+
+    async def _phone(self, agent, manager, *, who: Actor) -> None:
+        """Sparsh's tools, for the phone's own person.
+
+        THEIR PHONE, ASKED THERE. Only the one person the owner marked
+        ``phone = true`` gets it: the phone on this machine's cable is
+        theirs, messages and all. Its ordinary steps run unasked and
+        Sparsh holds the ones that can't be taken back (Send, Pay,
+        Delete, a password); ``confirm`` always asks, so the yes comes to
+        their channel as buttons, worded as Sparsh's own account of the
+        step (Yantra's sparsh_link). A screen the list can't read comes
+        with a screenshot when the model is local and can see, as at a
+        keyboard (``YANTRA_PHONE_SHOTS``).
+
+        NOT WITH NOBODY THERE: a scheduled turn never gets here. And a
+        Sparsh that will not start costs the turn its phone, never the
+        turn."""
+        from yantra.mcp import MCPError
+        from yantra.sparsh_link import Sparsh, SparshLinkError, load, shots
+
+        try:
+            found = await asyncio.to_thread(load, "on", self.sparsh, False)
+            assert found is not None
+            link = Sparsh(mode="on", path=self.sparsh, data=found[0], program=found[1])
+            provider = agent.provider
+            link.shots, link.shots_why = shots(
+                getattr(provider, "name", ""),
+                getattr(getattr(provider, "settings", None), "base_url", ""), str(agent.model))
+            await asyncio.to_thread(link.connect, manager, agent)
+        except (MCPError, SparshLinkError) as exc:
+            self._note(f"dvara: {who.id}'s phone is off for this turn -- sparsh: {exc}")
 
     async def _run_turn(self, agent, *, key: str, run: Run,
                         resuming: Hold | None, answers, door: str | None,

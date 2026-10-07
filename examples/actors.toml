@@ -9,6 +9,10 @@
 [actor.owner]
 # No `agents` key: every agent in the roster. No ceilings: the package's
 # own is the only one in force.
+#
+# phone = true   # the phone plugged into this machine is yours: with
+#                # `dvara --sparsh`, the `phone` agent can work it for you
+#                # (one person only; never in a scheduled run)
 
 # Where this person can be reached. AN ACTOR IS A PERSON, NOT A SEAT --
 # one entry per channel, and the allowance, the whitelist and the queue

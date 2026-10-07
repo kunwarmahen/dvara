@@ -128,7 +128,8 @@ from dvara.gate import LADDER
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
-                        "receipt", "setu", "setu_accounts", "setu_manage"})
+                        "receipt", "setu", "setu_accounts", "setu_manage",
+                        "phone"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -208,6 +209,10 @@ class Actor:
     #: (/connect, /disconnect) -- the owner's own phone on the owner's own
     #: folder. Never with ``setu_accounts``: a narrowed folder is a guest's.
     setu_manage: bool = False
+    #: The phone plugged into this machine is theirs: their agents may
+    #: work it, through Sparsh, when the service was started with
+    #: --sparsh. At most one person in the file (``ActorBook``).
+    phone: bool = False
 
     @property
     def manages_setu(self) -> bool:
@@ -257,6 +262,15 @@ class ActorBook:
                         f"both [actor.{claimed}] and [actor.{actor.id}]; "
                         f"one channel identity is one person, and there "
                         f"is no right way to guess which")
+
+        # ONE PHONE, ONE PERSON. The phone on this machine's cable is
+        # somebody's, with their messages on it; two people's agents on
+        # it would read each other's and tap over each other.
+        phones = [a.id for a in self._actors.values() if a.phone]
+        if len(phones) > 1:
+            raise ConfigProblem(
+                f"{where}: phone = true for both [actor.{phones[0]}] and "
+                f"[actor.{phones[1]}]; the phone on this machine is one person's")
 
     def __len__(self) -> int:
         return len(self._actors)
@@ -345,6 +359,7 @@ class ActorBook:
                 setu=_setu(body.get("setu"), name, where),
                 setu_accounts=_setu_accounts(body, name, where),
                 setu_manage=_setu_manage(body, name, where),
+                phone=_phone(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -425,6 +440,13 @@ def _setu_accounts(body: dict, name: str, where) -> tuple[str, ...] | None:
         raise ConfigProblem(f"{where}: [actor.{name}] setu_accounts must be a list "
                             f"of accounts like \"gmail:personal\"")
     return tuple(value)
+
+
+def _phone(body: dict, name: str, where) -> bool:
+    value = body.get("phone", False)
+    if not isinstance(value, bool):
+        raise ConfigProblem(f"{where}: [actor.{name}] phone must be true or false")
+    return value
 
 
 def _setu_manage(body: dict, name: str, where) -> bool:

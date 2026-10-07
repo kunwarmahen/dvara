@@ -91,6 +91,11 @@ first turn to a bot that asks you before anything changes.
   ([notes/19](notes/19-their-own-accounts.md)), and they connect them
   from the chat with `/connect gmail`
   ([notes/20](notes/20-signing-in-from-the-chat.md)).
+* **[Sparsh](https://github.com/kunwarmahen/sparsh)** — with `--sparsh`,
+  the agents of the one person marked `phone = true` work the phone
+  plugged into this machine, and a step that can't be taken back (Send,
+  Pay, Delete) comes to their chat as Yes and No buttons
+  ([notes/30](notes/30-do-this-on-my-phone.md)).
 * **[Sarathi](https://github.com/kunwarmahen/sarathi)** — starts this
   door beside Yantra's page and Samay's clock, wired to the clock, with
   a Telegram bot: `sarathi door`, then `sarathi up` (its note 04).
@@ -118,8 +123,9 @@ person's own accounts through Setu, never anybody else's; and a program
 that started it can ask whether it is serving, and a scheduled run's
 conversation is let go a week after it ends while what it wrote stays
 where the person's chat can read it, and sent to them as a file when
-they ask — covered by 635 tests. The API is not
-stable.
+they ask; and with `--sparsh`, the phone on this machine works for its
+one person from their chat, with Send held for their button — covered
+by 689 tests. The API is not stable.
 
 ## The shape of it
 
@@ -251,7 +257,8 @@ An unknown key is an error, not a shrug:
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, channel, max_usd_per_day, max_usd_per_turn,
-max_wait_per_day, permissions, receipt, setu, setu_accounts, setu_manage
+max_wait_per_day, permissions, phone, receipt, setu, setu_accounts,
+setu_manage
 ```
 
 **How long they may be kept waiting.** `max_wait_per_day` is seconds a
@@ -328,6 +335,11 @@ setu_accounts = ["gmail:personal"]   # ...but only this account of it
 setu = "~/.local/state/setu"         # the folder your desktop and page use
 setu_manage = true                   # ...and /connect, /disconnect reach it
 ```
+
+**Their phone.** `phone = true` says the phone plugged into this machine
+is theirs: with `--sparsh`, their agents can work it (*Your phone, from
+the chat*, below). One person at most: two marked is an error naming
+both.
 
 Each turn reads Setu in that person's folder and starts their
 connections there, so their agent can only open their accounts, and only
@@ -772,6 +784,43 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
   question still waiting
   ([notes/24](notes/24-a-conversation-nobody-will-continue.md)).
 
+### Your phone, from the chat
+
+With [Sparsh](https://github.com/kunwarmahen/sparsh) installed and a
+phone plugged into this machine (or the emulator running), `--sparsh`
+lets you say *"turn on Do Not Disturb"*, *"what's the code in my newest
+text?"* or *"text Sam I'm running late"* from Telegram, and have it done
+on the phone.
+
+```bash
+dvara --ask --sparsh /path/to/sparsh telegram --agent phone        # or DVARA_SPARSH=PATH
+#   dvara: the phone through sparsh 0.1.0 (/path/to/sparsh); phone: emulator-5554
+```
+
+```toml
+[actor.owner]
+phone = true            # the phone on this machine is yours
+```
+
+* **One person's phone.** Only the person marked `phone = true` gets the
+  phone tools. Two marked is an error.
+* **Their yes, as buttons.** Reading the screen and ordinary taps run
+  without asking. Sparsh holds a tap on Send, Pay, Buy, Delete and the
+  like, typing a password, and Enter beside a Send button. Its `confirm`
+  always asks, so the question arrives in the chat as Sparsh's own
+  account of the step (*"Do this on the phone? … tap button "Send SMS"
+  … 1 field "running late""*), with **Yes** and **No** under it.
+* **Never in a scheduled run**: nobody would be there to press Yes.
+* `examples/agents/phone` is the package for it (`[tools] allow =
+  ["mcp__sparsh__*"]`, `mode = "ask"`). Another package needs both.
+* Each turn starts `sparsh mcp` and stops it when the turn ends. A
+  screen the list can't read comes with a screenshot when the model is
+  local and can see, never to a cloud model unless
+  `YANTRA_PHONE_SHOTS=on`.
+* Off unless asked for; asked for and not found stops the start. No
+  phone attached yet is fine: plug one in and the next turn has it
+  ([notes/30](notes/30-do-this-on-my-phone.md)).
+
 ## Asking a person
 
 With nobody attached, a service refuses anything that could change
@@ -878,14 +927,14 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), and its person's own accounts ([notes/19](notes/19-their-own-accounts.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
-| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)) |
+| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
@@ -903,7 +952,7 @@ print(reply.text, reply.cost_usd)
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; the owner's own questions and held turns answered through the running door; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
-| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
+| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` and `--sparsh` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

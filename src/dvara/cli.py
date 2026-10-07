@@ -124,6 +124,14 @@ def build_parser() -> argparse.ArgumentParser:
                              "turn where it is and keeps it for the person "
                              "to answer later, from `dvara held`, POST "
                              "/holds/ID, or the buttons in their chat")
+    parser.add_argument("--sparsh", nargs="?", const="on", default=None,
+                        metavar="PATH",
+                        help="let the agents of the one person marked phone = true "
+                             "in the actors file work the phone plugged into this "
+                             "machine, through Sparsh; a held step (Send, Pay, "
+                             "Delete) is asked on their channel. Never in a "
+                             "scheduled run. Off unless asked for (PATH names the "
+                             "sparsh program; also DVARA_SPARSH)")
     parser.add_argument("--samay", nargs="?", const="on", default=None,
                         metavar="PATH",
                         help="let each person's agent offer to do things later "
@@ -291,6 +299,7 @@ def _service(args) -> Service:
     if args.keep_unattended < 0:
         raise ConfigProblem("--keep-unattended is a number of days, 0 or more")
     samay = _samay(args.samay or os.environ.get("DVARA_SAMAY"))
+    sparsh = _sparsh(args.sparsh or os.environ.get("DVARA_SPARSH"))
     try:
         return Service(
             roster=Roster(Path(args.root)),
@@ -302,6 +311,7 @@ def _service(args) -> Service:
             model=args.model,
             hold_for=args.hold_for,
             samay=samay,
+            sparsh=sparsh,
             keep_unattended=args.keep_unattended * 86400,
         )
     except ValueError as exc:
@@ -332,6 +342,27 @@ def _samay(asked: str | None) -> str | None:
     print(f"dvara: schedules through samay {data.get('version')} ({program}); its "
           f"clock is {'running' if data.get('serving') else 'NOT running (samay serve)'}",
           file=sys.stderr)
+    return program
+
+
+def _sparsh(asked: str | None) -> str | None:
+    """The sparsh program for the phone's owner's turns, checked now.
+    ASKED FOR OR OFF, like Samay. No phone attached yet is said, not
+    refused: it can be plugged in later, and each turn asks again."""
+    if not asked or asked.strip().lower() == "off":
+        return None
+    from yantra.sparsh_link import SparshLinkError, load, ready_phones, resolve_mode
+
+    mode, path = resolve_mode(asked, "")
+    try:
+        found = load("on", path, need_phone=False)
+    except SparshLinkError as exc:
+        raise ConfigProblem(f"--sparsh: {exc}") from None
+    assert found is not None
+    data, program = found
+    phones = ", ".join(p.get("serial", "?") for p in ready_phones(data)) or "none attached yet"
+    print(f"dvara: the phone through sparsh {data.get('version')} ({program}); "
+          f"phone: {phones}", file=sys.stderr)
     return program
 
 

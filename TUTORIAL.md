@@ -975,6 +975,50 @@ their id. And the page changes nothing: to change who's served, edit the
 actors file, which the door re-reads on its own
 ([notes/29](notes/29-the-owners-page.md)).
 
+## 18 · Your phone, from the chat
+
+With [Sparsh](https://github.com/kunwarmahen/sparsh) installed and your
+Android phone plugged into the computer running the door (or the
+emulator running there), you can ask from Telegram for something done
+on the phone: *"turn on Do Not Disturb"*, *"what's the code in my newest
+text?"*, *"text Sam I'm running late"*.
+
+Mark yourself as the phone's person in the actors file:
+
+```toml
+[actor.owner]
+phone = true
+```
+
+and start the door with `--sparsh` and the `phone` agent:
+
+```bash
+dvara --ask --root examples/agents --sparsh /path/to/sparsh telegram --agent phone
+#   dvara: the phone through sparsh 0.1.0 (/path/to/sparsh); phone: emulator-5554
+```
+
+The agent reads the phone's screen as a numbered list and taps by
+number. Most steps happen without a question. A step that can't be
+taken back — Send, Pay, Delete, typing a password — stops, and the
+question comes to your chat with **Yes** and **No** under it, saying
+exactly what will happen:
+
+```
+Do this on the phone?
+On the phone emulator-5554: tap button "Send SMS" in com.google.android.apps.messaging
+…
+4 field "running late"
+```
+
+Press **No** and nothing is sent; the agent tells you so.
+
+Only one person can be the phone's: the phone is somebody's, with their
+messages on it, so two people marked `phone = true` is an error. A
+scheduled run never gets the phone, because nobody would be there to
+press Yes. And it's off unless you start the door with `--sparsh`
+([notes/30](notes/30-do-this-on-my-phone.md)). Setting up the phone
+itself is in Sparsh's SETUP.md.
+
 ---
 
 # Where to read next
@@ -1006,6 +1050,7 @@ Each topic, and the note that argues it:
 | `notes/26-the-file-itself.md` | `/files`, `/file NAME`: a person's own file from their folder, sent as itself rather than retold by the agent |
 | `notes/27-your-folder-from-your-phone.md` | `setu_manage`: the owner's phone changes the owner's own folder from the chat; `/lock` stays at the computer |
 | `notes/29-the-owners-page.md` | `dvara page`: the door in a browser for the owner, and why other people's words stay off it |
+| `notes/30-do-this-on-my-phone.md` | `--sparsh` and `phone = true`: one person's phone worked from their chat, Send held for their button |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---

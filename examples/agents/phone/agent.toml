@@ -1,0 +1,33 @@
+# Does things on your phone for you, from wherever you are: "turn on
+# Do Not Disturb", "what's the code in my newest text?", "text Sam I'm
+# running late". The phone is the one plugged into the machine running
+# the service, worked through Sparsh.
+#
+# It does nothing on its own. Sparsh's tools reach it only when the owner
+# starts the service with `--sparsh`, and then only for the one person
+# marked `phone = true` in actors.toml: the phone is theirs, messages and
+# all. Never in a scheduled run.
+[agent]
+name        = "phone"
+description = "Does things on your phone: settings, apps, reading a message, sending one after you say yes."
+version     = "0.1.0"
+prompt      = "prompt.md"
+
+[tools]
+# Sparsh's tools, by pattern. Reading the screen and ordinary taps run
+# without asking; Sparsh itself holds a step that can't be taken back
+# (Send, Pay, Delete, a password), and `confirm` -- the only way through
+# a hold -- always asks: the card comes to your channel as Yes and No
+# buttons, saying what will be sent.
+allow = ["mcp__sparsh__*"]
+
+[env]
+context = "local"
+
+[permissions]
+# THE PACKAGE MUST ASK, or `confirm` is refused without asking anybody.
+mode = "ask"
+
+[budget]
+# A phone task takes a dozen steps or so, each reading a screen.
+max_usd_per_turn = 0.10
