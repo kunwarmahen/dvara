@@ -329,7 +329,9 @@ message; an exception is a reply that silently never arrives.
   those is a service of its own wearing this one's clothes. (Scheduling
   arrived exactly that way: Samay, a program of its own. What it needed
   from the door — a turn nobody typed, and a message nobody asked for —
-  is [note 17](17-nobody-wrote-first.md).)
+  is [note 17](17-nobody-wrote-first.md). An owner's page arrived the
+  same way: `dvara page`, a process of its own that only reads, in
+  [note 29](29-the-owners-page.md).)
 
 ## What is not here yet
 

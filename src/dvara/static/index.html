@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Dvara</title>
+<link rel="stylesheet" href="page.css">
+<script src="page.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">द्वार</span>
+    <h1>Dvara</h1>
+  </div>
+  <div class="facts" id="facts" aria-live="polite"></div>
+</header>
+
+<main>
+  <div id="gate" class="gate" hidden>
+    <h2>This page needs its key</h2>
+    <p>Open the address <code>dvara page</code> printed, the one ending in
+      <code>#token=…</code>. The page keeps the key after that.</p>
+  </div>
+
+  <div id="problems" class="problems" hidden></div>
+
+  <section aria-labelledby="h-people">
+    <div class="section-head">
+      <h2 id="h-people">People</h2>
+      <span class="count" id="n-people"></span>
+    </div>
+    <p class="lede">Everyone your door answers, and what they've spent today.
+      To change who's here or what they may spend, edit the actors file. The
+      door picks the change up without a restart.</p>
+    <div id="people" class="cards"></div>
+  </section>
+
+  <section aria-labelledby="h-agents">
+    <div class="section-head">
+      <h2 id="h-agents">Agents</h2>
+      <span class="count" id="n-agents"></span>
+    </div>
+    <div id="agents" class="cards"></div>
+  </section>
+
+  <section aria-labelledby="h-runs">
+    <div class="section-head">
+      <h2 id="h-runs">What they've been doing</h2>
+    </div>
+    <p class="lede">Every turn, newest first: who, which agent, what it cost and
+      which tools it used. What was said is shown only for your own turns.</p>
+    <div class="toolbar">
+      <label for="who">Person</label>
+      <select id="who"><option value="">everyone</option></select>
+      <label for="which">Agent</label>
+      <select id="which"><option value="">every agent</option></select>
+    </div>
+    <div id="runs" class="runs"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="updated"></span>
+  <span>This page only reads. Nothing here changes your door.</span>
+</footer>
+</body>
+</html>

@@ -19,6 +19,7 @@ how the receipts in the notes were produced.
     dvara serve --host 127.0.0.1 --port 8765
     dvara telegram --agent researcher
     dvara status --json
+    dvara page --as owner --port 8785
 
 ``--ask`` is where a front end becomes a channel. The escalating gate
 needs somewhere to put a question and somewhere an answer can land, and
@@ -154,6 +155,17 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--json", dest="json_out", action="store_true",
                         help="print dvara.status.v1, for a program that "
                              "started this one")
+
+    page = subs.add_parser(
+        "page", help="the owner's page: people, agents, runs and spending, "
+                     "in a browser")
+    page.add_argument("--as", dest="owner", default="owner",
+                      help="your id in the actors file: your own runs show what "
+                           "was said, everyone else's only their shape "
+                           "(default: owner)")
+    page.add_argument("--host", default="127.0.0.1",
+                      help="localhost by default, as for serve")
+    page.add_argument("--port", type=int, default=8785)
 
     say = subs.add_parser("say", help="run one turn, in process, no HTTP")
     say.add_argument("text", help="what to say to the agent")
@@ -330,6 +342,8 @@ def main(argv: list[str] | None = None) -> int:
     # lock and CPython closes it the moment nothing points at it.
     if args.command == "status":
         return _status(args)
+    if args.command == "page":
+        return _page(args)
     claim = None
     try:
         if args.command in CLAIMS:
@@ -371,6 +385,31 @@ def main(argv: list[str] | None = None) -> int:
         if claim is not None:
             claim.release()
     return 2
+
+
+def _page(args) -> int:
+    """Never claims, as ``status`` does not: the page only reads."""
+    from dvara.page import Api, PageServer, page_token
+
+    state = Path(args.state).expanduser()
+    try:
+        api = Api(root=Path(args.root).expanduser(), actors=Path(args.actors).expanduser(),
+                  state=state, owner=args.owner)
+        server = PageServer(api, page_token(state), host=args.host, port=args.port)
+    except (ConfigProblem, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"dvara's page for {args.owner}:\n  {server.page_url}\n"
+          "(the part after # is its key: open it once, the page keeps it. Ctrl-C stops.)",
+          flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.httpd.server_close()
+        api.close()
+    return 0
 
 
 def _status(args) -> int:

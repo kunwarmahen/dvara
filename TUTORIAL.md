@@ -946,6 +946,29 @@ need to be connected by the owner of this service"*. A person's tokens
 sit on the owner's disk, and the owner could read them. Say so to anyone
 you give a folder ([notes/19](notes/19-their-own-accounts.md)).
 
+## 17 · The owner's page
+
+Everything `dvara runs` and `dvara status` say, in a browser:
+
+```
+$ dvara page --as owner
+dvara's page for owner:
+  http://127.0.0.1:8785/#token=…
+```
+
+Open the address. You'll see a card for each person with today's spend
+against their allowance, the agents and who may use them, and every turn,
+newest first, with its tools. A refused call is red. Pick a person or an
+agent to narrow the list.
+
+Two lines are drawn, and both are about other people. **Their words stay
+theirs**: your own turns show what you said and what the agent answered,
+and everyone else's show only the agent, the cost and the tools. **How to
+reach them stays theirs too**: the card says `reached on telegram`, not
+their id. And the page changes nothing: to change who's served, edit the
+actors file, which the door re-reads on its own
+([notes/29](notes/29-the-owners-page.md)).
+
 ---
 
 # Where to read next
@@ -976,6 +999,7 @@ Each topic, and the note that argues it:
 | `notes/22-a-window-sent-to-their-phone.md` | `/connect amazon`: a browser-window sign-in streamed to the person's phone, at an address the owner chooses |
 | `notes/26-the-file-itself.md` | `/files`, `/file NAME`: a person's own file from their folder, sent as itself rather than retold by the agent |
 | `notes/27-your-folder-from-your-phone.md` | `setu_manage`: the owner's phone changes the owner's own folder from the chat; `/lock` stays at the computer |
+| `notes/29-the-owners-page.md` | `dvara page`: the door in a browser for the owner, and why other people's words stay off it |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---
@@ -998,7 +1022,8 @@ refusals and gaps, and each one is argued in the note that owns it.
 * **No streaming, no web UI, no registry, no scheduling.** Channels are
   turn-shaped, and each of the others is a service of its own wearing this
   one's clothes. Scheduling became exactly that: [Samay](https://github.com/kunwarmahen/samay), a program of its
-  own.
+  own. So did the owner's page (§17): `dvara page`, its own process, which
+  only reads.
 * **Locks are never evicted** — one `asyncio.Lock` per session key the
   process has ever served. A few hundred bytes against a correctness
   property, and the reason two dvaras may not share a state directory:

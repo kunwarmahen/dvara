@@ -322,6 +322,18 @@ class RunStore:
             ).fetchone()
         return float(row[0])
 
+    def turns_since(self, actor: str, since: datetime) -> tuple[int, int]:
+        """How many turns this actor had since ``since``, and how many of
+        them had no price -- counted, never summed as $0.00 (the module
+        docstring on why cost is nullable)."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(cost_usd IS NULL), 0) FROM runs "
+                "WHERE actor = ? AND started_at >= ?",
+                (actor, _stamp(since)),
+            ).fetchone()
+        return int(row[0]), int(row[1])
+
     def waited_since(self, actor: str, since: datetime) -> float:
         """Seconds this actor has been kept waiting on questions since
         ``since`` (patience.py) -- the same query as ``spent_since``, on

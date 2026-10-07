@@ -196,6 +196,9 @@ dvara --root examples/agents --actors examples/actors.toml runs
 #                     scribe changed after this turn: 0.1.0 -> 0.2.0
 #                     write_file(refused)[rule:eabd9e26]
 
+# ...or all of it in a browser: people, today's spend, agents, every turn
+dvara --root examples/agents --actors examples/actors.toml page --as owner
+
 # and which of your standing answers are earning their place
 dvara --root examples/agents --actors examples/actors.toml \
       --policy examples/policy.toml rules
@@ -642,6 +645,37 @@ line 3, column 13)
 At *startup* the opposite holds and a broken file is exit 2: nothing is
 serving yet, so there is nothing to lose.
 
+### The owner's page
+
+`dvara page` shows your door in a browser. It's a separate process that
+only reads, so it runs whether or not `dvara serve` does:
+
+```
+$ dvara page --as owner
+dvara's page for owner:
+  http://127.0.0.1:8785/#token=…
+```
+
+The page has a card for each person in the actors file (today's spend
+against their daily allowance, the past seven days, their agents, how
+they're reached), the agents and who may use each, and every turn newest
+first, filtered by person or agent, with the tools it called and the
+refused ones in red.
+
+* **What was said is shown only for your own turns** (`--as`, default
+  `owner`). Everyone else's turns show their shape (agent, cost, tools,
+  outcome) but not their words. Channels show by kind (`telegram`), never
+  by id.
+* **It changes nothing.** To change who is served or what they may
+  spend, edit the actors file as before.
+* **Its own token.** Every `/api` call needs `$DVARA_PAGE_TOKEN`, or the one
+  the page makes once in the state folder (`page.token`, 0600). It isn't
+  `DVARA_TOKEN`, which can speak as anyone and never goes to a browser.
+  The page listens on 127.0.0.1 only unless you pass `--host`, and no
+  other site can frame it.
+
+The reasoning is in [notes/29](notes/29-the-owners-page.md).
+
 ### The HTTP surface
 
 ```
@@ -854,15 +888,16 @@ print(reply.text, reply.cost_usd)
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
-| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), and which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)) |
+| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), and how many turns had no price ([notes/29](notes/29-the-owners-page.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | nine endpoints and a bearer token (`[http]` extra) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
+| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
-| `cli.py` | `agents`, `status`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
+| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences
