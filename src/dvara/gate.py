@@ -324,9 +324,15 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         if decisions is not None:
             decisions.ahead(request.call_id)
         return True
-    holds = desk.on_timeout == "hold"
+    scheduled = patience is not None and patience.scheduled is not None
+    # a scheduled run's question LAPSES when nobody answers: never held
+    holds = desk.on_timeout == "hold" and not scheduled
     if holds and patience is not None and patience.holding:
         return hold(request)
+    if scheduled and patience.scheduled <= 0:
+        patience.lapsed.append(_lapsed(request))
+        return refuse(request, waiting.lapsed(request.tool_name),
+                      code=REFUSED_OUT_OF_TIME)
     if patience is not None and patience.spent_out:
         if holds:
             patience.holding = True
@@ -341,13 +347,17 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         answer = await desk.put(actor=actor, agent=agent, thread=thread,
                                 tool=request.tool_name,
                                 summary=request.summary, reach=reach,
-                                timeout=deadline, picture=_png(request))
+                                timeout=deadline, picture=_png(request),
+                                scheduled=scheduled)
     finally:
         # Spent in a finally: a question the caller hung up on still kept
         # the person waiting for as long as it was up.
         if patience is not None:
             patience.spend(loop.time() - started)
-    if answer.code == REFUSED_TIMEOUT and deadline < desk.timeout:
+    if answer.code == REFUSED_TIMEOUT and scheduled:
+        patience.lapsed.append(_lapsed(request))
+        answer = replace(answer, reason=waiting.lapsed(request.tool_name))
+    elif answer.code == REFUSED_TIMEOUT and deadline < desk.timeout:
         # The day ran out under this question, not the desk's deadline;
         # the sentence says which clock stopped it.
         answer = replace(answer, reason=waiting.ran_out(request.tool_name,
@@ -494,3 +504,11 @@ def _png(request) -> bytes | None:
         return base64.b64decode(image.data, validate=True)
     except (binascii.Error, ValueError, TypeError):
         return None
+
+
+def _lapsed(request) -> str:
+    """One line for a run's report: the tool, and what it would have done
+    -- for a held step on the phone, Sparsh's own sentence."""
+    lines = [ln.strip() for ln in (request.summary or "").splitlines() if ln.strip()]
+    said = next((ln for ln in lines if not ln.endswith("?")), "")
+    return f"{request.tool_name}: {said[:200]}" if said else request.tool_name

@@ -196,3 +196,49 @@ def test_no_desk_is_the_old_behaviour_exactly():
     # existed working the way it did: nothing waits on somebody who was
     # never wired up.
     assert Policy(mode="ask").gate("ask", desk=None) is allow_read_only
+
+
+
+# ---- a scheduled run's own wait --------------------------------------------
+
+
+def test_a_schedules_wait_may_be_longer_than_the_desks_and_is_answered_in_it():
+    from dvara.gate import put
+    from dvara.patience import Patience
+
+    desk = AskDesk(timeout=0.05)   # the door's own deadline: far too short
+
+    async def go():
+        wait = Patience(scheduled=5.0)
+        deciding = asyncio.create_task(put(desk, request(read_only=False), actor="owner",
+                                           agent="ops", thread="t", patience=wait))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        await asyncio.sleep(0.2)                       # past the desk's deadline
+        desk.answer(desk.pending()[0].id, actor="owner", approve=True)
+        return await deciding, wait
+
+    approved, wait = asyncio.run(go())
+    assert approved and wait.lapsed == [] and 0 < wait.scheduled < 5
+
+
+def test_a_question_that_outwaits_its_schedule_lapses_never_held_and_is_named():
+    from dvara.gate import put
+    from dvara.patience import Patience
+
+    desk = AskDesk(timeout=10, on_timeout="hold")   # the owner holds silences...
+    wanted = PermissionRequest(
+        tool_name="mcp__sparsh__confirm", arguments={"hold": "h1"}, read_only=False,
+        summary="Do this on the phone?\nOn the phone emulator-5554: tap button "
+                '"Send SMS" in com.google.android.apps.messaging')
+    wait = Patience(scheduled=0.1)
+    approved = asyncio.run(put(desk, wanted, actor="owner", agent="ops", thread="t",
+                               patience=wait))
+    assert approved is False                         # ...but a schedule's lapses
+    assert "within the wait the person set for this schedule" in wanted.reason
+    assert wait.lapsed == ['mcp__sparsh__confirm: On the phone emulator-5554: tap button '
+                           '"Send SMS" in com.google.android.apps.messaging']
+    again = request(read_only=False)                 # nothing left: not even asked
+    assert asyncio.run(put(desk, again, actor="owner", agent="ops", thread="t",
+                           patience=wait)) is False
+    assert desk.pending() == [] and len(wait.lapsed) == 2

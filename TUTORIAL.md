@@ -1057,10 +1057,19 @@ printed. Say yes only if the ring is on what you asked for
 ([notes/32](notes/32-the-ring-in-the-chat.md)).
 
 Only one person can be the phone's: the phone is somebody's, with their
-messages on it, so two people marked `phone = true` is an error. A
-scheduled run never gets the phone, because nobody would be there to
-press Yes. And it's off unless you start the door with `--sparsh`
-([notes/30](notes/30-do-this-on-my-phone.md)). Setting up the phone
+messages on it, so two people marked `phone = true` is an error. And
+it's off unless you start the door with `--sparsh`
+([notes/30](notes/30-do-this-on-my-phone.md)).
+
+**On a schedule.** A scheduled run gets the phone only when its schedule
+says so: one your agent made in a chat that had the phone, or `samay add
+--phone`. Before it starts, the door looks at the phone. In your hand: it
+waits up to ten minutes, then skips. Locked: it asks you in your chat to
+unlock it, and waits the schedule's wait. Asleep: it wakes it. A Send the
+schedule names when you accept it (*"send in Messages when the screen
+shows 555-0123"*) goes through by itself; anything else held is asked in
+your chat, and lapses if you don't answer in time
+([notes/33](notes/33-the-phone-on-a-schedule.md)). Setting up the phone
 itself is in Sparsh's SETUP.md.
 
 ---

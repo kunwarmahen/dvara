@@ -77,5 +77,5 @@ before, 709 after.
 * **A real Telegram chat.** The photo goes through the same Bot API
   upload a file already uses ([note 26](26-the-file-itself.md)), and is
   untried from a real chat, like the rest of the phone road there.
-* **A phone in a scheduled run**, with nobody watching the ring. That
-  is next.
+* ~~**A phone in a scheduled run.**~~ [Note 33](33-the-phone-on-a-schedule.md):
+  a tap by position there is never granted, so it is asked, ring and all.

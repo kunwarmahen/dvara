@@ -107,8 +107,9 @@ stops the start. 676 tests before, 689 after.
   this road hasn't been pressed from a real chat yet.
 * **More than one phone**, one per person. One cable, one person, for
   now.
-* **A phone in a scheduled run.** That waits on a better answer to
-  "held, and nobody there" than refusing.
+* ~~**A phone in a scheduled run.**~~ When its schedule says so, after
+  the phone is checked free, with the steps its person granted
+  ([note 33](33-the-phone-on-a-schedule.md)).
 * ~~**A question you answer by looking.**~~ A tap by position's question
   carries the screen with the spot ringed, to every channel
   ([note 32](32-the-ring-in-the-chat.md)).

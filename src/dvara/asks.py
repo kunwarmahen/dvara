@@ -303,7 +303,8 @@ class AskDesk:
                   summary: str,
                   reach: Sequence[tuple[str, str]] = (),
                   timeout: float | None = None,
-                  picture: bytes | None = None) -> Answer:
+                  picture: bytes | None = None,
+                  scheduled: bool = False) -> Answer:
         """Ask, wait, and come back with a decision either way.
 
         Never raises for anything a person or a channel could have caused:
@@ -331,8 +332,10 @@ class AskDesk:
         never lengthens it: the desk's timeout is the owner's word on how
         long any one question may wait.
         """
+        # ``scheduled``: the deadline is a schedule's own wait, which its
+        # person accepted with it, and may be longer than the desk's.
         limit = (self.timeout if timeout is None
-                 else max(0.0, min(self.timeout, timeout)))
+                 else max(0.0, timeout if scheduled else min(self.timeout, timeout)))
         ask = Ask(id=secrets.token_urlsafe(16), actor=actor, agent=agent,
                   thread=thread, tool=tool, summary=summary, picture=picture)
         loop = asyncio.get_running_loop()
@@ -343,7 +346,7 @@ class AskDesk:
         answer: Answer | None = None
         try:
             answer = await self._wait(ask, future, deliveries, deadline,
-                                      limit)
+                                      limit, lapses=scheduled)
             return answer
         finally:
             # Whatever happened -- answered, timed out, the caller hung up
@@ -360,20 +363,20 @@ class AskDesk:
     async def _wait(self, ask: Ask,
                     future: asyncio.Future[tuple[bool, str | None]],
                     deliveries: list[asyncio.Future],
-                    deadline: float, limit: float) -> Answer:
+                    deadline: float, limit: float, lapses: bool = False) -> Answer:
         """The deadline, the deliveries and the answer, whichever speaks first."""
         loop = asyncio.get_running_loop()
         tool, actor = ask.tool, ask.actor
         while True:
             left = deadline - loop.time()
             if left <= 0:
-                return self._silence(tool, limit)
+                return self._silence(tool, limit, lapses)
             watching = {future} | {d for d in deliveries if not d.done()}
             done, _ = await asyncio.wait(
                 watching, timeout=left,
                 return_when=asyncio.FIRST_COMPLETED)
             if not done:
-                return self._silence(tool, limit)
+                return self._silence(tool, limit, lapses)
             # EVERY route failing is the fact that matters, not any
             # one of them. One bridge down while another is up is a
             # question that reached the person; refusing on the first
@@ -394,13 +397,16 @@ class AskDesk:
             # Delivered, and nobody has answered yet. Round again on
             # what is left of the deadline.
 
-    def _silence(self, tool: str, limit: float) -> Answer:
-        """Nobody answered: refused, or held for later, as the owner chose.
+    def _silence(self, tool: str, limit: float, lapses: bool = False) -> Answer:
+        """Nobody answered: refused, or held for later, as the owner chose
+        -- except a scheduled run's question, which LAPSES (``lapses``):
+        its person set the wait, and a run kept for later has nobody to
+        come back to it.
 
         A held answer carries no sentence. The model is not told anything
         -- the turn stops, and it reads the real answer when there is one.
         """
-        if self.on_timeout == "hold":
+        if self.on_timeout == "hold" and not lapses:
             return Answer(False, None, HELD)
         return Answer(False, _timed_out(tool, limit), REFUSED_TIMEOUT)
 

@@ -53,10 +53,20 @@ class Patience:
     """One turn's share of a person's waiting, and the tally of what it
     actually waited. One per turn; the gate writes, the Run reads."""
 
-    def __init__(self, left: float | None = None) -> None:
+    def __init__(self, left: float | None = None,
+                 scheduled: float | None = None) -> None:
         #: Seconds of waiting this person has left today, or None when
         #: their roster entry sets no daily limit.
         self.left = left
+        #: A SCHEDULED RUN'S OWN WAIT, in seconds still left, or None for
+        #: a turn somebody started. The person accepted it with the
+        #: schedule ("questions wait 30 minutes"), so it stands in for
+        #: the desk's deadline -- longer or shorter -- and a question it
+        #: runs out under LAPSES: refused, never held, and named in the
+        #: run's report (``lapsed``).
+        self.scheduled = scheduled
+        #: Questions that lapsed, in a sentence each, for the report.
+        self.lapsed: list[str] = []
         #: What this turn has waited so far -- recorded for every turn,
         #: limited or not, so a limit added tomorrow has a history.
         self.waited = 0.0
@@ -69,19 +79,24 @@ class Patience:
 
     @property
     def spent_out(self) -> bool:
-        return self.left is not None and self.left <= 0
+        return ((self.left is not None and self.left <= 0)
+                or (self.scheduled is not None and self.scheduled <= 0))
 
     def deadline(self, desk_timeout: float) -> float:
-        """How long the next question may wait: the desk's own deadline,
-        or what is left of today, whichever is shorter."""
+        """How long the next question may wait: the desk's own deadline
+        (a schedule's own wait instead, in a scheduled run), or what is
+        left of today, whichever is shorter."""
+        own = desk_timeout if self.scheduled is None else self.scheduled
         if self.left is None:
-            return desk_timeout
-        return min(desk_timeout, self.left)
+            return own
+        return min(own, self.left)
 
     def spend(self, seconds: float) -> None:
         self.waited += seconds
         if self.left is not None:
             self.left = max(0.0, self.left - seconds)
+        if self.scheduled is not None:
+            self.scheduled = max(0.0, self.scheduled - seconds)
 
 
 def remaining_today(limit: float | None, waited: float) -> float | None:
@@ -130,6 +145,14 @@ def spent_out(tool: str, now: datetime | None = None) -> str:
             f"as long as this service allows in one day; that comes back at "
             f"{money.next_reset(now):%H:%M UTC}. Carry on with what you can "
             f"reach, and say what you would have needed approved.")
+
+
+def lapsed(tool: str) -> str:
+    """The refusal when a scheduled run's question waited its schedule's
+    whole wait, or there was none of it left to put the question in."""
+    return (f"{tool} was denied: nobody answered within the wait the person "
+            f"set for this schedule. Nothing was done. Carry on with what needs "
+            f"no yes, and say in your answer what was waiting for one.")
 
 
 def ran_out(tool: str, seconds: float, now: datetime | None = None) -> str:

@@ -110,7 +110,7 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import files, fresh, money, patience
+from dvara import files, fresh, money, patience, ready
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -156,6 +156,19 @@ CLOCK_OFF = ("Samay's clock is not running on this service right now: when you "
 def _default_provider(name: str) -> Provider:
     """Yantra's own resolution: settings from the environment, one pool."""
     return get_provider(name, load_settings(name))
+
+
+#: Seconds a scheduled run's questions wait, in all, when its schedule
+#: didn't say (Samay's own default is the same thirty minutes).
+DEFAULT_SCHEDULE_WAIT = 1800.0
+
+
+@dataclass(frozen=True)
+class PhoneRun:
+    """A scheduled run that works the phone, checked free (ready.py)."""
+
+    #: Held taps its person let it do unasked, as they accepted them.
+    steps: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -425,7 +438,10 @@ class Service:
                       actor: str | None = None,
                       via: Channel | None = None,
                       unattended: bool = False,
-                      allow_tools: Sequence[str] = ()) -> Reply:
+                      allow_tools: Sequence[str] = (),
+                      phone: bool = False,
+                      phone_steps: Sequence[str] = (),
+                      wait: float | None = None) -> Reply:
         """Run one turn for one person, and answer them either way.
 
         Never raises for anything a person could have caused. A refusal is
@@ -461,6 +477,17 @@ class Service:
         ``allow_tools`` are the questions they answered ahead of time,
         when they accepted the schedule (``gate.put`` says what that can
         and cannot grant).
+
+        A SCHEDULE'S OWN WAIT. ``wait`` is how long, in all, its questions
+        may wait for the person (they accepted it with the schedule); one
+        it runs out under lapses, refused and named in the reply.
+
+        THE PHONE, ONLY WHEN THE SCHEDULE SAYS SO. ``phone``: the schedule
+        works the phone (Samay's, made in a turn that had it). Its person
+        must be the phone's; the phone is checked first (ready.py: in
+        use, locked, asleep) and the run skipped when it isn't free.
+        ``phone_steps`` are the held taps the person let it do unasked,
+        handed to Sparsh, which checks each (its rules.py).
         """
         started = datetime.now(UTC)
         self.refresh()
@@ -494,6 +521,20 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
+        scheduled = None
+        if unattended and phone:
+            if self.sparsh is None or not who.phone:
+                return Reply(text=f"{actor} has no phone this service can work: it "
+                                  "needs --sparsh and phone = true for them",
+                             run_id=None, agent=agent, actor=actor, stop_reason="refused")
+            skip = await ready.ready(ready.through(self.sparsh),
+                                     wait=wait or DEFAULT_SCHEDULE_WAIT,
+                                     ask=self._asker(who), about=" ".join(text.split())[:120])
+            if skip is not None:
+                return Reply(text=skip, run_id=None, agent=agent, actor=actor,
+                             stop_reason="skipped")
+            scheduled = PhoneRun(steps=tuple(phone_steps))
+
         async with self._locks.hold(key):
             # Costing zero until something is spent. The distinction the
             # ledger draws is between "nothing was spent" and "tokens
@@ -510,7 +551,8 @@ class Service:
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
-                                             ahead=tuple(allow_tools))
+                                             ahead=tuple(allow_tools),
+                                             phone_run=scheduled, wait_for=wait)
                 self._tidy_quietly()
                 return replace(reply, needs=tuple(record.needs),
                                busy=tuple(record.busy))
@@ -627,7 +669,9 @@ class Service:
                     run: Run, resuming: Hold | None = None,
                     answers: Mapping[str, bool | str] | None = None,
                     door: str | None = None,
-                    ahead: tuple[str, ...] = ()) -> Reply:
+                    ahead: tuple[str, ...] = (),
+                    phone_run: PhoneRun | None = None,
+                    wait_for: float | None = None) -> Reply:
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
@@ -652,7 +696,8 @@ class Service:
         wait = patience.Patience(patience.remaining_today(
             who.max_wait_per_day,
             (0.0 if who.max_wait_per_day is None
-             else self.runs.waited_since(who.id, money.day_start()))))
+             else self.runs.waited_since(who.id, money.day_start()))),
+            scheduled=wait_for if is_unattended() and wait_for else None)
 
         provider = self._provider(provider_name)
         try:
@@ -679,7 +724,8 @@ class Service:
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
         sent = self._send_file_tool(agent, who)
-        servers = await self._servers(agent, who=who, run=run, key=key, spec=spec)
+        servers = await self._servers(agent, who=who, run=run, key=key, spec=spec,
+                                      phone_run=phone_run)
         try:
             reply = await self._run_turn(
                 agent, key=key, run=run, resuming=resuming, answers=answers,
@@ -711,14 +757,22 @@ class Service:
         agent.registry.register(files.SendFile(deliver))
         return sent
 
-    async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec):
+    def _asker(self, who: Actor):
+        """A line in the person's own chat, for a run nobody started."""
+        async def ask(line: str) -> None:
+            await self.notices.send(who.id, who.reach(), line)
+        return ask
+
+    async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec,
+                       phone_run: PhoneRun | None = None):
         """The MCP servers this turn gets, all stopped when it ends: the
         person's own accounts (``_accounts``), Samay's tools
         (``_schedules``) and the phone (``_phone``). None when there are
         none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
-        phone = self.sparsh is not None and who.phone and not is_unattended()
+        phone = (self.sparsh is not None and who.phone
+                 and (not is_unattended() or phone_run is not None))
         if not (accounts or schedules or phone):
             return None
         from yantra.mcp import MCPManager
@@ -730,7 +784,8 @@ class Service:
         if schedules:
             await self._schedules(agent, manager, who=who, run=run)
         if phone:
-            await self._phone(agent, manager, who=who)
+            await self._phone(agent, manager, who=who,
+                              grants=list(phone_run.steps) if phone_run else None)
         return manager
 
     async def _account_words(self, who: Actor, spec: AgentSpec, text: str) -> str | None:
@@ -830,12 +885,15 @@ class Service:
             assert found is not None
             link = Samay(mode="on", data=found[0], program=found[1],
                          person=who.id, agent=run.agent, runner="dvara",
-                         seen_at=SEEN_HERE, clock_off=CLOCK_OFF)
+                         seen_at=SEEN_HERE, clock_off=CLOCK_OFF,
+                         # a turn with the phone makes schedules that work it
+                         phone=self.sparsh is not None and who.phone)
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
 
-    async def _phone(self, agent, manager, *, who: Actor) -> None:
+    async def _phone(self, agent, manager, *, who: Actor,
+                     grants: list[str] | None = None) -> None:
         """Sparsh's tools, for the phone's own person.
 
         THEIR PHONE, ASKED THERE. Only the one person the owner marked
@@ -848,9 +906,10 @@ class Service:
         with a screenshot when the model is local and can see, as at a
         keyboard (``YANTRA_PHONE_SHOTS``).
 
-        NOT WITH NOBODY THERE: a scheduled turn never gets here. And a
-        Sparsh that will not start costs the turn its phone, never the
-        turn."""
+        WITH NOBODY THERE, ONLY WHEN ITS SCHEDULE SAYS SO (``deliver``):
+        the phone was checked free first, and ``grants`` are the held
+        taps its person let it do unasked. And a Sparsh that will not
+        start costs the turn its phone, never the turn."""
         from yantra.mcp import MCPError
         from yantra.sparsh_link import Sparsh, SparshLinkError, load, shots
 
@@ -862,7 +921,7 @@ class Service:
             link.shots, link.shots_why = shots(
                 getattr(provider, "name", ""),
                 getattr(getattr(provider, "settings", None), "base_url", ""), str(agent.model))
-            await asyncio.to_thread(link.connect, manager, agent)
+            await asyncio.to_thread(link.connect, manager, agent, grants)
         except (MCPError, SparshLinkError) as exc:
             self._note(f"dvara: {who.id}'s phone is off for this turn -- sparsh: {exc}")
 
@@ -942,9 +1001,7 @@ class Service:
                      usage=run.usage,
                      receipt=self._receipt(who, run, provider_name),
                      held=held,
-                     refused=tuple(dict.fromkeys(
-                         step.name for step in run.tools
-                         if step.refusal not in (None, HELD))))
+                     refused=_refused(wait.lapsed, run.tools))
 
     def _keep(self, agent, key: str, run: Run,
               decisions: Decisions) -> Hold:
@@ -1216,3 +1273,13 @@ def _explain(reason: str, detail: str | None, ceiling: money.Ceiling) -> str:
     if reason == "cancelled":
         return "that was interrupted"
     return detail or "I have no answer for that"
+
+
+def _refused(lapsed: Sequence[str], steps) -> tuple[str, ...]:
+    """What a scheduled run's report says was refused: each question that
+    lapsed, in its own words (``tool: what it would have done``), then the
+    tools refused outright -- a tool named in a lapse is not named again."""
+    named = {line.split(": ", 1)[0] for line in lapsed}
+    return tuple(dict.fromkeys([*lapsed, *(
+        step.name for step in steps
+        if step.refusal not in (None, HELD) and step.name not in named)]))

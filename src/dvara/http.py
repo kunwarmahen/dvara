@@ -215,11 +215,32 @@ def create_app(service: Service, *, token: str,
             # A person who IS there answers the question when it comes.
             raise HTTPException(status_code=400,
                                 detail="allow_tools goes with unattended: true")
+        # A schedule's own: the phone, the steps its person let it do on it
+        # unasked, and how long its questions may wait (service.deliver).
+        phone = body.get("phone", False)
+        phone_steps = body.get("phone_steps") or []
+        wait = body.get("wait")
+        if not isinstance(phone, bool):
+            raise HTTPException(status_code=400, detail="phone is true or false")
+        if not isinstance(phone_steps, list) or not all(
+                isinstance(s, str) for s in phone_steps):
+            raise HTTPException(status_code=400,
+                                detail="phone_steps is a list of sentences")
+        if wait is not None and (isinstance(wait, bool)
+                                 or not isinstance(wait, (int, float)) or wait <= 0):
+            raise HTTPException(status_code=400, detail="wait is seconds, more than 0")
+        if (phone or phone_steps or wait is not None) and not unattended:
+            raise HTTPException(status_code=400,
+                                detail="phone, phone_steps and wait go with unattended: true")
+        if phone_steps and not phone:
+            raise HTTPException(status_code=400, detail="phone_steps go with phone: true")
         reply = await service.deliver(actor=actor, via=via,
                                       agent=body["agent"],
                                       thread=body["thread"], text=body["text"],
                                       unattended=unattended,
-                                      allow_tools=allow_tools)
+                                      allow_tools=allow_tools,
+                                      phone=phone, phone_steps=phone_steps,
+                                      wait=float(wait) if wait is not None else None)
         return {
             "text": reply.text,
             "ok": reply.ok,

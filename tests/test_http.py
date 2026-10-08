@@ -395,6 +395,12 @@ def test_an_unattended_message_reports_its_three_lists(client):
     ({"unattended": "yes"}, "unattended is true or false"),
     ({"unattended": True, "allow_tools": "browser_*"}, "a list"),
     ({"allow_tools": ["browser_*"]}, "goes with unattended"),
+    ({"phone": True}, "go with unattended"),
+    ({"wait": 60}, "go with unattended"),
+    ({"unattended": True, "phone": "yes"}, "phone is true or false"),
+    ({"unattended": True, "wait": 0}, "wait is seconds"),
+    ({"unattended": True, "phone_steps": ["send in Messages when the screen shows 1"]},
+     "go with phone: true"),
 ])
 def test_unattended_fields_are_checked(client, extra, detail):
     response = client.post("/message", headers=auth(), json={

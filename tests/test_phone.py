@@ -28,7 +28,7 @@ from dvara.errors import ConfigProblem
 from tests.conftest import calls, says, write_package
 
 FAKE = """\
-    import json, sys
+    import json, os, sys
     LOG = {log!r}
     args = sys.argv[1:]
     with open(LOG, "a") as out:
@@ -48,6 +48,13 @@ FAKE = """\
             "mcp": {{"command": {python!r}, "args": [sys.argv[0], "mcp"]}},
             "shots": "--shots", "tools": KINDS}}))
         sys.exit(0)
+    if args == ["state", "--json"]:
+        print(json.dumps({{"state": os.environ.get("FAKE_PHONE", "asleep")}}))
+        sys.exit(0)
+    if args == ["wake"]:
+        sys.exit(0)
+    with open(LOG, "a") as out:
+        out.write(json.dumps(["grants", os.environ.get("SPARSH_GRANTS", "")]) + "\\n")
     for line in sys.stdin:
         msg = json.loads(line)
         method, mid = msg.get("method"), msg.get("id")
@@ -213,3 +220,124 @@ class TestTheOwnersFile:
     def test_found_is_announced_with_its_phone(self, sparsh, capsys):
         assert _sparsh(str(sparsh[0])) == str(sparsh[0])
         assert "phone: emulator-5554" in capsys.readouterr().err
+
+
+
+# ---- a schedule that works the phone ---------------------------------------
+
+STEP = "send in Messages when the screen shows 555-0123"
+ON_TELEGRAM = ActorBook.from_dict({"actor": {"owner": {
+    "phone": True, "channel": [{"kind": "telegram", "id": 42}]}}})
+
+
+def scheduled(service, **kw):
+    return asyncio.run(service.deliver(actor="owner", agent="greeter",
+                                       thread="samay-s1-1", text="text Sam I'm late",
+                                       unattended=True, **kw))
+
+
+class TestAScheduleWithThePhone:
+    def test_it_gets_the_phone_and_the_steps_its_person_let_it_do(
+            self, make_service, sparsh, monkeypatch):
+        monkeypatch.setenv("FAKE_PHONE", "asleep")
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        reply = scheduled(service, phone=True, phone_steps=[STEP])
+        assert reply.ok and "mcp__sparsh__confirm" in phone_tools(service)
+        assert ["wake"] in logged(sparsh[1])                  # asleep: woken first
+        assert ["grants", json.dumps([STEP])] in logged(sparsh[1])
+
+    def test_without_its_schedule_saying_so_a_scheduled_turn_still_gets_none(
+            self, make_service, sparsh):
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        scheduled(service)
+        assert phone_tools(service) == set() and started(sparsh[1]) == 0
+
+    def test_someone_who_isnt_the_phones_person_is_refused(self, make_service, sparsh,
+                                                           phone_book):
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=phone_book)
+        reply = asyncio.run(service.deliver(actor="guest", agent="greeter", thread="s",
+                                            text="go", unattended=True, phone=True))
+        assert reply.stop_reason == "refused" and "phone = true" in reply.text
+
+    def test_a_phone_in_use_is_left_alone_and_the_run_skipped(
+            self, make_service, sparsh, monkeypatch):
+        from dvara import ready
+
+        monkeypatch.setenv("FAKE_PHONE", "in_use")
+        monkeypatch.setattr(ready, "IN_USE_FOR", 0.2)
+        monkeypatch.setattr(ready, "IN_USE_EVERY", 0.05)
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        reply = scheduled(service, phone=True)
+        assert reply.stop_reason == "skipped" and "in use" in reply.text
+        assert started(sparsh[1]) == 0 and service.scripted.requests == []
+
+    def test_a_locked_phone_asks_its_person_then_skips(self, make_service, sparsh,
+                                                       monkeypatch):
+        from dvara import ready
+
+        monkeypatch.setenv("FAKE_PHONE", "locked")
+        monkeypatch.setattr(ready, "LOCKED_EVERY", 0.05)
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        got = []
+
+        async def telegram(address, text, file=None):
+            got.append((address, text))
+        service.notices.route("telegram", telegram)
+        reply = scheduled(service, phone=True, wait=0.3)
+        assert reply.stop_reason == "skipped" and "stayed locked" in reply.text
+        assert len(got) == 1 and got[0][0] == "42"
+        assert "Your phone is locked" in got[0][1] and "text Sam" in got[0][1]
+
+
+class TestReady:
+    """ready.py on its own, with a phone made of answers and a clock."""
+
+    def run(self, states, *, wait=60.0):
+        from dvara import ready
+
+        now, said, woken = [0.0], [], []
+        answers = iter(states)
+
+        async def state():
+            return next(answers)
+
+        async def wake():
+            woken.append(True)
+
+        async def ask(line):
+            said.append(line)
+
+        async def sleep(seconds):
+            now[0] += seconds
+        why = asyncio.run(ready.ready(ready.Phone(state, wake), wait=wait, ask=ask,
+                                      about="check", clock=lambda: now[0], sleep=sleep))
+        return why, said, woken, now[0]
+
+    def test_unlocked_after_being_asked_is_a_go(self):
+        why, said, woken, _ = self.run(["locked", "locked", "in_use"])
+        assert why is None and len(said) == 1 and woken == []
+
+    def test_in_use_is_looked_at_each_minute_for_ten(self):
+        why, said, _, waited = self.run(["in_use"] * 20)
+        assert "in use for 10 minutes" in why and said == [] and waited == 600
+
+    def test_put_down_while_waited_on_and_locked_then_asks(self):
+        why, said, _, _ = self.run(["in_use", "locked", "in_use"])
+        assert why is None and len(said) == 1
+
+    def test_an_iphone_that_says_only_unlocked_goes(self):
+        assert self.run(["unknown"])[0] is None
+
+    def test_a_phone_that_cant_be_reached_is_a_skip_in_its_words(self):
+        from dvara import ready
+
+        async def state():
+            raise RuntimeError("no phone attached")
+
+        async def wake():
+            pass
+
+        async def ask(line):
+            pass
+        why = asyncio.run(ready.ready(ready.Phone(state, wake), wait=60, ask=ask, about="x"))
+        assert why == "skipped: the phone couldn't be reached (no phone attached)"
