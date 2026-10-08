@@ -125,7 +125,7 @@ conversation is let go a week after it ends while what it wrote stays
 where the person's chat can read it, and sent to them as a file when
 they ask; and with `--sparsh`, the phone on this machine works for its
 one person from their chat, with Send held for their button — covered
-by 705 tests. The API is not stable.
+by 726 tests. The API is not stable.
 
 ## The shape of it
 
@@ -820,7 +820,16 @@ phone = true            # the phone on this machine is yours
   always asks, so the question arrives in the chat as Sparsh's own
   account of the step (*"Do this on the phone? … tap button "Send SMS"
   … 1 field "running late""*), with **Yes** and **No** under it.
-* **Never in a scheduled run**: nobody would be there to press Yes.
+* **In a scheduled run only when its schedule says so** (made in a chat
+  that had the phone, or `samay add --phone`). The phone is checked
+  first: in your hand, it waits up to ten minutes, then skips; locked,
+  it asks you to unlock it; asleep, it wakes it. Steps you granted with
+  the schedule (*"send in Messages when the screen shows 555-0123"*) go
+  through by themselves; anything else is asked in your chat and lapses
+  after the schedule's wait ([notes/33](notes/33-the-phone-on-a-schedule.md)).
+* **A tap by position** (a screen only a picture shows) is asked every
+  time, and the question brings the picture with the spot ringed: a
+  photo above the buttons in Telegram ([notes/32](notes/32-the-ring-in-the-chat.md)).
 * `examples/agents/phone` is the package for it (`[tools] allow =
   ["mcp__sparsh__*"]`, `mode = "ask"`). Another package needs both.
 * Each turn starts `sparsh mcp` and stops it when the turn ends. A

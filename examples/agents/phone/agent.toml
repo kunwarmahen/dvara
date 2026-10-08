@@ -6,7 +6,8 @@
 # It does nothing on its own. Sparsh's tools reach it only when the owner
 # starts the service with `--sparsh`, and then only for the one person
 # marked `phone = true` in actors.toml: the phone is theirs, messages and
-# all. Never in a scheduled run.
+# all. A scheduled run gets it only when its schedule works the phone,
+# after the phone is checked free (notes/33).
 [agent]
 name        = "phone"
 description = "Does things on your phone: settings, apps, reading a message, sending one after you say yes."
