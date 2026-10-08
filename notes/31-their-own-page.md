@@ -94,7 +94,11 @@ parts refused, the switch.
 
 ## What is not here yet
 
-* **The owner's page doesn't list people's open pages.** Running `setu page-link
-  --close-all` in their folder signs out every device.
-* **On Sarathi's Podman road**, Setu's page container doesn't mount the
-  door's people folders yet.
+* ~~**The owner's page doesn't list people's open pages.**~~ Setu's own
+  page now does (Setu `21c222a`): People's pages shows each person's
+  devices in two words and since when, an unopened link until when, and
+  closes one person's pages from there.
+* ~~**On Sarathi's Podman road**, Setu's page container doesn't mount the
+  door's people folders yet.~~ It does, with only the people's folders
+  mounted, and listens on the door's window address too (Sarathi
+  `33365b4`); a link worked once from that address in a real run.
