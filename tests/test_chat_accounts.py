@@ -29,6 +29,9 @@ from tests.conftest import says, write_package
 
 SETU = """\
     import json, os, sys
+    if sys.argv[1] == "config":          # the owner's own Setu: no SETU_HOME
+        assert "SETU_HOME" not in os.environ
+        print("people-page: " + os.environ.get("FAKE_PEOPLE_PAGE", "(not set)")); sys.exit(0)
     HOME = os.environ["SETU_HOME"]
     with open(os.path.join(HOME, "argv.log"), "a") as log:
         log.write(json.dumps(sys.argv[1:]) + "\\n")
@@ -43,6 +46,12 @@ SETU = """\
                              "level_label": "Read only", "installed": True} for r in have],
             "connectors": [{"id": "gmail", "name": "Gmail", "auth": "google"},
                            {"id": "amazon", "name": "Amazon", "auth": "browser"}]}))
+    elif cmd == "page-link":
+        if not os.environ.get("SETU_PAGE_URL"):
+            print("error: a person's link needs an address", file=sys.stderr); sys.exit(2)
+        print(json.dumps({"url": os.environ["SETU_PAGE_URL"] + "#link="
+                          + os.path.basename(HOME) + ".CODE", "person": os.path.basename(HOME),
+                          "expires_at": 0}))
     elif cmd == "disconnect":
         ref = sys.argv[2]
         if ref not in have:
@@ -298,3 +307,47 @@ def test_what_counts_as_a_paste_and_what_is_kept_of_one():
     assert accounts.scrub(GOOD) == "(an address pasted back for a sign-in)"
     assert accounts.is_command("/connect gmail") and accounts.is_command("/accounts@my_bot")
     assert not accounts.is_command("connect my gmail")
+
+
+class TestTheirOwnPage:
+    """``/accounts page``: a link to their own folder's page, never anyone else's."""
+
+    def test_the_link_is_made_in_their_own_folder(self, make_service, fake_setu,
+                                                  agents_root, monkeypatch):
+        monkeypatch.setenv("SETU_PAGE_URL", "http://100.64.0.7:8775/")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/accounts page"))
+        assert "http://100.64.0.7:8775/#link=raj.CODE" in reply.text
+        assert "once, on the first device" in reply.text
+        assert reply.stop_reason == "accounts" and service.scripted.requests == []
+
+    def test_off_in_the_owners_setu_means_no_link_is_made(self, make_service, fake_setu,
+                                                          agents_root, monkeypatch):
+        monkeypatch.setenv("SETU_PAGE_URL", "http://100.64.0.7:8775/")
+        monkeypatch.setenv("FAKE_PEOPLE_PAGE", "off")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/accounts page"))
+        assert "turned this page off" in reply.text and "#link=" not in reply.text
+        log = service.state / "setu" / "raj" / "argv.log"
+        assert not log.exists() or "page-link" not in log.read_text()
+
+    def test_with_no_address_for_the_page_the_person_is_told_plainly(
+            self, make_service, fake_setu, agents_root, monkeypatch):
+        monkeypatch.delenv("SETU_PAGE_URL", raising=False)
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/accounts page"))
+        assert "can't be reached from your phone yet" in reply.text
+
+    def test_a_shared_folder_has_no_page_of_theirs(self, make_service, fake_setu,
+                                                   agents_root, tmp_path, monkeypatch):
+        monkeypatch.setenv("SETU_PAGE_URL", "http://100.64.0.7:8775/")
+        shared = tmp_path / "owners-setu"
+        shared.mkdir()
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": str(shared),
+                                                    "setu_manage": True}))
+        reply = run(turn(service, "raj", "/accounts page"))
+        assert "owner's own folder" in reply.text and "#link=" not in reply.text

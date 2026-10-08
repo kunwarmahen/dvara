@@ -932,6 +932,22 @@ chat would lock your desktop and page out of every account, so a shared
 folder's passphrase is set at the computer
 ([notes/27](notes/27-your-folder-from-your-phone.md)).
 
+**Their own page.** raj can also see his accounts in a browser. Start
+Setu's page so it knows where people's folders are, on an address his
+phone reaches (here a Tailscale one):
+
+```bash
+setu serve --host 100.64.0.7 --people ~/dvara/state/setu
+```
+
+and start the door with `SETU_PAGE_URL=http://100.64.0.7:8775/` (or the
+window's `SETU_WINDOW_HOST`, which gives the same address). raj sends
+`/accounts page` and gets a link that opens once, on the first device,
+within ten minutes. It shows his connections and what each one did, with
+Connect, Change level and Disconnect, and none of your settings. To turn
+people's pages off: `setu config people-page off`
+([notes/31](notes/31-their-own-page.md)).
+
 From then on, each of their turns reads Setu in *their* folder
 and starts their connections there, so their agent can open only their
 accounts, and only what the package asks for in `[connections] needs`,
@@ -974,6 +990,13 @@ reach them stays theirs too**: the card says `reached on telegram`, not
 their id. And the page changes nothing: to change who's served, edit the
 actors file, which the door re-reads on its own
 ([notes/29](notes/29-the-owners-page.md)).
+
+Further down are **Schedules** and **Files**. Schedules are each person's,
+in Samay's own words, with when each one runs next. Start the page with
+`dvara --samay PATH page` if `samay` isn't on PATH. Files are each
+person's folder with each agent: names, sizes and dates. Click one of
+your own to read it there. Everyone else's are names only, and so are
+the words of their schedules.
 
 ## 18 · Your phone, from the chat
 
@@ -1062,8 +1085,9 @@ Each topic, and the note that argues it:
 | `notes/22-a-window-sent-to-their-phone.md` | `/connect amazon`: a browser-window sign-in streamed to the person's phone, at an address the owner chooses |
 | `notes/26-the-file-itself.md` | `/files`, `/file NAME`: a person's own file from their folder, sent as itself rather than retold by the agent |
 | `notes/27-your-folder-from-your-phone.md` | `setu_manage`: the owner's phone changes the owner's own folder from the chat; `/lock` stays at the computer |
-| `notes/29-the-owners-page.md` | `dvara page`: the door in a browser for the owner, and why other people's words stay off it |
+| `notes/29-the-owners-page.md` | `dvara page`: the door in a browser for the owner, and why other people's words stay off it; files and schedules |
 | `notes/30-do-this-on-my-phone.md` | `--sparsh` and `phone = true`: one person's phone worked from their chat, Send held for their button |
+| `notes/31-their-own-page.md` | `/accounts page`: a one-time link to a person's own Setu page, and the owner's one switch |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 
 ---

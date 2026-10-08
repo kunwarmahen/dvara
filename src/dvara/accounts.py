@@ -11,6 +11,7 @@ THREE WORDS, AND THEY ARE THE PERSON'S, NOT THE MODEL'S.
     /connect gmail send as work    a level, and a name for the account
     /connect homeassistant http://ha.local:8123
     /accounts                      what is connected here, for you
+    /accounts page                 a one-time link to their folder's page
     /disconnect gmail:work         revoke it and forget it
     /lock, /unlock [days]          a passphrase only they know (unlocked.py)
 
@@ -40,6 +41,14 @@ to the owner's own folder. Unless the owner said so for that person
 (``setu_manage``, never with ``setu_accounts``): the owner's own phone on
 the owner's own folder. Even then /lock is the computer's, since a
 folder shared with a desktop and a page would lock them all out.
+
+THEIR OWN PAGE, BY A LINK THAT WORKS ONCE. ``/accounts page`` runs
+``setu page-link`` in the person's folder and sends what it prints:
+Setu's page for that folder alone, opened on the first device within ten
+minutes (Setu's people.py). Only for a folder of their own -- a shared
+one is the owner's, and has the owner's page. The owner turns every
+person's page off in one place, their own Setu (``setu config
+people-page off``), and the link is not even made then.
 
 ONE SIGN-IN AT A TIME PER PERSON, for ten minutes. A new ``/connect``
 replaces one that is waiting. The outcome comes back as the reply to the
@@ -159,6 +168,8 @@ class AccountDesk:
         program = self._program()
         if program is None:
             return "Accounts aren't available here right now (no Setu on this computer)."
+        if word == "/accounts" and [w.lower() for w in rest[:1]] == ["page"]:
+            return await self._page(program, home, own if may_lock is None else may_lock)
         if word == "/accounts":
             return await self._list(program, home, narrowed, self.keys.key_for(actor))
         if not own:
@@ -204,6 +215,26 @@ class AccountDesk:
                                                      if lock.get("open")
                                                      else ": send /unlock to open it."))
         return "Connected for you here:\n" + "\n".join(lines) + state
+
+    async def _page(self, program: str, home: Path, own_folder: bool) -> str:
+        if not own_folder:
+            return ("Your accounts here are in the owner's own folder, so there's no page "
+                    "of yours for them. /accounts lists them.")
+        if not await _people_page_on(program):
+            return ("The owner has turned this page off. /accounts and /connect still "
+                    "work here.")
+        code, out, err = await _run([program, "page-link", "--json"], home)
+        try:
+            url = json.loads(out)["url"] if code == 0 else None
+        except (ValueError, KeyError, TypeError):
+            url = None
+        if url is None:
+            self.log(f"dvara: accounts page: {(err or out).strip()[-300:]}")
+            return ("Your accounts page can't be reached from your phone yet: the owner "
+                    "needs to give Setu's page an address (SETU_PAGE_URL).")
+        return (f"Your accounts page:\n\n{url}\n\nIt opens once, on the first device, "
+                "within 10 minutes. That device then stays on your page until you press "
+                "Close there. Only your own accounts are on it.")
 
     # ---- /disconnect ------------------------------------------------------------
 
@@ -445,6 +476,20 @@ def _env(home: Path, key: str | None = None) -> dict[str, str]:
     if key:
         env["SETU_VAULT_KEY"] = key
     return env
+
+
+async def _people_page_on(program: str) -> bool:
+    """The owner's switch for people's pages, read in the owner's own Setu
+    (``setu config people-page``). On unless it says off."""
+    env = {k: v for k, v in os.environ.items() if k != "SETU_HOME"}
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            program, "config", "people-page", stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL, env=env)
+        out, _ = await asyncio.wait_for(proc.communicate(), ANSWER_WITHIN)
+    except (OSError, TimeoutError):
+        return True        # Setu's page refuses on its own when it is off
+    return out.decode().strip().split(":")[-1].strip().lower() != "off"
 
 
 def owners_client_file(program: str | None = None) -> str | None:

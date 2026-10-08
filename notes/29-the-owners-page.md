@@ -172,11 +172,64 @@ now runs `node --check` on it.
   holds the door's token and every conversation's lock, and the page
   would stop whenever the door did.
 
+## Files and schedules
+
+Each person has a folder per agent (`state/work/<person>/<agent>`,
+note 25), and their schedules live in Samay. The page shows both, on
+the same line as the runs.
+
+**FILES BY NAME FOR EVERYONE, OPENED ONLY FOR YOU.** Every folder is
+listed: the name, size and date of each file, newest first, and the
+folder's total. An owner whose disk is filling needs to know whose
+folder is doing it. Only your own files open on the page, as text. The
+walls are `/file`'s from the chat (files.py): a name that leaves the
+folder, a name under a dot (`.yantra/`, the agent's bookkeeping) and a
+name that isn't there all get the same `no such file`, so a refusal
+says nothing about what is out there.
+
+**SCHEDULES IN SAMAY'S WORDS.** The page asks `samay list --json` (the
+program from `--samay`, `$DVARA_SAMAY`, or PATH) and shows each
+person's schedules as Samay says them: the sentence with its next
+times, when it runs next, whether it is paused and why, and how the last
+run ended. What a schedule asks the agent to do is the person's words,
+so it is on the page only for your own schedules. A schedule whose owner
+the door doesn't serve isn't shown. Changing one stays on Samay's page,
+which is linked from here. No Samay on the computer is a sentence on the
+page, not an error.
+
+Live, two schedules and a folder each for the owner and the guest
+(`examples/actors.toml`):
+
+```
+$ curl -s -H "Authorization: Bearer …" http://127.0.0.1:8799/api/schedules
+{"samay": {"found": true, "why": null, "page": null},
+ "schedules": [
+  {"person": "owner", "agent": "scribe",
+   "sentence": "at 08:00, Mon–Fri -- next: Thu 8 Oct 08:00, Fri 9 Oct 08:00, …",
+   "next_at": "2026-10-08T12:00:00+00:00", "last": null,
+   "prompt": "add basil to the shopping list"},
+  {"person": "guest", "agent": "scribe",
+   "sentence": "every 3 hours -- next: Thu 8 Oct 02:05, 05:05, 08:05 …",
+   "next_at": "2026-10-08T06:05:29+00:00", "last": null, "prompt": null}]}
+
+$ curl -s … "/api/file?agent=scribe&path=notes/shopping.md"
+{"agent": "scribe", "path": "notes/shopping.md", "size": 18,
+ "text": "Milk, eggs, basil\n", "binary": false, "truncated": false}
+
+$ curl -s … "/api/file?agent=scribe&path=../../guest/scribe/journal.txt"
+{"detail": "no such file"}
+```
+
+The guest's `journal.txt` is on the page as a name and 24 bytes. Its
+words aren't.
+
 ## What is not here yet
 
 * ~~**The owner's approvals and held turns, answered in the browser.**~~
   Above: [answering your own](#answering-your-own-through-the-door).
-* **Each person's files and schedules**: names, sizes and dates for
-  everyone; contents only for the owner's own.
-* **Started by Sarathi** beside the door, and linked from Sarathi's home
-  page.
+* ~~**Each person's files and schedules**~~: above, [files and
+  schedules](#files-and-schedules).
+* ~~**Started by Sarathi** beside the door~~: `sarathi up` starts it, and
+  Sarathi's home page links it.
+* **A file that isn't text** opens nowhere on the page. `/file NAME` in
+  the chat sends it.

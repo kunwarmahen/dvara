@@ -165,8 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "started this one")
 
     page = subs.add_parser(
-        "page", help="the owner's page: people, agents, runs and spending, "
-                     "and your own questions answered, in a browser. Answers go "
+        "page", help="the owner's page: people, agents, runs, spending, each "
+                     "person's files and schedules, and your own questions "
+                     "answered, in a browser. Answers go "
                      "to the running door: set DVARA_TOKEN (and DVARA_URL if it "
                      "is not where `dvara status` says)")
     page.add_argument("--as", dest="owner", default="owner",
@@ -426,8 +427,10 @@ def _page(args) -> int:
 
     state = Path(args.state).expanduser()
     try:
+        # `dvara --samay PATH page` names the program schedules are read with
+        samay = args.samay if args.samay not in (None, "on", "off") else None
         api = Api(root=Path(args.root).expanduser(), actors=Path(args.actors).expanduser(),
-                  state=state, owner=args.owner)
+                  state=state, owner=args.owner, samay=samay)
         server = PageServer(api, page_token(state), host=args.host, port=args.port)
     except (ConfigProblem, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)

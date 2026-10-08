@@ -204,3 +204,16 @@ select {
   font: inherit; font-size: 13px; flex: 1 1 180px; min-width: 0; padding: 4px 8px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); color: var(--ink);
 }
+
+/* files and schedules */
+.file-list { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 2px;
+             max-height: 260px; overflow: auto; }
+.file-list li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.file-list .name { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.file-list button.name { background: none; border: 0; padding: 0; color: var(--accent);
+                         cursor: pointer; text-align: left; text-decoration: underline; }
+.file-list .when { color: var(--ink-3); white-space: nowrap; }
+.file-view { margin-top: 12px; }
+.file-view pre { margin: 8px 0 0; max-height: 480px; overflow: auto; font-family: var(--mono);
+                 font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }

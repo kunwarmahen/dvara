@@ -342,3 +342,113 @@ def test_the_pages_script_parses():
     script = files("dvara").joinpath("static", "page.js")
     done = subprocess.run([node, "--check", str(script)], capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
+
+
+# ---- files and schedules ----------------------------------------------------------------
+#
+# The same bias, for files: the owner may see that Priya has a 4 KB
+# "diary.txt" with her agent -- whose disk it fills -- but not what it says.
+
+SAMAY = """\
+#!{python}
+import json, sys
+if sys.argv[1] == "status":
+    print(json.dumps({{"serving": True, "url": "http://127.0.0.1:8780/"}}))
+elif sys.argv[1] == "list":
+    print(json.dumps([
+        {{"id": "s1", "owner": "priya", "agent": "greeter", "prompt": "read my diary aloud",
+         "sentence": "every day at 7:00", "state": "active", "paused_because": "",
+         "next_at": "2026-10-07T11:00:00+00:00",
+         "last_run": {{"outcome": "ok", "ended_at": "2026-10-06T11:00:05+00:00"}}}},
+        {{"id": "s2", "owner": "owner", "agent": "greeter", "prompt": "water the garden",
+         "sentence": "every 3 hours", "state": "active", "paused_because": "",
+         "next_at": "2026-10-06T18:00:00+00:00", "last_run": None}},
+        {{"id": "s3", "owner": "stranger", "agent": "x", "prompt": "not served here",
+         "sentence": "hourly", "state": "active", "next_at": None, "last_run": None}}]))
+"""
+
+
+@pytest.fixture
+def folders(door):
+    work = door["state"] / "work"
+    (work / "priya" / "greeter").mkdir(parents=True)
+    (work / "priya" / "greeter" / "diary.txt").write_text("dear diary, my secret")
+    (work / "owner" / "greeter" / "notes").mkdir(parents=True)
+    (work / "owner" / "greeter" / "notes" / "garden.md").write_text("tomatoes: watered")
+    (work / "owner" / "greeter" / "picture.bin").write_bytes(b"\xff\xd8\xff\x00")
+    (work / "owner" / "greeter" / ".yantra").mkdir()
+    (work / "owner" / "greeter" / ".yantra" / "mcp.json").write_text("{}")
+    (door["state"] / "outside.txt").write_text("not in any folder")
+    return work
+
+
+@pytest.fixture
+def samay(tmp_path):
+    import sys
+    program = tmp_path / "samay"
+    program.write_text(SAMAY.format(python=sys.executable))
+    program.chmod(0o755)
+    return str(program)
+
+
+def test_every_folder_is_listed_by_name_size_and_date(api, folders):
+    found = {(f["person"], f["agent"]): f for f in api.folders()}
+    priya = found[("priya", "greeter")]
+    assert [r["path"] for r in priya["files"]] == ["diary.txt"]
+    assert priya["files"][0]["size"] == len("dear diary, my secret")
+    assert priya["owner"] is False
+    assert "dear diary" not in json.dumps(api.folders())
+
+
+def test_the_agents_own_bookkeeping_is_not_listed(api, folders):
+    mine = next(f for f in api.folders() if f["person"] == "owner")
+    assert ".yantra/mcp.json" not in [r["path"] for r in mine["files"]]
+    assert mine["count"] == 2
+
+
+def test_the_owner_opens_their_own_file(api, folders):
+    f = api.handle("GET", "/api/file", {"agent": ["greeter"], "path": ["notes/garden.md"]})[1]
+    assert f["text"] == "tomatoes: watered" and f["binary"] is False
+
+
+def test_a_file_that_is_not_text_is_said_not_shown(api, folders):
+    f = api.open_file("greeter", "picture.bin")
+    assert f["binary"] is True and f["text"] is None
+
+
+@pytest.mark.parametrize("agent, path", [
+    ("greeter", "../../priya/greeter/diary.txt"),       # somebody else's, by walking
+    ("../priya/greeter", "diary.txt"),                  # by naming their folder
+    ("greeter", "../../../outside.txt"),
+    ("greeter", ".yantra/mcp.json"),
+    ("greeter", "nothing.txt"),
+    ("", "diary.txt"),
+])
+def test_nobody_elses_file_opens_and_every_refusal_reads_the_same(api, folders,
+                                                                   agent, path):
+    with pytest.raises(Exception) as caught:
+        api.open_file(agent, path)
+    assert caught.value.code == 404 and caught.value.detail == "no such file"
+
+
+def test_schedules_are_samays_sentence_with_words_only_for_the_owner(door, folders,
+                                                                     samay):
+    made = Api(**door, owner="owner", now=lambda: NOW, samay=samay)
+    data = made.schedules()
+    made.close()
+    assert data["samay"] == {"found": True, "why": None, "page": "http://127.0.0.1:8780/"}
+    by = {s["id"]: s for s in data["schedules"]}
+    assert set(by) == {"s1", "s2"}                    # nobody this door does not serve
+    assert by["s1"]["sentence"] == "every day at 7:00"
+    assert by["s1"]["prompt"] is None and "diary" not in json.dumps(data)
+    assert by["s2"]["prompt"] == "water the garden"
+    assert by["s1"]["last"] == {"outcome": "ok", "at": "2026-10-06T11:00:05+00:00"}
+    assert data["schedules"][0]["person"] == "owner"   # yours first
+
+
+def test_no_samay_is_said_on_the_page_not_an_error(api, monkeypatch):
+    monkeypatch.setenv("PATH", "/nonexistent")
+    monkeypatch.delenv("DVARA_SAMAY", raising=False)
+    data = api.schedules()
+    assert data["samay"]["found"] is False and "--samay" in data["samay"]["why"]
+    assert data["schedules"] == []

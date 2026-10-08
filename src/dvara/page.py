@@ -9,6 +9,9 @@ those at a time, in a terminal. This page shows them together:
     GET /api/people          everyone in the actors file, with today's spend
     GET /api/agents          the agents in the root
     GET /api/runs?actor=&agent=&limit=N   newest first
+    GET /api/files           each person's folder per agent: names, sizes, dates
+    GET /api/file?agent=A&path=P          one of the owner's own files, as text
+    GET /api/schedules       each person's schedules, as Samay says them
     GET  /api/waiting        the owner's questions and held turns, from the door
     POST /api/asks/ID        {approve: true|false}
     POST /api/holds/ID       {answers: {call id: true|false|"reason"}}
@@ -43,6 +46,20 @@ is theirs: a run's ``message`` and ``reply`` are on the page only for the
 owner's own runs (``--as``). The ledger holds everyone's words; this
 page does not put them on a screen. The same for how to reach someone:
 channels are listed by kind (``telegram``), never by their id.
+
+FILES BY NAME FOR EVERYONE, OPENED ONLY FOR THE OWNER. Each person has a
+folder per agent (``state/work/<person>/<agent>``). The page lists every
+folder's files -- name, size, when it changed -- because an owner with a
+full disk needs to know whose it is. It opens only the owner's own, with
+the same walls as ``/file`` in the chat (files.py): a name that leaves
+the folder, or starts with a dot, is not found.
+
+SCHEDULES IN SAMAY'S WORDS. Each person's schedules come from ``samay
+list --json`` (the ``samay`` program: ``--samay``, ``$DVARA_SAMAY``, or
+on PATH), shown as Samay's own sentence with the next time and how the
+last run ended. What a schedule asks the agent to do is the person's
+words, so like a run's message it is on the page for the owner's own
+schedules only. Changing a schedule is Samay's page, linked from here.
 
 UNPRICED IS COUNTED, NOT ROUNDED. A turn on a local model has no price,
 and spending says how many such turns there were rather than adding
@@ -83,6 +100,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
+from dvara import files as person_files
 from dvara import money
 from dvara.actors import OWN_SETU, Actor, ActorBook
 from dvara.errors import ConfigProblem
@@ -98,6 +116,11 @@ MAX_BODY = 64 * 1024
 ENV_DOOR = "DVARA_URL"
 #: A held turn answered runs the rest of the turn: minutes, on a slow model.
 RESUME_TIMEOUT = 600.0
+#: The most files listed for one folder; the rest are counted.
+FILES_AT_MOST = 200
+#: The most of one file the page shows.
+SHOW_AT_MOST = 256 * 1024
+ENV_SAMAY = "DVARA_SAMAY"
 
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"),
           "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -208,9 +231,11 @@ class Api:
     straight, and the handler below stays a thin skin."""
 
     def __init__(self, *, root: Path, actors: Path, state: Path, owner: str,
-                 now=None, door: Door | None = None) -> None:
+                 now=None, door: Door | None = None, samay: str | None = None) -> None:
         self.root, self.actors, self.state = root, actors, state
         self.owner = owner
+        #: The samay program to read schedules with (None: found on PATH).
+        self.samay = samay
         self._door = door
         self._now = now or (lambda: datetime.now(UTC))
         self._runs: RunStore | None = None
@@ -265,6 +290,13 @@ class Api:
             agent = (query.get("agent") or [None])[0] or None
             limit = _int((query.get("limit") or ["50"])[0], "limit")
             return 200, {"runs": self.recent(actor, agent, max(1, min(limit, MAX_RUNS)))}
+        if parts == ["files"]:
+            return 200, {"folders": self.folders()}
+        if parts == ["file"]:
+            return 200, self.open_file((query.get("agent") or [""])[0],
+                                       (query.get("path") or [""])[0])
+        if parts == ["schedules"]:
+            return 200, self.schedules()
         raise ApiError(404, f"no such endpoint: GET /api/{'/'.join(parts)}")
 
     def _answer(self, kind: str, item: str, body: dict) -> tuple[int, dict[str, Any]]:
@@ -326,6 +358,100 @@ class Api:
             "week": {"spent": self.runs.spent_since(actor.id, week),
                      "turns": week_turns, "unpriced": week_unpriced},
         }
+
+    # ---- files and schedules -------------------------------------------------------
+
+    def folders(self) -> list[dict[str, Any]]:
+        """Each person's folder per agent: the files in it, newest first."""
+        work = self.state / "work"
+        out = []
+        for person in self._book().ids():
+            base = work / person
+            agents = sorted(p for p in base.iterdir() if p.is_dir()) \
+                if base.is_dir() else []
+            for folder in agents:
+                if folder.name.startswith("."):
+                    continue
+                found = person_files._theirs(folder)
+                rows = []
+                for path in found[:FILES_AT_MOST]:
+                    st = path.stat()
+                    rows.append({"path": str(path.relative_to(folder)), "size": st.st_size,
+                                 "modified": datetime.fromtimestamp(st.st_mtime, UTC)
+                                 .isoformat(timespec="seconds")})
+                out.append({"person": person, "agent": folder.name,
+                            "owner": person == self.owner, "files": rows,
+                            "count": len(found),
+                            "bytes": sum(p.stat().st_size for p in found)})
+        return out
+
+    def open_file(self, agent: str, path: str) -> dict[str, Any]:
+        """One of the owner's own files, as text -- nobody else's."""
+        if not agent or "/" in agent or agent.startswith("."):
+            raise ApiError(404, "no such file")
+        found = person_files.pick(self.state / "work" / self.owner / agent, path)
+        if found is None:
+            raise ApiError(404, "no such file")
+        size = found.stat().st_size
+        with found.open("rb") as handle:
+            data = handle.read(SHOW_AT_MOST)
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = None
+        return {"agent": agent, "path": path, "size": size,
+                "text": text, "binary": text is None, "truncated": size > SHOW_AT_MOST}
+
+    def schedules(self) -> dict[str, Any]:
+        """Each person's schedules, as Samay says them."""
+        import shutil
+        import subprocess
+
+        program = self.samay or os.environ.get(ENV_SAMAY) or shutil.which("samay")
+        if not program:
+            return {"samay": {"found": False, "why": "Samay isn't on this computer "
+                              "(start dvara page with --samay PATH to name it)",
+                              "page": None}, "schedules": []}
+        try:
+            listed = subprocess.run([program, "list", "--json"], capture_output=True,
+                                    text=True, timeout=30)
+            cards = json.loads(listed.stdout) if listed.returncode == 0 else None
+            status = subprocess.run([program, "status", "--json"], capture_output=True,
+                                    text=True, timeout=30)
+            page = (json.loads(status.stdout) or {}).get("url") \
+                if status.returncode == 0 else None
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            return {"samay": {"found": False, "page": None,
+                              "why": f"Samay didn't answer ({type(exc).__name__})"},
+                    "schedules": []}
+        if not isinstance(cards, list):
+            why = (listed.stderr or "").strip().splitlines()[-1:] or ["no answer"]
+            return {"samay": {"found": False, "page": None,
+                              "why": f"Samay didn't list its schedules: {why[0]}"},
+                    "schedules": []}
+        people = set(self._book().ids())
+        rows = []
+        for card in cards:
+            person = card.get("owner") if isinstance(card, dict) else None
+            if person not in people:
+                continue           # somebody this door does not serve
+            last = card.get("last_run") or {}
+            rows.append({
+                # a direct-road schedule names its package by path: the name is enough
+                "id": card.get("id"), "person": person,
+                "agent": Path(str(card.get("agent") or "")).name,
+                "sentence": card.get("sentence") or "", "state": card.get("state") or "",
+                "paused_because": card.get("paused_because") or "",
+                "next_at": card.get("next_at"),
+                "last": ({"outcome": last.get("outcome"),
+                          "at": last.get("ended_at") or last.get("due_at")}
+                         if last else None),
+                # what it asks the agent to do is the person's own words
+                "prompt": card.get("prompt") if person == self.owner else None,
+            })
+        rows.sort(key=lambda r: (r["person"] != self.owner, r["person"],
+                                 r["next_at"] or "~"))
+        return {"samay": {"found": True, "why": None, "page": page}, "schedules": rows}
 
     def agents(self) -> list[dict[str, Any]]:
         try:

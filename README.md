@@ -353,6 +353,8 @@ A person with a folder of their own -- or one the owner let them manage
 /connect gmail                 they get Google's link, sign in on their phone, and
                                send back the address of the page that won't load
 /accounts                      what's connected for them
+/accounts page                 a link to their own folder's page in Setu: once, on the
+                               first device, for ten minutes (notes/31)
 /disconnect gmail:personal     revoke and forget
 /lock, /unlock [days]          a passphrase only they know (notes/21); a folder of
                                their own only -- a shared one is locked at the computer
@@ -684,6 +686,14 @@ refused ones in red.
   the button in your chat. Start the page with `DVARA_TOKEN` set (the
   door's token, kept server-side) and, if the door isn't where `dvara
   status` says, `DVARA_URL`. Nobody else's questions appear.
+* **Each person's files**, folder by folder with each agent: names, sizes
+  and dates. Only your own open on the page, as text, inside the same
+  walls as `/file` in the chat.
+* **Each person's schedules**, in Samay's own words: the sentence, when it
+  runs next, and how the last run ended. What a schedule asks for is
+  shown only for yours. The page reads them with `samay list --json`
+  (`dvara --samay PATH page`, `$DVARA_SAMAY`, or `samay` on PATH), and links
+  to Samay's page for changes.
 * **Nothing else changes from it.** To change who is served or what
   they may spend, edit the actors file as before.
 * **Its own token.** Every `/api` call needs `$DVARA_PAGE_TOKEN`, or the one
@@ -928,7 +938,7 @@ print(reply.text, reply.cost_usd)
 | module | what it holds |
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
-| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)) |
+| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
@@ -950,7 +960,7 @@ print(reply.text, reply.cost_usd)
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
-| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; the owner's own questions and held turns answered through the running door; its own token ([notes/29](notes/29-the-owners-page.md)) |
+| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` and `--sparsh` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

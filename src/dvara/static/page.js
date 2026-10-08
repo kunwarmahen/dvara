@@ -296,6 +296,119 @@ async function drawWaiting() {
     : [h("p.empty", {}, "Nothing is waiting for you.")]));
 }
 
+// -- schedules and files -------------------------------------------------------------
+
+function size(n) {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function soon(iso) {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const s = (then - Date.now()) / 1000;
+  if (s < 0) return "due now";
+  if (s < 5400) return `in ${Math.max(1, Math.round(s / 60))} minutes`;
+  if (s < 129600) return `in ${Math.round(s / 3600)} hours`;
+  return new Date(then).toLocaleString();
+}
+
+function scheduleCard(sc) {
+  const last = sc.last ? `last ${sc.last.outcome || "?"}` +
+    (sc.last.at ? ` ${ago(sc.last.at)}` : "") : "not run yet";
+  return h("article.run", {},
+    h("div.run-head", {},
+      h("span.run-who", {}, `${sc.person} · ${sc.agent || "?"}`),
+      h("span.run-meta", {}, sc.state === "active"
+        ? `next ${soon(sc.next_at)}` : sc.state)),
+    h("div.who", {}, sc.sentence),
+    sc.paused_because ? h("div.warn", {}, `Paused: ${sc.paused_because}`) : null,
+    h("div.meta", {}, last),
+    sc.prompt !== null && sc.prompt !== undefined
+      ? h("div.words", {}, sc.prompt)
+      : h("div.private", {}, "What it asks is theirs."));
+}
+
+async function drawSchedules() {
+  const data = await api("/api/schedules");
+  const box = document.getElementById("schedules");
+  document.getElementById("n-schedules").textContent =
+    data.schedules.length ? `${data.schedules.length}` : "";
+  const rows = [];
+  if (!data.samay.found) {
+    rows.push(h("p.empty", {}, data.samay.why));
+  } else if (!data.schedules.length) {
+    rows.push(h("p.empty", {}, "Nobody here has a schedule."));
+  }
+  rows.push(...data.schedules.map(scheduleCard));
+  if (data.samay.page) {
+    rows.push(h("p.meta", {}, "Change them on ",
+      h("a", { href: data.samay.page, target: "_blank", rel: "noopener noreferrer" },
+        "Samay's page"), "."));
+  }
+  box.replaceChildren(...rows);
+}
+
+let filesSeen = "";
+
+async function drawFiles() {
+  const data = await api("/api/files");
+  const key = JSON.stringify(data.folders);
+  if (key === filesSeen) return;          // a file open below stays open
+  filesSeen = key;
+  const box = document.getElementById("files");
+  const total = data.folders.reduce((n, f) => n + f.count, 0);
+  document.getElementById("n-files").textContent = total ? `${total}` : "";
+  if (!data.folders.length) {
+    box.replaceChildren(h("p.empty", {}, "No agent has a folder for anyone yet."));
+    return;
+  }
+  box.replaceChildren(...data.folders.map(folderCard));
+}
+
+function folderCard(f) {
+  const list = h("ul.file-list", {}, f.files.map((file) => {
+    const name = f.owner
+      ? h("button.name", { type: "button", title: "open it here" }, file.path)
+      : h("span.name", {}, file.path);
+    if (f.owner) name.addEventListener("click", () => openFile(f.agent, file.path));
+    return h("li", {}, name,
+      h("span.when", { title: file.modified }, `${size(file.size)} · ${ago(file.modified)}`));
+  }));
+  return h("article.card", {},
+    h("div.card-head", {},
+      h("h3", {}, f.person, f.owner ? h("span.you", {}, "you") : null),
+      h("span.chip", {}, f.agent)),
+    h("div.meta", {}, f.count
+      ? `${f.count} file${f.count === 1 ? "" : "s"}, ${size(f.bytes)}`
+      : "empty"),
+    f.count ? list : null,
+    f.count > f.files.length
+      ? h("div.meta", {}, `The newest ${f.files.length} of ${f.count}.`) : null);
+}
+
+async function openFile(agent, path) {
+  const view = document.getElementById("file-view");
+  view.hidden = false;
+  const close = h("button.btn", { type: "button" }, "Close");
+  close.addEventListener("click", () => { view.hidden = true; });
+  const head = h("div.card-head", {}, h("h3", {}, `${agent} / ${path}`), close);
+  try {
+    const q = `agent=${encodeURIComponent(agent)}&path=${encodeURIComponent(path)}`;
+    const f = await api(`/api/file?${q}`);
+    view.replaceChildren(head,
+      h("div.meta", {}, size(f.size) + (f.truncated ? " — the first 256 KB" : "")),
+      f.binary ? h("p.empty", {}, "Not text, so it isn't shown here. Send /file " +
+                   `${path} in your chat to get it.`)
+               : h("pre", {}, f.text));
+  } catch (err) {
+    view.replaceChildren(head, h("p.warn", {}, `Couldn't open it: ${err.message}`));
+  }
+  view.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 // -- the loop -------------------------------------------------------------------
 
 async function refresh() {
@@ -310,6 +423,7 @@ async function refresh() {
     drawAgents(agents.agents);
     await drawRuns();
     await drawWaiting();
+    await Promise.all([drawSchedules(), drawFiles()]);
     document.getElementById("updated").textContent =
       `Updated ${new Date().toLocaleTimeString()}`;
   } catch (err) {
