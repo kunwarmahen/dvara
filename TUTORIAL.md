@@ -1012,6 +1012,19 @@ On the phone emulator-5554: tap button "Send SMS" in com.google.android.apps.mes
 
 Press **No** and nothing is sent; the agent tells you so.
 
+**Try it without Telegram first.** `dvara say` runs one turn in the
+terminal, and its questions come to the terminal too:
+
+```bash
+printf '[actor.owner]\nphone = true\n' > /tmp/phone-actors.toml
+dvara --root examples/agents --actors /tmp/phone-actors.toml --state /tmp/phone-state \
+  --provider ollama --model gemma4:26b --ask --sparsh /path/to/sparsh \
+  say --actor owner --agent phone "Text 555-0123 from my phone: hello"
+```
+
+It stops at `Do this on the phone? … "Send SMS"`; type `n` and nothing
+is sent. Sparsh's SETUP.md, Part T, checks the phone itself first.
+
 Only one person can be the phone's: the phone is somebody's, with their
 messages on it, so two people marked `phone = true` is an error. A
 scheduled run never gets the phone, because nobody would be there to
