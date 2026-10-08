@@ -128,6 +128,7 @@ still says "no longer waiting".
 from __future__ import annotations
 
 import asyncio
+import base64
 import secrets
 from contextlib import suppress
 from collections.abc import Awaitable, Callable, Sequence
@@ -169,6 +170,10 @@ class Ask:
     #: shared, because it is the same question and the first answer on
     #: any of them settles it.
     to: str | None = None
+    #: A picture the question needs, PNG bytes: a phone's screen with the
+    #: spot a tap by position would hit ringed (Yantra's card_picture).
+    #: The person answers by looking; None for a question in words.
+    picture: bytes | None = field(default=None, repr=False)
 
     def as_dict(self) -> dict:
         """The wire shape. One place, so a channel and the HTTP surface agree.
@@ -177,10 +182,14 @@ class Ask:
         address is for the notifier being handed the question, not for
         everyone who can list what is pending.
         """
-        return {"id": self.id, "actor": self.actor, "agent": self.agent,
-                "thread": self.thread, "tool": self.tool,
-                "summary": self.summary,
-                "asked_at": self.asked_at.isoformat(timespec="seconds")}
+        out = {"id": self.id, "actor": self.actor, "agent": self.agent,
+               "thread": self.thread, "tool": self.tool,
+               "summary": self.summary,
+               "asked_at": self.asked_at.isoformat(timespec="seconds")}
+        if self.picture is not None:
+            # only ever listed to the person it was put to (/asks?actor=)
+            out["picture"] = base64.b64encode(self.picture).decode()
+        return out
 
 
 @dataclass(frozen=True)
@@ -293,7 +302,8 @@ class AskDesk:
     async def put(self, *, actor: str, agent: str, thread: str, tool: str,
                   summary: str,
                   reach: Sequence[tuple[str, str]] = (),
-                  timeout: float | None = None) -> Answer:
+                  timeout: float | None = None,
+                  picture: bytes | None = None) -> Answer:
         """Ask, wait, and come back with a decision either way.
 
         Never raises for anything a person or a channel could have caused:
@@ -324,7 +334,7 @@ class AskDesk:
         limit = (self.timeout if timeout is None
                  else max(0.0, min(self.timeout, timeout)))
         ask = Ask(id=secrets.token_urlsafe(16), actor=actor, agent=agent,
-                  thread=thread, tool=tool, summary=summary)
+                  thread=thread, tool=tool, summary=summary, picture=picture)
         loop = asyncio.get_running_loop()
         future: asyncio.Future[tuple[bool, str | None]] = loop.create_future()
         self._waiting[ask.id] = (ask, future, loop)

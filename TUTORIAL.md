@@ -1048,6 +1048,14 @@ dvara --root examples/agents --actors /tmp/phone-actors.toml --state /tmp/phone-
 It stops at `Do this on the phone? … "Send SMS"`; type `n` and nothing
 is sent. Sparsh's SETUP.md, Part T, checks the phone itself first.
 
+**A tap you answer by looking.** On a screen the phone can't describe
+as a list (Settings' About page), the agent taps a spot on a screenshot,
+and every such tap asks. The question comes with the picture, the spot
+ringed in red: in Telegram as a photo just above the buttons, on your
+page above the words, and at the terminal as a file whose path is
+printed. Say yes only if the ring is on what you asked for
+([notes/32](notes/32-the-ring-in-the-chat.md)).
+
 Only one person can be the phone's: the phone is somebody's, with their
 messages on it, so two people marked `phone = true` is an error. A
 scheduled run never gets the phone, because nobody would be there to

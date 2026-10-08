@@ -465,6 +465,25 @@ def test_a_question_goes_to_the_person_with_two_buttons_on_it(make_bot):
     assert [b["callback_data"] for b in buttons] == ["y:abc123", "n:abc123"]
 
 
+def test_a_question_with_a_picture_shows_it_first_and_the_buttons_under_it(make_bot):
+    # A tap by position is answered by looking where the ring is.
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot._deliver_ask(_ask(tool="mcp__sparsh__confirm",
+                                      picture=b"\x89PNG ringed")))
+    assert [m for m, _ in fake.calls] == ["sendPhoto", "sendMessage"]
+    photo = fake.of("sendPhoto")[0]["multipart"]
+    assert "\x89PNG ringed" in photo and str(KNOWN) in photo
+    assert "inline_keyboard" in fake.calls[1][1]["reply_markup"]
+
+
+def test_a_question_in_words_sends_no_picture(make_bot):
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot._deliver_ask(_ask()))
+    assert fake.of("sendPhoto") == []
+
+
 def test_a_question_is_delivered_to_the_person_not_to_the_thread(make_bot):
     # The turn is running in a group chat; the question still arrives in
     # the person's own chat, because the address rides on the Ask.

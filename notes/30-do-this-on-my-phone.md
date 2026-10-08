@@ -109,5 +109,8 @@ stops the start. 676 tests before, 689 after.
   now.
 * **A phone in a scheduled run.** That waits on a better answer to
   "held, and nobody there" than refusing.
+* ~~**A question you answer by looking.**~~ A tap by position's question
+  carries the screen with the spot ringed, to every channel
+  ([note 32](32-the-ring-in-the-chat.md)).
 * **The door in containers.** Sarathi's containers can't reach a phone
   on a cable; that waits for pairing over Wi-Fi.

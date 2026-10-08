@@ -217,3 +217,13 @@ select {
 .file-view pre { margin: 8px 0 0; max-height: 480px; overflow: auto; font-family: var(--mono);
                  font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 [hidden] { display: none !important; }
+
+/* a phone's screen on a question, the spot a tap lands ringed */
+.ask-picture {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}

@@ -74,6 +74,9 @@ from yantra import (
     yolo,
 )
 
+import base64
+import binascii
+
 from dvara import patience as waiting
 from dvara.asks import AskDesk
 from dvara.patience import Patience
@@ -338,7 +341,7 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         answer = await desk.put(actor=actor, agent=agent, thread=thread,
                                 tool=request.tool_name,
                                 summary=request.summary, reach=reach,
-                                timeout=deadline)
+                                timeout=deadline, picture=_png(request))
     finally:
         # Spent in a finally: a question the caller hung up on still kept
         # the person waiting for as long as it was up.
@@ -479,3 +482,15 @@ def _no_route(request: PermissionRequest, mode: str,
             f"read-only tools and there is nobody available to ask. Say what "
             f"you would have done and why, and carry on with what you can "
             f"reach.")
+
+
+def _png(request) -> bytes | None:
+    """The card's picture as bytes, for the person's channel (asks.Ask):
+    a PNG Yantra attached to the question, or None. Never the model's."""
+    image = getattr(request, "picture", None)
+    if image is None or getattr(image, "media_type", "") != "image/png":
+        return None
+    try:
+        return base64.b64decode(image.data, validate=True)
+    except (binascii.Error, ValueError, TypeError):
+        return None

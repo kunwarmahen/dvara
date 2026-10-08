@@ -810,6 +810,11 @@ class TelegramBot:
         head = f"{ask.agent} wants to run {ask.tool}:\n\n"
         question = head + elide(ask.summary, MESSAGE_LIMIT - utf16_len(head))
         chat = int(ask.to)
+        if ask.picture is not None:
+            # THE PICTURE FIRST, THE BUTTONS UNDER IT: a tap by position is
+            # answered by looking at where the ring is (Yantra's note 123).
+            await self._send_photo(chat, ask.picture,
+                                   caption="The phone's screen: a tap lands where it is ringed.")
         sent = await self._send(
             chat, question,
             reply_markup={"inline_keyboard": [[
@@ -979,6 +984,16 @@ class TelegramBot:
                 return await self._api("sendDocument", upload=(
                     "document", (path.name, path.read_bytes())),
                     chat_id=chat, caption=caption)
+            finally:
+                self._pacer.sent(chat)
+
+    async def _send_photo(self, chat: int, png: bytes, *, caption: str):
+        """One picture into one chat, paced like a message."""
+        async with self._pacer.lock(chat):
+            await self._pacer.wait(chat)
+            try:
+                return await self._api("sendPhoto", upload=(
+                    "photo", ("screen.png", png)), chat_id=chat, caption=caption)
             finally:
                 self._pacer.sent(chat)
 

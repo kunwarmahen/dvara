@@ -10,6 +10,7 @@ what happens when there IS somebody, which is a gate that suspends.
 from __future__ import annotations
 
 import asyncio
+import base64
 
 from yantra import (
     DENIED,
@@ -19,6 +20,8 @@ from yantra import (
     denial_text,
     yolo,
 )
+
+from yantra.types import ImageBlock
 
 from dvara.asks import AskDesk
 from dvara.gate import Policy, stricter
@@ -116,6 +119,42 @@ def test_a_desk_is_what_turns_ask_into_a_question():
         desk.answer(desk.pending()[0].id, actor="owner", approve=True)
         assert await deciding is True
         assert wanted.reason is None
+
+    asyncio.run(go())
+
+
+def test_a_cards_picture_rides_on_the_question_to_the_person_only():
+    desk = AskDesk(timeout=5)
+    gate = gate_with_desk(desk)
+
+    async def go():
+        wanted = request(read_only=False, tool="mcp__sparsh__confirm")
+        wanted.picture = ImageBlock(media_type="image/png",
+                                    data=base64.b64encode(b"\x89PNG ringed").decode())
+        deciding = asyncio.create_task(adecide(gate, wanted))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        ask = desk.pending()[0]
+        assert ask.picture == b"\x89PNG ringed"
+        assert ask.as_dict()["picture"] == wanted.picture.data
+        desk.answer(ask.id, actor="owner", approve=False)
+        assert await deciding is False
+
+    asyncio.run(go())
+
+
+def test_a_question_in_words_carries_no_picture():
+    desk = AskDesk(timeout=5)
+    gate = gate_with_desk(desk)
+
+    async def go():
+        deciding = asyncio.create_task(adecide(gate, request(read_only=False)))
+        while not desk.pending():
+            await asyncio.sleep(0)
+        assert desk.pending()[0].picture is None
+        assert "picture" not in desk.pending()[0].as_dict()
+        desk.answer(desk.pending()[0].id, actor="owner", approve=False)
+        await deciding
 
     asyncio.run(go())
 

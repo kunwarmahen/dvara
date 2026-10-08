@@ -51,6 +51,7 @@ import contextlib
 import json
 import os
 import sys
+import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -557,6 +558,12 @@ def _ask_at_the_keyboard(desk: AskDesk):
     async def notify(ask: Ask) -> None:
         print(f"\n{ask.agent} wants to run {ask.tool}:", file=sys.stderr)
         print(f"  {ask.summary}", file=sys.stderr)
+        if ask.picture is not None:
+            # a terminal can't show it: a file the person can open
+            with tempfile.NamedTemporaryFile("wb", prefix="dvara-ask-", suffix=".png",
+                                             delete=False) as shot:
+                shot.write(ask.picture)
+            print(f"  the screen, the spot ringed: {shot.name}", file=sys.stderr)
         print("approve? [y/N] ", end="", file=sys.stderr, flush=True)
         typed = await _typed_line()
         # "terminal" is not a channel kind and never appears in
