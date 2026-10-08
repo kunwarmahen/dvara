@@ -125,7 +125,7 @@ conversation is let go a week after it ends while what it wrote stays
 where the person's chat can read it, and sent to them as a file when
 they ask; and with `--sparsh`, the phone on this machine works for its
 one person from their chat, with Send held for their button — covered
-by 689 tests. The API is not stable.
+by 705 tests. The API is not stable.
 
 ## The shape of it
 
