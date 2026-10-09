@@ -1056,6 +1056,12 @@ page above the words, and at the terminal as a file whose path is
 printed. Say yes only if the ring is on what you asked for
 ([notes/32](notes/32-the-ring-in-the-chat.md)).
 
+**Your own agent package.** The `phone` example lets the phone in. An
+agent of your own (Sarathi's `minder`, say) must too: if its `[tools]
+allow` lists tools, add `"mcp__sparsh__*"` to it. Without it that agent
+gets no phone at all, and a schedule on it is refused with that line,
+before you're asked to unlock anything.
+
 Only one person can be the phone's: the phone is somebody's, with their
 messages on it, so two people marked `phone = true` is an error. And
 it's off unless you start the door with `--sparsh`
@@ -1064,13 +1070,37 @@ it's off unless you start the door with `--sparsh`
 **On a schedule.** A scheduled run gets the phone only when its schedule
 says so: one your agent made in a chat that had the phone, or `samay add
 --phone`. Before it starts, the door looks at the phone. In your hand: it
-waits up to ten minutes, then skips. Locked: it asks you in your chat to
-unlock it, and waits the schedule's wait. Asleep: it wakes it. A Send the
+waits up to ten minutes, then skips. Locked with a PIN: it asks you in
+your chat to unlock it, and waits the schedule's wait. Asleep, or behind
+a swipe lock with no PIN: it wakes it and goes, without asking. A Send the
 schedule names when you accept it (*"send in Messages when the screen
 shows 555-0123"*) goes through by itself; anything else held is asked in
 your chat, and lapses if you don't answer in time
 ([notes/33](notes/33-the-phone-on-a-schedule.md)). Setting up the phone
 itself is in Sparsh's SETUP.md.
+
+**Test the locked-phone question by hand.** Make a schedule that works
+the phone, lock the phone, and run the schedule now:
+
+```bash
+samay add "On my phone, open Settings and tell me what the Battery row says." \
+  --when "at 08:00" --runner dvara --as owner --agent phone --phone --wait 5
+adb shell input keyevent KEYCODE_SLEEP         # lock it (a PIN must be set to be asked)
+samay run-now <the id samay printed>
+```
+
+Your chat gets *"Your phone is locked, and a schedule wants it now: …
+Unlock it and it will start; it waits 5 minutes."* Unlock it, and the
+run answers, on a real Nexus 6P:
+
+```
+ok   Your phone's Settings show the Battery row as: Battery — 99% · charging.
+```
+
+Leave it locked and after five minutes `samay runs` says `skipped: the
+phone stayed locked for 5 minutes after you were asked to unlock it`.
+With no PIN, nothing is asked and the run just goes. `samay rm <id>`
+when you're done, or it runs every morning.
 
 ---
 
