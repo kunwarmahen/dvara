@@ -527,6 +527,13 @@ class Service:
                 return Reply(text=f"{actor} has no phone this service can work: it "
                                   "needs --sparsh and phone = true for them",
                              run_id=None, agent=agent, actor=actor, stop_reason="refused")
+            if not works_phone(spec):
+                # Before the phone is looked at: a person asked to unlock it
+                # for a run that can't touch it gets up for nothing.
+                return Reply(text=f"{agent} can't work the phone: its package's [tools] "
+                                  "allow leaves out mcp__sparsh__* (add it, as "
+                                  "examples/agents/phone does)",
+                             run_id=None, agent=agent, actor=actor, stop_reason="refused")
             skip = await ready.ready(ready.through(self.sparsh),
                                      wait=wait or DEFAULT_SCHEDULE_WAIT,
                                      ask=self._asker(who), about=" ".join(text.split())[:120])
@@ -771,7 +778,7 @@ class Service:
         none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
-        phone = (self.sparsh is not None and who.phone
+        phone = (self.sparsh is not None and who.phone and works_phone(spec)
                  and (not is_unattended() or phone_run is not None))
         if not (accounts or schedules or phone):
             return None
@@ -1202,6 +1209,21 @@ class Service:
 
 
 # ---- small pure helpers ----------------------------------------------------
+
+
+def works_phone(spec: AgentSpec) -> bool:
+    """Whether this package lets Sparsh's tools in. A package's allow list
+    is complete (Yantra's admit_only): one that leaves out
+    ``mcp__sparsh__*`` hides every phone tool however the service was
+    started. Its turns then get no phone -- not a server and a prompt
+    about tools the model can't call, which on a real schedule had the
+    agent call one, read "no such tool", and tell its person the phone
+    wasn't connected, after they had unlocked it to let the run in."""
+    from yantra.tools.base import ToolRegistry
+
+    tools = ToolRegistry()
+    tools.admit_only(spec.tool_allow, spec.tool_deny)
+    return tools.admits("mcp__sparsh__look")
 
 
 def _copy(usage: Usage) -> Usage:

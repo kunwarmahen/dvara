@@ -187,6 +187,16 @@ class TestWhoGetsNone:
                                     unattended=True))
         assert phone_tools(service) == set() and started(sparsh[1]) == 0
 
+    def test_a_package_that_leaves_the_phone_out_gets_no_phone_and_no_word_of_one(
+            self, make_service, sparsh, phone_book, agents_root):
+        write_package(agents_root, "reader", body=(
+            '[agent]\nname = "reader"\nprompt = "prompt.md"\n'
+            '[tools]\nallow = ["web_fetch"]\n'))
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=phone_book)
+        asyncio.run(service.deliver(actor="owner", agent="reader", thread="t", text="hi"))
+        assert phone_tools(service) == set() and started(sparsh[1]) == 0
+        assert "BY NUMBER" not in service.scripted.requests[0]["system"]
+
     def test_a_service_started_without_it(self, make_service, sparsh, phone_book):
         service = make_service([says("ok")], actors=phone_book)
         asyncio.run(service.deliver(actor="owner", agent="greeter", thread="t", text="hi"))
@@ -258,6 +268,20 @@ class TestAScheduleWithThePhone:
         reply = asyncio.run(service.deliver(actor="guest", agent="greeter", thread="s",
                                             text="go", unattended=True, phone=True))
         assert reply.stop_reason == "refused" and "phone = true" in reply.text
+
+    def test_a_package_that_leaves_the_phone_out_is_refused_before_anyone_is_asked(
+            self, make_service, sparsh, agents_root, monkeypatch):
+        # A real schedule on a minder-like package: its person unlocked the
+        # phone when asked, and the run had no phone tool to use.
+        write_package(agents_root, "minder", body=(
+            '[agent]\nname = "minder"\nprompt = "prompt.md"\n'
+            '[tools]\nallow = ["web_fetch"]\n'))
+        monkeypatch.setenv("FAKE_PHONE", "locked")
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        reply = asyncio.run(service.deliver(actor="owner", agent="minder", thread="s",
+                                            text="go", unattended=True, phone=True))
+        assert reply.stop_reason == "refused" and "mcp__sparsh__*" in reply.text
+        assert logged(sparsh[1]) == [] and service.scripted.requests == []
 
     def test_a_phone_in_use_is_left_alone_and_the_run_skipped(
             self, make_service, sparsh, monkeypatch):

@@ -125,7 +125,7 @@ conversation is let go a week after it ends while what it wrote stays
 where the person's chat can read it, and sent to them as a file when
 they ask; and with `--sparsh`, the phone on this machine works for its
 one person from their chat, with Send held for their button — covered
-by 726 tests. The API is not stable.
+by 728 tests. The API is not stable.
 
 ## The shape of it
 
@@ -831,7 +831,10 @@ phone = true            # the phone on this machine is yours
   time, and the question brings the picture with the spot ringed: a
   photo above the buttons in Telegram ([notes/32](notes/32-the-ring-in-the-chat.md)).
 * `examples/agents/phone` is the package for it (`[tools] allow =
-  ["mcp__sparsh__*"]`, `mode = "ask"`). Another package needs both.
+  ["mcp__sparsh__*"]`, `mode = "ask"`). Another package needs both. One
+  whose allow list leaves the phone out gets no phone and no word of one,
+  and a schedule run on it is refused before you're asked to unlock
+  anything ([notes/33](notes/33-the-phone-on-a-schedule.md)).
 * Each turn starts `sparsh mcp` and stops it when the turn ends. A
   screen the list can't read comes with a screenshot when the model is
   local and can see, never to a cloud model unless

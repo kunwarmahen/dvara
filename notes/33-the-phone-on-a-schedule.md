@@ -92,6 +92,48 @@ The emulator's sent box held the two texts to 555-0123 and none to
 scratch person had no chat, and was refused at once. With a chat, it
 waits the schedule's wait first.
 
+## Live, on a real phone
+
+A Nexus 6P (Android 8.1) with a PIN, reached over Wi-Fi from Sarathi's
+containers, the door on `qwen3.8-64k:latest`, the `minder` package, and
+its person on Telegram. A schedule "On my phone, open Settings and tell
+me what the Battery row says", wait 2 then 5 minutes:
+
+```
+samay run-now ...   # locked; the Wi-Fi link stale from the screen being off
+  skipped   skipped: the phone couldn't be reached (adb said: error: closed)
+samay run-now ...   # locked; asked on Telegram; away from the phone
+  skipped   skipped: the phone stayed locked for 2 minutes after you were asked
+samay run-now ...   # locked; asked; unlocked in time
+  ok        I couldn't do that -- the phone tools (Sparsh) aren't connected
+            in this scheduled session ...
+samay run-now ...   # the same, after the fix below
+  ok        Your phone's Settings show the Battery row as: Battery -- 99% ·
+            charging.
+```
+
+The question reached the chat each time. The first skip was Sparsh's: a
+Wi-Fi link that went stale while the screen was off, now reconnected
+once (Sparsh's note 08).
+
+**THE PACKAGE MUST LET THE PHONE IN, OR THE RUN NEVER STARTS.** The third
+run is the one this note didn't foresee. `minder`'s `[tools] allow` named
+its own tools and not `mcp__sparsh__*`, and an allow list is complete:
+every phone tool was hidden. But the door still started Sparsh and wrote
+the phone into the prompt, so the model called `open_app`, read "no such
+tool", and told its person the phone wasn't connected, right after they
+had unlocked it to let the run in. Now a package whose list leaves the
+phone out gets neither the server nor the prompt, and a schedule that
+works the phone on such a package is refused before the phone is
+looked at:
+
+```
+minder can't work the phone: its package's [tools] allow leaves out
+mcp__sparsh__* (add it, as examples/agents/phone does)
+```
+
+Nobody is asked to unlock a phone for a run that can't touch it.
+
 ## What the tests hold
 
 `tests/test_phone.py`: a scheduled run whose schedule works the phone
@@ -104,12 +146,14 @@ looked at each minute for ten; put down and locked then asks; an iPhone
 goes; unreachable is a skip). `tests/test_gate.py`: a schedule's wait
 may be longer than the desk's; a question that outwaits it lapses,
 never held, and is named. `tests/test_http.py`: the new fields go with
-`unattended: true`. 709 tests before, 726 after.
+`unattended: true`. 709 tests before, 726 after; 728 with a package that leaves the
+phone out (refused before asking; no phone and no word of one).
 
 ## What is not here yet
 
-* **A real phone, with a real lock** and a real Telegram chat to ask
-  in. Everything above is the emulator through `samay run-now`.
+* ~~**A real phone, with a real lock** and a real Telegram chat to ask
+  in.~~ A Nexus 6P with a PIN, asked on Telegram: *Live, on a real
+  phone*, above.
 * **Asking the person in the run's own words for a lapsed step,
   afterwards** ("it's in the compose box: send it?"). The agent says so
   in its answer today; nothing turns that into a button.
