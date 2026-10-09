@@ -98,7 +98,7 @@ first turn to a bot that asks you before anything changes.
   ([notes/30](notes/30-do-this-on-my-phone.md)).
 * **[Sarathi](https://github.com/kunwarmahen/sarathi)** — starts this
   door beside Yantra's page and Samay's clock, wired to the clock, with
-  a Telegram bot: `sarathi door`, then `sarathi up` (its note 04).
+  a Telegram bot: `sarathi dvara`, then `sarathi up` (its note 04).
 
 ## Status
 
