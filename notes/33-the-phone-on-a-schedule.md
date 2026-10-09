@@ -36,8 +36,9 @@ Before the turn, the door asks Sparsh (`sparsh state`):
   schedule wants it now: … Unlock it and it will start; it waits N
   minutes."* Unlocked in time is a yes: the run goes, though the screen
   is on. Still locked at the end of the schedule's wait: skipped.
-* **Asleep** (screen off, no lock): woken (`sparsh wake`), and the run
-  goes.
+* **Asleep** (screen off with no lock, or a lock with no PIN): woken
+  (`sparsh wake`, which swipes a PIN-less lock away), and the run goes.
+  Nobody is asked to open what anything could.
 * **Unknown** (an iPhone says only whether it's locked): goes.
 
 A phone that can't be reached is a skip in Sparsh's words. A skip

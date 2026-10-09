@@ -14,8 +14,9 @@ that phone when the time comes, and Sparsh says which
              unlock it for this schedule; the run waits the schedule's
              own wait for that, then is skipped. Unlocked after being
              asked is a yes: the run goes, though the screen is on.
-    asleep   the screen is off and there is no lock: woken, and the run
-             goes.
+    asleep   nobody has it and no PIN stands in the way (the screen off,
+             or a swipe lock): woken -- Sparsh's wake swipes such a lock
+             away -- and the run goes.
 
 ``unknown`` (an iPhone says only whether it is locked) goes, as asleep
 does, without waking. A phone that can't be reached at all is a skip,

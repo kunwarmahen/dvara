@@ -823,7 +823,7 @@ phone = true            # the phone on this machine is yours
 * **In a scheduled run only when its schedule says so** (made in a chat
   that had the phone, or `samay add --phone`). The phone is checked
   first: in your hand, it waits up to ten minutes, then skips; locked,
-  it asks you to unlock it; asleep, it wakes it. Steps you granted with
+  it asks you to unlock it; asleep (or a lock with no PIN), it wakes it. Steps you granted with
   the schedule (*"send in Messages when the screen shows 555-0123"*) go
   through by themselves; anything else is asked in your chat and lapses
   after the schedule's wait ([notes/33](notes/33-the-phone-on-a-schedule.md)).
