@@ -1033,7 +1033,7 @@ screen with what it would tap ringed**, then one sentence with
 minder wants to run mcp__sparsh__confirm:
 
 Do this on the phone?
-On the phone emulator-5554: tap button "Send SMS" in com.google.android.apps.messaging -- held because it says "send".
+On your phone (Nexus 6P): tap button "Send SMS" in com.google.android.apps.messaging -- held because it says "send".
 On the screen: field "running late"
 (The picture shows the phone's screen; what it would tap is ringed.)
 ```
