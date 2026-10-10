@@ -1022,18 +1022,27 @@ dvara --ask --root examples/agents --sparsh /path/to/sparsh telegram --agent pho
 
 The agent reads the phone's screen as a numbered list and taps by
 number. Most steps happen without a question. A step that can't be
-taken back — Send, Pay, Delete, typing a password — stops, and the
-question comes to your chat with **Yes** and **No** under it, saying
-exactly what will happen:
+taken back — Send, Pay, Delete, a Call, typing a password — stops, and
+the question comes to your chat: first a **photo of the phone's
+screen with what it would tap ringed**, then one sentence with
+**approve** and **refuse** under it:
 
 ```
+(photo) The phone's screen: what it would tap is ringed.
+
+minder wants to run mcp__sparsh__confirm:
+
 Do this on the phone?
-On the phone emulator-5554: tap button "Send SMS" in com.google.android.apps.messaging
-…
-4 field "running late"
+On the phone emulator-5554: tap button "Send SMS" in com.google.android.apps.messaging -- held because it says "send".
+On the screen: field "running late"
+(The picture shows the phone's screen; what it would tap is ringed.)
 ```
 
-Press **No** and nothing is sent; the agent tells you so.
+Check the message or the number on the screen line, and the ring in
+the photo. Press **refuse** and nothing is sent; the agent tells you
+so. Press **approve** and it's done; if the phone then shows a message
+of its own (*"Turn off airplane mode to make a call"*), the agent tells
+you that, since the step itself was carried out.
 
 **The button is the question.** A held step lives only while that turn
 runs. If the agent asks *"shall I send it?"* in words and you answer
@@ -1060,12 +1069,14 @@ dvara --root examples/agents --actors /tmp/phone-actors.toml --state /tmp/phone-
   say --actor owner --agent phone "Text 555-0123 from my phone: hello"
 ```
 
-It stops at `Do this on the phone? … "Send SMS"`; type `n` and nothing
-is sent. Sparsh's SETUP.md, Part T, checks the phone itself first.
+It stops at `Do this on the phone? … "Send SMS"`, with the path of the
+screen's picture under it (open it to see the ring); type `n` and
+nothing is sent. Sparsh's SETUP.md, Part T, checks the phone itself first.
 
 **A tap you answer by looking.** On a screen the phone can't describe
-as a list (Settings' About page), the agent taps a spot on a screenshot,
-and every such tap asks. The question comes with the picture, the spot
+as a list (Settings' About page), or describes only in part (Google
+Maps' places, boxes with no names), the agent is shown a screenshot,
+and it can tap a spot on it. Every such tap asks. The question comes with the picture, the spot
 ringed in red: in Telegram as a photo just above the buttons, on your
 page above the words, and at the terminal as a file whose path is
 printed. Say yes only if the ring is on what you asked for

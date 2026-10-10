@@ -811,10 +811,10 @@ class TelegramBot:
         question = head + elide(ask.summary, MESSAGE_LIMIT - utf16_len(head))
         chat = int(ask.to)
         if ask.picture is not None:
-            # THE PICTURE FIRST, THE BUTTONS UNDER IT: a tap by position is
-            # answered by looking at where the ring is (Yantra's note 123).
+            # THE PICTURE FIRST, THE BUTTONS UNDER IT: a held step is
+            # answered by looking at what is ringed (Yantra's note 123).
             await self._send_photo(chat, ask.picture,
-                                   caption="The phone's screen: a tap lands where it is ringed.")
+                                   caption="The phone's screen: what it would tap is ringed.")
         sent = await self._send(
             chat, question,
             reply_markup={"inline_keyboard": [[

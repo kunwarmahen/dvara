@@ -170,8 +170,8 @@ class Ask:
     #: shared, because it is the same question and the first answer on
     #: any of them settles it.
     to: str | None = None
-    #: A picture the question needs, PNG bytes: a phone's screen with the
-    #: spot a tap by position would hit ringed (Yantra's card_picture).
+    #: A picture the question needs, PNG bytes: a phone's screen as a held
+    #: step found it, what it would tap ringed (Yantra's card_picture).
     #: The person answers by looking; None for a question in words.
     picture: bytes | None = field(default=None, repr=False)
 

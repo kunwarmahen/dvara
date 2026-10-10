@@ -563,7 +563,7 @@ def _ask_at_the_keyboard(desk: AskDesk):
             with tempfile.NamedTemporaryFile("wb", prefix="dvara-ask-", suffix=".png",
                                              delete=False) as shot:
                 shot.write(ask.picture)
-            print(f"  the screen, the spot ringed: {shot.name}", file=sys.stderr)
+            print(f"  the phone's screen, what it would tap ringed: {shot.name}", file=sys.stderr)
         print("approve? [y/N] ", end="", file=sys.stderr, flush=True)
         typed = await _typed_line()
         # "terminal" is not a channel kind and never appears in

@@ -76,6 +76,10 @@ before, 709 after.
 
 * **A real Telegram chat.** The photo goes through the same Bot API
   upload a file already uses ([note 26](26-the-file-itself.md)), and is
-  untried from a real chat, like the rest of the phone road there.
+  untried from a real chat, like the rest of the phone road there. On a
+  real 6P no tap by position came (Maps' places were blank in the list,
+  but no picture went with a list that had anything); now a partly
+  blank screen sends one, and every held step brings its picture, so
+  the photo comes with the next Send or Call (Sparsh's notes/10).
 * ~~**A phone in a scheduled run.**~~ [Note 33](33-the-phone-on-a-schedule.md):
   a tap by position there is never granted, so it is asked, ring and all.

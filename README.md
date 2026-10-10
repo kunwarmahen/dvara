@@ -817,9 +817,12 @@ phone = true            # the phone on this machine is yours
 * **Their yes, as buttons.** Reading the screen and ordinary taps run
   without asking. Sparsh holds a tap on Send, Pay, Buy, Delete and the
   like, typing a password, and Enter beside a Send button. Its `confirm`
-  always asks, so the question arrives in the chat as Sparsh's own
-  account of the step (*"Do this on the phone? … tap button "Send SMS"
-  … 1 field "running late""*), with **Yes** and **No** under it.
+  always asks, so the question arrives in the chat as a photo of the
+  phone's screen with what it would tap ringed, then Sparsh's own
+  sentence (*"Do this on the phone? … tap button "Send SMS" … On the
+  screen: field "running late""*), with **approve** and **refuse** under
+  it. Not the screen's numbered list: that's the model's (Sparsh's
+  notes/10).
 * **In a scheduled run only when its schedule says so** (made in a chat
   that had the phone, or `samay add --phone`). The phone is checked
   first: in your hand, it waits up to ten minutes, then skips; locked,
@@ -827,9 +830,10 @@ phone = true            # the phone on this machine is yours
   the schedule (*"send in Messages when the screen shows 555-0123"*) go
   through by themselves; anything else is asked in your chat and lapses
   after the schedule's wait ([notes/33](notes/33-the-phone-on-a-schedule.md)).
-* **A tap by position** (a screen only a picture shows) is asked every
-  time, and the question brings the picture with the spot ringed: a
-  photo above the buttons in Telegram ([notes/32](notes/32-the-ring-in-the-chat.md)).
+* **A tap by position** (a screen only a picture shows, or one the list
+  reads only in part, like Google Maps' places) is asked every time,
+  and the question brings the picture with the spot ringed: a photo
+  above the buttons in Telegram ([notes/32](notes/32-the-ring-in-the-chat.md)).
 * `examples/agents/phone` is the package for it (`[tools] allow =
   ["mcp__sparsh__*"]`, `mode = "ask"`). Another package needs both. One
   whose allow list leaves the phone out gets no phone and no word of one,

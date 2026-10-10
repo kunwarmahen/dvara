@@ -238,7 +238,7 @@ function askCard(a) {
       h("span.run-meta", { title: a.asked_at }, ago(a.asked_at))),
     a.picture && /^[A-Za-z0-9+/=]+$/.test(a.picture)
       ? h("img.ask-picture", { src: `data:image/png;base64,${a.picture}`,
-                               alt: "the phone's screen; a tap lands where it is ringed" })
+                               alt: "the phone's screen; what it would tap is ringed" })
       : null,
     h("div.cmd", {}, a.summary),
     h("div.actions", {}, yes, no), say);

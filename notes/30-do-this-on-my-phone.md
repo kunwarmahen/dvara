@@ -119,6 +119,9 @@ stops the start. 676 tests before, 689 after.
   ([note 33](33-the-phone-on-a-schedule.md)).
 * ~~**A question you answer by looking.**~~ A tap by position's question
   carries the screen with the spot ringed, to every channel
-  ([note 32](32-the-ring-in-the-chat.md)).
+  ([note 32](32-the-ring-in-the-chat.md)), and so does every held step:
+  the screen with what it would tap ringed and one line of what's
+  filled in, where the card above had the whole numbered list (Sparsh's
+  notes/10).
 * **The door in containers.** Sarathi's containers can't reach a phone
   on a cable; that waits for pairing over Wi-Fi.
