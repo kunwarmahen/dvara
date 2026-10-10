@@ -1035,6 +1035,21 @@ On the phone emulator-5554: tap button "Send SMS" in com.google.android.apps.mes
 
 Press **No** and nothing is sent; the agent tells you so.
 
+**The button is the question.** A held step lives only while that turn
+runs. If the agent asks *"shall I send it?"* in words and you answer
+*"yes"*, the step it held is gone by then, so the door doesn't show you
+a card for it at all. The agent is told to do the step again and ask
+with the button. The `phone` example's prompt says so; give your own
+agent the same sentence.
+
+**The screen stays on while it works.** A local model can think for
+longer than your phone's screen timeout between steps, and a dark screen
+locks. So Sparsh keeps the screen on while the agent works and puts your
+own timeout back two minutes after its last step (`SPARSH_AWAKE`, in
+Sparsh's README: `working`, `always` for a phone set aside for the
+agent, or `off`). If you pick the phone up mid-task, Sparsh notices the
+screen changed and does nothing; the agent looks again.
+
 **Try it without Telegram first.** `dvara say` runs one turn in the
 terminal, and its questions come to the terminal too:
 
@@ -1060,7 +1075,17 @@ printed. Say yes only if the ring is on what you asked for
 agent of your own (Sarathi's `minder`, say) must too: if its `[tools]
 allow` lists tools, add `"mcp__sparsh__*"` to it. Without it that agent
 gets no phone at all, and a schedule on it is refused with that line,
-before you're asked to unlock anything.
+before you're asked to unlock anything. Then add the phone to its
+`prompt.md`, especially if that prompt tells it to wait for a yes in the
+person's own words (Sarathi's `minder` does, for schedules):
+
+```
+If they ask for something done on their phone, use the phone tools. A
+step that comes back held (sending, paying, deleting) is asked with a
+button, not in words: say in one sentence what it will do, then call
+confirm in that same answer. The yes in their own words above is for
+schedules only; a phone's held step is gone by the time they reply.
+```
 
 Only one person can be the phone's: the phone is somebody's, with their
 messages on it, so two people marked `phone = true` is an error. And

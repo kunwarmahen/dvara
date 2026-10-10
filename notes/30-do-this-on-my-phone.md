@@ -102,9 +102,16 @@ stops the start. 676 tests before, 689 after.
 
 ## What is not here yet
 
-* **A real phone over Telegram.** The receipt is the emulator through
-  `dvara say`. The buttons are the ones every other question uses, but
-  this road hasn't been pressed from a real chat yet.
+* ~~**A real phone over Telegram.**~~ Pressed from a real chat, to a
+  Nexus 6P over Wi-Fi from Sarathi's containers: the Send card came with
+  the message in its box and the yes went through (the phone had no SIM,
+  so Messages said *"Network is not ready"* and the agent said so). It
+  found two things. A model asked *"shall I send it?"* in words, so the
+  hold was gone by the reply. That card is no longer shown, and
+  the `phone` prompt says to confirm in the same answer (Yantra's note
+  124). The second was a screen that went dark mid-task, now kept on
+  while the agent works (Sparsh's note 09). The ring card, from a real
+  chat, waits for a task that needs a tap by position.
 * **More than one phone**, one per person. One cable, one person, for
   now.
 * ~~**A phone in a scheduled run.**~~ When its schedule says so, after
