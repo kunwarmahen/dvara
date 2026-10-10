@@ -146,7 +146,9 @@ lVxSFx5_…  owner/scribe  thread samay-678740c0-1791163084  run 58b8c388a0a9
   (Samay's time limit) doesn't stop the turn here. A cancel endpoint
   would let one program stop another person's turn, and that needs
   its own argument.
-* **Durable notices**, as above.
+* ~~**Durable notices**, as above.~~ With `--web`, every notice is also
+  a line kept on disk for the person's page:
+  [note 34](34-a-chat-on-a-page.md). Without it, as above.
 
 Each scheduled run's conversation is let go a while after it ends, and
 its runs stay in the ledger: [note 24](24-a-conversation-nobody-will-continue.md).

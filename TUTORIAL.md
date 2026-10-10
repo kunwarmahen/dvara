@@ -1145,6 +1145,49 @@ phone stayed locked for 5 minutes after you were asked to unlock it`.
 With no PIN, nothing is asked and the run just goes. `samay rm <id>`
 when you're done, or it runs every morning.
 
+## 19 · A chat on a page
+
+Telegram was the one place a person could talk to their agent, and the
+one place a schedule's answer could reach them. Turn on the web channel
+and every person also has a page's chat:
+
+```
+DVARA_TOKEN=... dvara --root examples/agents --actors examples/actors.toml \
+      --ask --provider ollama --model qwen3.8:latest serve --port 8798 --web
+```
+
+Send a notice to someone with no Telegram. Before, it went nowhere; now
+it waits for them as a line:
+
+```
+$ curl -H "Authorization: Bearer $DVARA_TOKEN" \
+       -d '{"actor":"owner","text":"2 new mails from the bank"}' localhost:8798/notify
+{"actor":"owner","sent":["web"],"kept":[],"failed":{},"nowhere":false}
+$ curl -H "Authorization: Bearer $DVARA_TOKEN" "localhost:8798/web?actor=owner"
+{"lines":[{"id":1,"who":"notice","text":"2 new mails from the bank",...}], ...}
+```
+
+Now say something, and look again a few seconds later:
+
+```
+$ curl -H "Authorization: Bearer $DVARA_TOKEN" \
+       -d '{"actor":"owner","agent":"greeter","text":"hello"}' localhost:8798/web/message
+{"line":{"id":2,"who":"you","text":"hello",...}}
+$ curl -H "Authorization: Bearer $DVARA_TOKEN" "localhost:8798/web?actor=owner&after=2"
+```
+
+The first look says `"busy": ["greeter"]`; a later one has the answer
+as line 3. The turn runs behind the request, so a page reloaded in the
+middle loses nothing. Ask `scribe` to write a file and the question
+shows up under `asks` (and on Telegram, if the person has it); answer
+it with `POST /web/asks/{id}` and `{"actor": "owner", "approve": true}`.
+
+You won't usually type these. Sarathi starts the door with `--web` and
+puts the chat on its home page. Two things to know: the page's chat is
+its own conversation (one on Telegram doesn't continue there), and the
+person is the same person on both, with the same allowance, rules and
+questions ([notes/34](notes/34-a-chat-on-a-page.md)).
+
 ---
 
 # Where to read next
@@ -1251,5 +1294,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 635 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 739 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*

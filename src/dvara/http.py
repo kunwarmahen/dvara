@@ -1,6 +1,7 @@
 """The HTTP surface -- a transport, and honest about being only that.
 
-Seven endpoints, no session state, no cleverness. Everything that decides
+Seven endpoints for any caller, five more for a page's chat (web.py),
+no session state, no cleverness. Everything that decides
 anything lives in ``service.py``; this module moves JSON.
 
 THREE WAYS IN, AND THEY ARE NOT THE SAME WAY. ``/message`` starts a turn;
@@ -59,6 +60,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from dvara.actors import Channel
 from dvara.asks import NotYours
@@ -303,6 +305,109 @@ def create_app(service: Service, *, token: str,
         each handed over once, oldest first."""
         check(authorization)
         return {"notices": [n.as_dict() for n in service.notices.take(channel)]}
+
+    # ---- the web channel (web.py): a page's chat, as a trusted caller -----
+
+    def web_for(actor: object) -> Any:
+        """The web channel and a person on it, or the reason not."""
+        if service.web is None:
+            raise HTTPException(status_code=404,
+                                detail="this service has no web channel; "
+                                       "start it with --web")
+        if not isinstance(actor, str) or not actor.strip():
+            raise HTTPException(status_code=400, detail="missing or empty: actor")
+        try:
+            service.actors.get(actor)
+        except Refused as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return service.web
+
+    @app.get("/web")
+    async def web_look(actor: str = "", after: int = 0,
+                       authorization: str | None = Header(default=None)) -> dict:
+        """A person's lines after ``after``, the agents they may talk to,
+        what is running, and the questions and held turns waiting for
+        them -- everything a page draws, in one look."""
+        check(authorization)
+        service.refresh()
+        return web_for(actor).look(actor, max(0, after))
+
+    @app.post("/web/message")
+    async def web_say(request: Request,
+                      authorization: str | None = Header(default=None)) -> dict:
+        """Say something on the page. Answers at once with the line
+        written; the agent's answer is a later line (web.py)."""
+        check(authorization)
+        body = await request.json()
+        web = web_for(body.get("actor"))
+        missing = [f for f in ("agent", "text")
+                   if not isinstance(body.get(f), str) or not body[f].strip()]
+        if missing:
+            raise HTTPException(status_code=400,
+                                detail=f"missing or empty: {', '.join(missing)}")
+        service.refresh()
+        try:
+            line = web.say(body["actor"], body["agent"], body["text"])
+        except Refused as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        return {"line": line.as_dict()}
+
+    @app.post("/web/asks/{ask_id}")
+    async def web_answer(ask_id: str, request: Request,
+                         authorization: str | None = Header(default=None)) -> dict:
+        """A question answered from the page -- the same desk, the same
+        first-answer-wins, as Telegram's buttons."""
+        check(authorization)
+        body = await request.json()
+        web_for(body.get("actor"))
+        if not isinstance(body.get("approve"), bool):
+            raise HTTPException(status_code=400,
+                                detail="approve must be true or false")
+        if service.asks is None:
+            raise HTTPException(status_code=404,
+                                detail="this service does not escalate")
+        try:
+            landed = service.asks.answer(ask_id, actor=body["actor"],
+                                         approve=body["approve"], via="web")
+        except NotYours:
+            raise HTTPException(status_code=403,
+                                detail="that question was put to somebody else") from None
+        if not landed:
+            raise HTTPException(status_code=404,
+                                detail="that question is not waiting any more")
+        return {"answered": True, "approved": body["approve"]}
+
+    @app.post("/web/holds/{hold_id}")
+    async def web_carry_on(hold_id: str, request: Request,
+                           authorization: str | None = Header(default=None)) -> dict:
+        """A held turn answered from the page; what it comes to is a line."""
+        check(authorization)
+        body = await request.json()
+        web = web_for(body.get("actor"))
+        answers = body.get("answers")
+        if not isinstance(answers, dict) or not answers:
+            raise HTTPException(
+                status_code=400,
+                detail="answers must map each waiting call's id to true, "
+                       "false, or a reason")
+        try:
+            web.carry_on(hold_id, body["actor"], answers)
+        except NotYourHold:
+            raise HTTPException(status_code=403,
+                                detail="that held turn ran as somebody else") from None
+        except NoSuchHold as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return {"started": True}
+
+    @app.get("/web/file")
+    async def web_file(actor: str = "", line: int = 0, n: int = 0,
+                       authorization: str | None = Header(default=None)) -> Any:
+        """A file a line carried, by line and number."""
+        check(authorization)
+        path = web_for(actor).file(actor, line, n)
+        if path is None:
+            raise HTTPException(status_code=404, detail="no such file any more")
+        return FileResponse(path, filename=path.name)
 
     @app.get("/asks")
     async def asks(actor: str | None = None, channel: str | None = None,

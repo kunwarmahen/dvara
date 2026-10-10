@@ -269,6 +269,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--catch-up", action="store_true",
                        help="with --telegram: answer the messages that "
                             "arrived while this was down")
+    serve.add_argument(
+        "--web", action="store_true",
+        help="the web channel: a page's chat (GET /web, POST "
+             "/web/message), and every notice kept as a line for each "
+             "person's page, whether or not they have Telegram")
     return parser
 
 
@@ -315,6 +320,7 @@ def _service(args) -> Service:
             samay=samay,
             sparsh=sparsh,
             keep_unattended=args.keep_unattended * 86400,
+            web=getattr(args, "web", False),
         )
     except ValueError as exc:
         raise ConfigProblem(str(exc)) from None

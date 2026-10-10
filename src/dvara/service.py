@@ -232,6 +232,7 @@ class Service:
                  samay: str | None = None,
                  sparsh: str | None = None,
                  keep_unattended: float = KEEP_UNATTENDED,
+                 web: bool = False,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -282,6 +283,13 @@ class Service:
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
         #: Telling a person something nobody asked about (notices.py).
         self.notices = NoticeDesk()
+        #: The web channel (web.py), when the owner turned it on: a page's
+        #: chat, and every notice kept for the page as a line.
+        self.web = None
+        if web:
+            from dvara.web import KIND, WebBook, WebChannel
+            self.web = WebChannel(self, WebBook(self.state / "web.sqlite3"))
+            self.notices.route(KIND, self.web.notice)
         # The one seam between this service and the network. Injected so
         # tests exercise the real assembly against a scripted provider,
         # and so an embedder that already holds a provider does not open
@@ -336,6 +344,8 @@ class Service:
         loop over providers rather than a loop over their internals.
         """
         await self.accounts.aclose()
+        if self.web is not None:
+            await self.web.aclose()
         for provider in self._providers.values():
             await provider.aclose()
         self._providers.clear()
@@ -410,7 +420,16 @@ class Service:
                else self.actors.resolve(via.kind, via.id))
         if not text.strip():
             raise Refused("a notice needs some text")
-        return who.id, await self.notices.send(who.id, who.reach(), text)
+        return who.id, await self.notices.send(who.id, self._told_at(who), text)
+
+    def _told_at(self, who: Actor) -> tuple[tuple[str, str], ...]:
+        """Where a notice for ``who`` goes: their channels, and the web
+        channel's lines when it is on (web.py) -- every person has those,
+        with no line in the actors file."""
+        if self.web is None:
+            return who.reach()
+        from dvara.web import KIND
+        return who.reach() + ((KIND, who.id),)
 
     # ---- the verb ----------------------------------------------------------
 
@@ -756,7 +775,7 @@ class Service:
             if not unattended:
                 sent.append(path)
                 return f"{path.name} will be sent to them with your answer"
-            result = await self.notices.send(who.id, who.reach(), note, file=path)
+            result = await self.notices.send(who.id, self._told_at(who), note, file=path)
             if result.nowhere:
                 raise ToolError("they have no channel a file can be sent to")
             return f"sent {path.name} to them"
@@ -767,7 +786,7 @@ class Service:
     def _asker(self, who: Actor):
         """A line in the person's own chat, for a run nobody started."""
         async def ask(line: str) -> None:
-            await self.notices.send(who.id, who.reach(), line)
+            await self.notices.send(who.id, self._told_at(who), line)
         return ask
 
     async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec,

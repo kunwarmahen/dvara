@@ -124,8 +124,9 @@ that started it can ask whether it is serving, and a scheduled run's
 conversation is let go a week after it ends while what it wrote stays
 where the person's chat can read it, and sent to them as a file when
 they ask; and with `--sparsh`, the phone on this machine works for its
-one person from their chat, with Send held for their button — covered
-by 728 tests. The API is not stable.
+one person from their chat, with Send held for their button; and with
+`--web`, a page can be a chat too, where everything sent to a person
+waits for them — covered by 739 tests. The API is not stable.
 
 ## The shape of it
 
@@ -223,6 +224,9 @@ TELEGRAM_TOKEN=... dvara --root examples/agents --actors examples/actors.toml \
 # a bot in the same process, which is the only way to have both
 DVARA_TOKEN=$(openssl rand -hex 24) dvara serve --port 8765
 DVARA_TOKEN=... TELEGRAM_TOKEN=... dvara serve --telegram researcher
+
+# and a page's chat, where every notice waits for each person
+DVARA_TOKEN=... dvara serve --port 8765 --web
 ```
 
 `--root`, `--actors`, `--policy` and `--state` also read `$DVARA_ROOT`,
@@ -716,6 +720,11 @@ GET  /holds?actor=                               -> {holds: [{id, calls, age, ..
 POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
+GET  /web?actor=&after=N                         -> {lines, agents, busy, asks, holds}
+POST /web/message  {actor, agent, text}          -> {line}
+POST /web/asks/{id}  {actor, approve}            -> {answered, approved}
+POST /web/holds/{id} {actor, answers}            -> {started}
+GET  /web/file?actor=&line=&n=                   -> a file a line carried
 ```
 
 A program that runs turns for people who are not there — a scheduler —
@@ -727,6 +736,18 @@ reply carries `needs_person`, `busy` and `refused`. `/notify` sends a
 text to a person's channels from the actors file; a channel with no
 adapter in this process collects from `/notices`, each one once, kept
 in memory ([notes/17](notes/17-nobody-wrote-first.md)).
+
+**The web channel: a chat on a page.** `dvara serve --web` gives every
+person a list of lines kept on disk: what they said on a page, what
+their agent answered, and every notice sent to them. So a schedule's
+answer waits there until they open the page, even for someone with no
+Telegram (`nowhere` is never true with `--web` on). `POST /web/message`
+writes the line and starts the turn behind the request; the answer is a
+later line, so a page reloaded mid-turn loses nothing. The page's turns
+run as their own conversation (`web:chat`): a chat on Telegram doesn't
+continue there. Questions and held turns are listed in the same look
+and answered with `/web/asks` and `/web/holds`. Sarathi's home page is
+one such page ([notes/34](notes/34-a-chat-on-a-page.md)).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person**: a caller is a channel adapter
@@ -973,7 +994,8 @@ print(reply.text, reply.cost_usd)
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), and how many turns had no price ([notes/29](notes/29-the-owners-page.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | nine endpoints and a bearer token (`[http]` extra) |
+| `http.py` | fourteen endpoints and a bearer token (`[http]` extra) |
+| `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
