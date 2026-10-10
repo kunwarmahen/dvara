@@ -80,6 +80,9 @@ before, 709 after.
   real 6P no tap by position came (Maps' places were blank in the list,
   but no picture went with a list that had anything); now a partly
   blank screen sends one, and every held step brings its picture, so
-  the photo comes with the next Send or Call (Sparsh's notes/10).
+  the photo comes with the next Send or Call (Sparsh's notes/10). A
+  ring card from a tap by position has been seen through `dvara say`
+  on the 6P: a map pin, ringed, opened on yes. The same from a real
+  chat is still to be pressed.
 * ~~**A phone in a scheduled run.**~~ [Note 33](33-the-phone-on-a-schedule.md):
   a tap by position there is never granted, so it is asked, ring and all.

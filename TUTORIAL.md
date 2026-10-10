@@ -1076,11 +1076,18 @@ nothing is sent. Sparsh's SETUP.md, Part T, checks the phone itself first.
 **A tap you answer by looking.** On a screen the phone can't describe
 as a list (Settings' About page), or describes only in part (Google
 Maps' places, boxes with no names), the agent is shown a screenshot,
-and it can tap a spot on it. Every such tap asks. The question comes with the picture, the spot
-ringed in red: in Telegram as a photo just above the buttons, on your
-page above the words, and at the terminal as a file whose path is
-printed. Say yes only if the ring is on what you asked for
-([notes/32](notes/32-the-ring-in-the-chat.md)).
+and it can tap a spot on it. Every such tap asks. The question comes
+with the picture, the spot ringed in red: in Telegram as a photo just
+above the buttons, on your page above the words, and at the terminal
+as a file whose path is printed. Say yes only if the ring is on what
+you asked for ([notes/32](notes/32-the-ring-in-the-chat.md)).
+
+To see one, send the bot: *"On my phone, search Google Maps for Indian
+restaurants, then tap the pin on the map (not the list) of the
+best-rated one you can see on the map, to open it, and tell me its
+name."* A map's pins are only in the picture, so the tap is by
+position: the photo comes with one pin ringed. On a real Nexus 6P,
+approve opened the restaurant on that pin and the agent named it.
 
 **Your own agent package.** The `phone` example lets the phone in. An
 agent of your own (Sarathi's `minder`, say) must too: if its `[tools]

@@ -840,7 +840,8 @@ phone = true            # the phone on this machine is yours
   and a schedule run on it is refused before you're asked to unlock
   anything ([notes/33](notes/33-the-phone-on-a-schedule.md)).
 * Each turn starts `sparsh mcp` and stops it when the turn ends. A
-  screen the list can't read comes with a screenshot when the model is
+  screen the list can't read, or reads only in part (Google Maps'
+  places, a map's pins), comes with a screenshot when the model is
   local and can see, never to a cloud model unless
   `YANTRA_PHONE_SHOTS=on`.
 * Off unless asked for; asked for and not found stops the start. No
