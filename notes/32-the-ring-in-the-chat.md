@@ -74,15 +74,11 @@ before, 709 after.
 
 ## What is not here yet
 
-* **A real Telegram chat.** The photo goes through the same Bot API
-  upload a file already uses ([note 26](26-the-file-itself.md)), and is
-  untried from a real chat, like the rest of the phone road there. On a
-  real 6P no tap by position came (Maps' places were blank in the list,
-  but no picture went with a list that had anything); now a partly
-  blank screen sends one, and every held step brings its picture, so
-  the photo comes with the next Send or Call (Sparsh's notes/10). A
-  ring card from a tap by position has been seen through `dvara say`
-  on the 6P: a map pin, ringed, opened on yes. The same from a real
-  chat is still to be pressed.
+* ~~**A real Telegram chat.**~~ The photo goes through the same Bot API
+  upload a file already uses ([note 26](26-the-file-itself.md)). Pressed
+  from a real chat on a Nexus 6P with the containers rebuilt, after
+  Sparsh's notes/10: the Maps question read from pictures, the Call
+  card's photo with Call ringed, and a map pin's ring card that opened
+  its restaurant on approve.
 * ~~**A phone in a scheduled run.**~~ [Note 33](33-the-phone-on-a-schedule.md):
   a tap by position there is never granted, so it is asked, ring and all.
