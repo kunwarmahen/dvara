@@ -56,7 +56,6 @@ package asks for when it ships ``tools/*.py`` at all.
 from __future__ import annotations
 
 import asyncio
-import fnmatch
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
@@ -69,7 +68,9 @@ from yantra import (
     PermissionFn,
     PermissionRequest,
     allow_read_only,
+    granted,
     hold,
+    parse_grant,
     refuse,
     yolo,
 )
@@ -224,7 +225,8 @@ class Policy:
         (patience.py), carried to the one place a question is put. None
         means no limit and no tally.
 
-        ``ahead`` is tool-name globs the person answered yes to BEFORE the
+        ``ahead`` is grants -- tool-name globs, maybe with fixed arguments
+        (Yantra's ``Grant``) -- the person answered yes to BEFORE the
         turn -- a schedule they accepted, which named the browser. Carried
         to the same one place, ``put``, because that is where it means
         something: a call that reaches ``put`` is one a person may be
@@ -319,8 +321,9 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     # ANSWERED AHEAD OF TIME, which is still a person's answer -- except
     # for a tool that asks on every call, whose whole point is that a yes
     # given before the call existed does not count (Yantra's always_ask).
-    if ahead and not request.always_ask and any(
-            fnmatch.fnmatchcase(request.tool_name, g) for g in ahead):
+    # A grant may fix the arguments too (Yantra's ``Grant``): the stairs
+    # light's switch, not every device the tool reaches.
+    if ahead and granted(_grants(ahead), request):
         if decisions is not None:
             decisions.ahead(request.call_id)
         return True
@@ -492,6 +495,19 @@ def _no_route(request: PermissionRequest, mode: str,
             f"read-only tools and there is nobody available to ask. Say what "
             f"you would have done and why, and carry on with what you can "
             f"reach.")
+
+
+def _grants(ahead: Sequence[str]) -> tuple:
+    """The answers given ahead of time as grants; one that does not
+    read as a grant grants nothing (``/message`` refuses it at the
+    door, so this is a schedule saved before the form was checked)."""
+    out = []
+    for text in ahead:
+        try:
+            out.append(parse_grant(text))
+        except ValueError:
+            continue
+    return tuple(out)
 
 
 def _png(request) -> bytes | None:

@@ -583,6 +583,7 @@ GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
 POST /asks/{id}    {actor, approve}              -> {answered, approved}
+POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code}
 POST /notify       {actor, text}                 -> {sent, kept, nowhere}
 ```
 
@@ -590,12 +591,16 @@ POST /notify       {actor, text}                 -> {sent, kept, nowhere}
 DVARA_TOKEN=$(openssl rand -hex 24) dvara serve --port 8765
 ```
 
-Two of these exist for a program that acts for people who are not
+Three of these exist for a program that acts for people who are not
 there — a scheduler. `/message` with `"unattended": true` runs a turn
 nobody typed, with `"allow_tools"` standing in for the questions the
 person answered ahead of time (they grant only what a question could
-have), and `/notify` sends a person a finding they did not ask for, on
-their own channels ([notes/17](notes/17-nobody-wrote-first.md)).
+have; `write_file(path=notes.txt)` grants that one file), `/notify`
+sends a person a finding they did not ask for, on their own channels
+([notes/17](notes/17-nobody-wrote-first.md)), and `/ask` puts one
+question to a person for a run that lives somewhere else — Samay's
+direct road — and answers with their yes or no
+([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person.** A caller is a channel adapter

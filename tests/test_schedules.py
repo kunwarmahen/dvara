@@ -132,7 +132,9 @@ class TestAPersonsTurn:
             return ask, await turn
 
         ask, reply = asyncio.run(go())
-        assert ask.summary.startswith("Save a schedule.")
+        assert ask.summary.startswith("New schedule.")
+        # a person behind Dvara: what nothing allowed is asked in their chat
+        assert "changes something is asked in your chat" in ask.summary
         assert "every 2 hours -- next: 14:00, 16:00" in ask.summary
         assert '{"every"' not in ask.summary
         assert reply.ok

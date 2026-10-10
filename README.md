@@ -126,7 +126,7 @@ where the person's chat can read it, and sent to them as a file when
 they ask; and with `--sparsh`, the phone on this machine works for its
 one person from their chat, with Send held for their button; and with
 `--web`, a page can be a chat too, where everything sent to a person
-waits for them — covered by 739 tests. The API is not stable.
+waits for them — covered by 754 tests. The API is not stable.
 
 ## The shape of it
 
@@ -718,6 +718,7 @@ GET  /asks?actor=                                -> {asks: [{id, tool, summary, 
 POST /asks/{id}    {actor, approve}              -> {answered, approved}
 GET  /holds?actor=                               -> {holds: [{id, calls, age, ...}]}
 POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
+POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code, via}
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, asks, holds}
@@ -729,13 +730,25 @@ GET  /web/file?actor=&line=&n=                   -> a file a line carried
 
 A program that runs turns for people who are not there — a scheduler —
 adds `"unattended": true` to `/message`, and may add `"allow_tools":
-[globs]`: the questions the person answered ahead of time. They grant
-only what the person could have been asked about (a deny rule still
-refuses), the call is recorded as `[ahead]` in `dvara runs`, and the
-reply carries `needs_person`, `busy` and `refused`. `/notify` sends a
-text to a person's channels from the actors file; a channel with no
-adapter in this process collects from `/notices`, each one once, kept
-in memory ([notes/17](notes/17-nobody-wrote-first.md)).
+[grants]`: the questions the person answered ahead of time. A grant is
+a tool name or glob, or one tool fixed to exact argument values —
+`call_service(domain=switch, entity_id=switch.lights_2)` covers that
+switch and not the front door — and one that doesn't read as a grant is
+a 400. They grant only what the person could have been asked about (a
+deny rule still refuses), the call is recorded as `[ahead]` in `dvara
+runs`, and the reply carries `needs_person`, `busy` and `refused`.
+`/notify` sends a text to a person's channels from the actors file; a
+channel with no adapter in this process collects from `/notices`, each
+one once, kept in memory ([notes/17](notes/17-nobody-wrote-first.md)).
+
+`/ask` is for a run that isn't Dvara's: Samay's direct road starts
+Yantra with nobody at it, and when that run meets a write nobody
+allowed, it puts the question here. It goes through the same gate a turn
+here gets (the owner's rules, the person's rung, their channels) and the
+reply is the answer after at most `timeout` seconds: approved, or a
+refusal with its reason and code (`user`, `timeout`, `policy`,
+`unattended`). Silence lapses; it is never held
+([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)).
 
 **The web channel: a chat on a page.** `dvara serve --web` gives every
 person a list of lines kept on disk: what they said on a page, what
@@ -988,13 +1001,13 @@ print(reply.text, reply.cost_usd)
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)); a scheduled run's own wait, after which a question lapses ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
 | `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
-| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)) |
+| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), and how many turns had no price ([notes/29](notes/29-the-owners-page.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | fourteen endpoints and a bearer token (`[http]` extra) |
+| `http.py` | fifteen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)) |

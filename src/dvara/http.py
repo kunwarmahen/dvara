@@ -1,6 +1,6 @@
 """The HTTP surface -- a transport, and honest about being only that.
 
-Seven endpoints for any caller, five more for a page's chat (web.py),
+Ten endpoints for any caller, five more for a page's chat (web.py),
 no session state, no cleverness. Everything that decides
 anything lives in ``service.py``; this module moves JSON.
 
@@ -13,6 +13,13 @@ meant to release, and sit there until the deadline passed. ``/holds`` and
 ``/holds/{id}`` carry on a turn that stopped because nobody answered in
 time (notes/16): nothing is standing there any more, so an answer there
 STARTS the rest of the turn and replies with what it came to.
+
+A FOURTH WAY IN, FOR A TURN THAT IS NOT DVARA'S. ``/ask`` puts one
+question to a person and replies with their answer -- for a run started
+somewhere else (Samay's direct road) that met a call nobody allowed
+ahead of time. The question is the same question a turn here would put,
+on the same desk, through the same owner's rules; only the turn lives
+elsewhere.
 
 THE TOKEN AUTHENTICATES THE CALLER, NOT THE PERSON. That distinction is
 the whole security posture of this layer. A caller here is a channel
@@ -61,6 +68,8 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
+
+from yantra import parse_grant
 
 from dvara.actors import Channel
 from dvara.asks import NotYours
@@ -212,6 +221,12 @@ def create_app(service: Service, *, token: str,
                 isinstance(g, str) for g in allow_tools):
             raise HTTPException(status_code=400,
                                 detail="allow_tools is a list of tool-name globs")
+        for text in allow_tools:
+            try:
+                parse_grant(text)
+            except ValueError as exc:
+                raise HTTPException(status_code=400,
+                                    detail=f"allow_tools: {exc}") from None
         if allow_tools and not unattended:
             # An answer given ahead of time is for a turn nobody is at.
             # A person who IS there answers the question when it comes.
@@ -274,6 +289,44 @@ def create_app(service: Service, *, token: str,
             # can read it (files.py).
             "files": [str(f) for f in reply.files],
         }
+
+    @app.post("/ask")
+    async def ask(request: Request,
+                  authorization: str | None = Header(default=None)) -> dict:
+        """Put ONE question to a person and wait for their answer.
+
+        For a run Dvara is not running -- Samay's direct road, Yantra
+        started with nobody at it -- that met a call nobody allowed ahead
+        of time. The question goes where every other question here goes,
+        the person's chat with two buttons, through the same owner's
+        rules (service.ask); the reply is the decision, after at most
+        ``timeout`` seconds. 200 either way: "they said no" and "nobody
+        answered" are answers, not errors.
+        """
+        check(authorization)
+        body = await request.json()
+        missing = [f for f in ("actor", "tool", "summary")
+                   if not isinstance(body.get(f), str) or not body[f].strip()]
+        if missing:
+            raise HTTPException(status_code=400,
+                                detail=f"missing or empty: {', '.join(missing)}")
+        arguments = body.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            raise HTTPException(status_code=400, detail="arguments is an object")
+        timeout = body.get("timeout")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) \
+                or timeout <= 0:
+            raise HTTPException(status_code=400, detail="timeout is seconds, more than 0")
+        try:
+            answer = await service.ask(
+                actor=body["actor"], tool=body["tool"], summary=body["summary"],
+                arguments=arguments, timeout=float(timeout),
+                agent=str(body.get("agent") or ""), thread=str(body.get("thread") or ""))
+        except Refused as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return {"approved": answer.approved, "reason": answer.reason or "",
+                "code": "" if answer.approved else answer.code or "",
+                "via": answer.via or ""}
 
     @app.post("/notify")
     async def notify(request: Request,

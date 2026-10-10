@@ -92,6 +92,8 @@ from pathlib import Path
 from yantra import (
     HELD,
     AgentSpec,
+    PermissionRequest,
+    adecide,
     ToolExecuted,
     Provider,
     bills_nothing,
@@ -114,7 +116,7 @@ from dvara import files, fresh, money, patience, ready
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
-from dvara.asks import AskDesk
+from dvara.asks import Answer, AskDesk
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Decisions, Policy
 from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
@@ -421,6 +423,48 @@ class Service:
         if not text.strip():
             raise Refused("a notice needs some text")
         return who.id, await self.notices.send(who.id, self._told_at(who), text)
+
+    async def ask(self, *, actor: str, tool: str, summary: str,
+                  arguments: dict, timeout: float, agent: str = "",
+                  thread: str = "") -> Answer:
+        """One question for a run that is not Dvara's (``POST /ask``).
+
+        Samay's direct road starts Yantra with nobody at it; when that run
+        meets a call nobody allowed ahead of time, its person may still
+        be a tap away. The question is put THROUGH THE SAME GATE A TURN
+        HERE IS GIVEN -- the owner's rules, the person's rung, their
+        channels -- built as for a package that asks, because the run on
+        the other end already decided this is a call it would ask about.
+        So a deny rule still refuses without anybody being asked, an
+        allow rule answers it, and a person on ``read_only`` is never put
+        on the spot.
+
+        ``timeout`` is the run's own wait, which its person accepted with
+        the schedule: a question unanswered in it LAPSES, the way a
+        scheduled turn's question here does -- refused, never held, since
+        the run on the other end cannot be resumed from here.
+        """
+        self.refresh()
+        who = self.actors.get(actor)
+        request = PermissionRequest(tool_name=tool, arguments=dict(arguments),
+                                    summary=summary, read_only=False, call_id="ask")
+        decisions = Decisions()
+        gate = self.policy.gate(
+            "ask", actor_mode=who.permissions, desk=self.asks, actor=who.id,
+            agent=agent or "samay", thread=thread or "samay", reach=who.reach(),
+            decisions=decisions, ahead=(),
+            patience=patience.Patience(patience.remaining_today(
+                who.max_wait_per_day,
+                (0.0 if who.max_wait_per_day is None
+                 else self.runs.waited_since(who.id, money.day_start()))),
+                scheduled=max(0.0, float(timeout))))
+        approved = await adecide(gate, request)
+        how = decisions.of("ask") or ""
+        via = how.partition(":")[2] if how.startswith("asked:") else None
+        if approved:
+            return Answer(True, via=via)
+        return Answer(False, request.reason or f"{tool} was not approved.",
+                      request.code or "unspecified", via=via)
 
     def _told_at(self, who: Actor) -> tuple[tuple[str, str], ...]:
         """Where a notice for ``who`` goes: their channels, and the web
