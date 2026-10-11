@@ -777,7 +777,9 @@ later line, so a page reloaded mid-turn loses nothing. The page's turns
 run as their own conversation (`web:chat`): a chat on Telegram doesn't
 continue there. Questions and held turns are listed in the same look
 and answered with `/web/asks` and `/web/holds`. Sarathi's home page is
-one such page ([notes/34](notes/34-a-chat-on-a-page.md)).
+one such page ([notes/34](notes/34-a-chat-on-a-page.md)): the owner's,
+and each person's in the house once they sign in there, as their id in
+`actors.toml` (Sarathi's own sign-in; nothing here decides who).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person**: a caller is a channel adapter

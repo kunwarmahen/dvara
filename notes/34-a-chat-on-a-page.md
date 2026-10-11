@@ -87,9 +87,9 @@ itself.
 **THE CALLER SAYS WHO, AS EVERY CALLER DOES.** These endpoints take
 `actor` from a trusted caller holding the token, like `/message`. The
 page in front of them decides who is talking (Sarathi's home page: the
-owner), and the browser never holds this service's token. A file is
-asked for by line and number; the path on this machine never leaves
-the process.
+owner, or the person signed in there), and the browser never holds this
+service's token. A file is asked for by line and number; the path on
+this machine never leaves the process.
 
 **KEPT ON DISK, AND CAPPED.** One SQLite file, `web.sqlite3`, beside
 the ledger. A person keeps their newest 2000 lines; older ones go.
@@ -127,10 +127,11 @@ agent : Done — `a.txt` now contains the word `hello`, verified by reading it b
 
 ## What was deliberately not built
 
-* **Signing in.** The page in front of this channel says who is
-  talking. Today that is Sarathi's home page, and it speaks as the
-  owner. One sign-in per person in the house is its own piece of work,
-  done in front of this channel, not inside it.
+* ~~**Signing in.**~~ Done in front of this channel, as planned, not
+  inside it: Sarathi's home page signs in each person in the house
+  (an invite from the owner, a password chosen once) and names them on
+  every call, as their id in the actors file (Sarathi's note 14).
+  Nothing here changed for it.
 * **Push to a phone.** Lines wait until a page asks for them. A page
   installed on a phone with notices pushed to it may come later.
 * **Streaming.** An answer arrives whole, as a line. The page polls
