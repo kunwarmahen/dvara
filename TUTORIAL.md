@@ -1294,6 +1294,13 @@ notices joins the same list, and the answer gets one line saying so.
 On Telegram both words are in the `/` menu of an agent that remembers
 ([notes/38](notes/38-what-they-said-in-passing.md)).
 
+**`/memory` says the agent doesn't keep memories?** Its package has no
+`[memory]` table: add the two lines above to that agent's `agent.toml`.
+The words work from the next message. Telegram's `/` menu is sent when
+the bot starts, so restart Dvara for the menu to show them (`sarathi
+down && sarathi up`, or `systemctl --user restart sarathi-dvara` on
+Sarathi's Podman road), then reopen the chat.
+
 ---
 
 # Where to read next

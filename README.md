@@ -409,7 +409,9 @@ what it keeps about them:
 `/new` looks back over the conversation first, and lists what it noticed
 under its answer; a turn that noticed something says so in one line.
 Nothing is kept until the person sends `/remember`
-([notes/38](notes/38-what-they-said-in-passing.md)).
+([notes/38](notes/38-what-they-said-in-passing.md)). The agent's package
+must say `[memory] via`; Telegram's menu shows the two words after the
+bot restarts.
 
 These go to dvara, never to an agent, and the pasted address goes only to
 the waiting sign-in ([notes/20](notes/20-signing-in-from-the-chat.md)).
