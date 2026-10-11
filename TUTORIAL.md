@@ -1196,6 +1196,38 @@ its own conversation (one on Telegram doesn't continue there), and the
 person is the same person on both, with the same allowance, rules and
 questions ([notes/34](notes/34-a-chat-on-a-page.md)).
 
+## 20 · What an agent remembers about each person
+
+A package can ask Yantra to remember the people it talks to: add this to
+its `agent.toml`.
+
+```toml
+[memory]
+via = "local"
+```
+
+Behind the door, each person's memories are filed under their own id in
+the actors file, never under the login name running Dvara. Tell `greeter`
+*"remember I have a cat called Biscuit"* as Priya, and the owner's
+greeter never hears of Biscuit.
+
+For memories found by meaning, with [Smritikosh](https://github.com/kunwarmahen/smritikosh),
+start the door with `--memory FILE`. The file names Smritikosh's MCP
+server, and `<state>/memory.json` holds each person's own key. `sarathi
+smritikosh` writes both. Each person's turn then starts the server with
+their key alone:
+
+```
+$ curl -H "Authorization: Bearer $DVARA_TOKEN" -d '{"actor":"priya","agent":"greeter",
+       "thread":"t","text":"What do you remember about me?"}' localhost:8412/message
+{"text": "You have a cat named Biscuit and you prefer tea over coffee.", ...}
+```
+
+That answer came from `gemma4:12b`, with the owner's facts in the same
+Smritikosh and out of reach of Priya's key. Someone with no key in
+`memory.json` gets no memory, and the owner sees one line saying so
+([notes/37](notes/37-their-own-memories.md)).
+
 ---
 
 # Where to read next
@@ -1230,6 +1262,7 @@ Each topic, and the note that argues it:
 | `notes/30-do-this-on-my-phone.md` | `--sparsh` and `phone = true`: one person's phone worked from their chat, Send held for their button |
 | `notes/31-their-own-page.md` | `/accounts page`: a one-time link to a person's own Setu page, and the owner's one switch |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
+| `notes/37-their-own-memories.md` | each person's memories under their own name, and `--memory`: the owner's store, opened per turn with that person's own key |
 
 ---
 

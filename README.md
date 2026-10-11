@@ -96,6 +96,10 @@ first turn to a bot that asks you before anything changes.
   plugged into this machine, and a step that can't be taken back (Send,
   Pay, Delete) comes to their chat as Yes and No buttons
   ([notes/30](notes/30-do-this-on-my-phone.md)).
+* **[Smritikosh](https://github.com/kunwarmahen/smritikosh)** — with
+  `--memory`, a package that asks for memory keeps each person's in
+  Smritikosh, which finds them by meaning, with that person's own key
+  ([notes/37](notes/37-their-own-memories.md)).
 * **[Sarathi](https://github.com/kunwarmahen/sarathi)** — starts this
   door beside Yantra's page and Samay's clock, wired to the clock, with
   a Telegram bot: `sarathi dvara`, then `sarathi up` (its note 04).
@@ -126,7 +130,9 @@ where the person's chat can read it, and sent to them as a file when
 they ask; and with `--sparsh`, the phone on this machine works for its
 one person from their chat, with Send held for their button; and with
 `--web`, a page can be a chat too, where everything sent to a person
-waits for them — covered by 754 tests. The API is not stable.
+waits for them; and what an agent remembers about a person is filed
+under that person, in Yantra's own file or, with `--memory`, behind a
+key of their own — covered by 773 tests. The API is not stable.
 
 ## The shape of it
 
@@ -885,6 +891,36 @@ phone = true            # the phone on this machine is yours
   phone attached yet is fine: plug one in and the next turn has it
   ([notes/30](notes/30-do-this-on-my-phone.md)).
 
+### What an agent remembers about each person
+
+A package that asks for memory (`[memory] via = "local"` in its
+agent.toml) remembers the people it talks to. Each one's memories are
+filed under their own name, their id in the actors file, never under the
+login running Dvara. A package that doesn't ask gets no memory.
+
+With [Smritikosh](https://github.com/kunwarmahen/smritikosh), which finds
+a memory by meaning, the owner names it once:
+
+```bash
+dvara --ask --memory smritikosh-mcp.json serve --port 8765        # or DVARA_MEMORY=FILE
+```
+
+The file names one MCP server, in the format of Yantra's `--mcp-config`;
+its settings may say `${DVARA_MEMORY_USER}` and `${DVARA_MEMORY_KEY}`.
+Each turn starts it with that person's name and key from
+`<state>/memory.json` (readable by you alone), and stops it when the turn
+ends:
+
+```json
+{"people": {"owner": {"user": "asha", "key": "sk-smriti-..."},
+            "priya": {"user": "dvara-priya", "key": "sk-smriti-..."}}}
+```
+
+A person with no key there gets no memory, never somebody else's, and you
+are told once. `sarathi smritikosh` writes both files: an account and key
+for each person in the actors file, and you as yourself
+([notes/37](notes/37-their-own-memories.md)).
+
 ## Asking a person
 
 With nobody attached, a service refuses anything that could change
@@ -991,7 +1027,7 @@ print(reply.text, reply.cost_usd)
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
@@ -1018,7 +1054,8 @@ print(reply.text, reply.cost_usd)
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
-| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` and `--sparsh` checked at the start |
+| `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
+| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay`, `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

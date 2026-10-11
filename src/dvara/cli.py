@@ -142,6 +142,14 @@ def build_parser() -> argparse.ArgumentParser:
                              "(PATH names the samay program; also DVARA_SAMAY). "
                              "Set SAMAY_DVARA_URL and SAMAY_DVARA_TOKEN here "
                              "too: Samay checks each schedule against them")
+    parser.add_argument("--memory", default=None, metavar="FILE",
+                        help="where people's memories are kept, for a package "
+                             "that asks for memory: an MCP config naming one "
+                             "server (Smritikosh), started per turn for that "
+                             "person with their own key from <state>/memory.json. "
+                             "Unset: the package's own choice. Either way each "
+                             "person's memories are filed under their own name "
+                             "(also DVARA_MEMORY)")
     parser.add_argument("--keep-unattended", type=float,
                         default=KEEP_UNATTENDED / 86400, metavar="DAYS",
                         help=f"how long a finished conversation a program "
@@ -310,6 +318,7 @@ def _service(args) -> Service:
         raise ConfigProblem("--keep-unattended is a number of days, 0 or more")
     samay = _samay(args.samay or os.environ.get("DVARA_SAMAY"))
     sparsh = _sparsh(args.sparsh or os.environ.get("DVARA_SPARSH"))
+    memory = _memory(args.memory or os.environ.get("DVARA_MEMORY"))
     try:
         return Service(
             roster=Roster(Path(args.root)),
@@ -322,10 +331,24 @@ def _service(args) -> Service:
             hold_for=args.hold_for,
             samay=samay,
             sparsh=sparsh,
+            memory=memory,
             keep_unattended=args.keep_unattended * 86400,
             web=getattr(args, "web", False),
         )
     except ValueError as exc:
+        raise ConfigProblem(str(exc)) from None
+
+
+def _memory(named: str | None):
+    """The owner's memory store, read now: a file that cannot be used
+    stops the start, where the owner is looking (memory.py)."""
+    if not named or not named.strip():
+        return None
+    from dvara.memory import MemoryProblem, Store
+
+    try:
+        return Store.load(Path(named).expanduser())
+    except MemoryProblem as exc:
         raise ConfigProblem(str(exc)) from None
 
 

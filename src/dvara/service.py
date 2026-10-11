@@ -123,6 +123,7 @@ from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
                          NotYourHold, Waiting, waiting_text)
 from dvara.keys import session_key, workspace_parts
 from dvara.locks import KeyedLocks
+from dvara.memory import PEOPLE_FILE, MemoryProblem, Person, Store, person
 from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
@@ -235,6 +236,7 @@ class Service:
                  sparsh: str | None = None,
                  keep_unattended: float = KEEP_UNATTENDED,
                  web: bool = False,
+                 memory: Store | None = None,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -270,6 +272,10 @@ class Service:
         #: (``--sparsh``): the turns of the one person marked ``phone`` get
         #: its tools (``_phone``). None: no turn does.
         self.sparsh = sparsh
+        #: The owner's memory store (``--memory``, memory.py): a package
+        #: that asks for memory gets this one, for its person. None: the
+        #: package's own choice, still filed under the person's name.
+        self.memory = memory
         #: How long a conversation a program started is kept once it is
         #: over, before ``tidy`` lets its history and workspace go.
         self.keep_unattended = keep_unattended
@@ -780,6 +786,7 @@ class Service:
             scheduled=wait_for if is_unattended() and wait_for else None)
 
         provider = self._provider(provider_name)
+        spec, remembers = self._memory_for(spec, who)
         try:
             agent = replace(spec, max_usd_per_turn=ceiling.amount).build_async(
                 permissions=self.policy.gate(
@@ -796,6 +803,7 @@ class Service:
                 provider=provider,
                 provider_name=provider_name,
                 model=model,
+                memory_user=remembers.user,
             )
         except ConfigError as exc:
             # The commonest one: a ceiling on a model nobody can price.
@@ -805,7 +813,7 @@ class Service:
 
         sent = self._send_file_tool(agent, who)
         servers = await self._servers(agent, who=who, run=run, key=key, spec=spec,
-                                      phone_run=phone_run)
+                                      phone_run=phone_run, remembers=remembers)
         try:
             reply = await self._run_turn(
                 agent, key=key, run=run, resuming=resuming, answers=answers,
@@ -844,16 +852,19 @@ class Service:
         return ask
 
     async def _servers(self, agent, *, who: Actor, run: Run, key: str, spec: AgentSpec,
-                       phone_run: PhoneRun | None = None):
+                       phone_run: PhoneRun | None = None,
+                       remembers: Person | None = None):
         """The MCP servers this turn gets, all stopped when it ends: the
         person's own accounts (``_accounts``), Samay's tools
-        (``_schedules``) and the phone (``_phone``). None when there are
-        none to start."""
+        (``_schedules``), the phone (``_phone``) and their memory
+        (``_remembering``). None when there are none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
         phone = (self.sparsh is not None and who.phone and works_phone(spec)
                  and (not is_unattended() or phone_run is not None))
-        if not (accounts or schedules or phone):
+        remembering = (self.memory is not None and spec.memory == self.memory.name
+                       and getattr(agent, "memory", None) is not None)
+        if not (accounts or schedules or phone or remembering):
             return None
         from yantra.mcp import MCPManager
 
@@ -866,7 +877,48 @@ class Service:
         if phone:
             await self._phone(agent, manager, who=who,
                               grants=list(phone_run.steps) if phone_run else None)
+        if remembering:
+            assert remembers is not None
+            await self._remembering(agent, manager, who=who, remembers=remembers)
         return manager
+
+    def _memory_for(self, spec: AgentSpec, who: Actor) -> tuple[AgentSpec, Person]:
+        """The spec with the owner's store in it, and whose memories.
+
+        Only a package that asked for memory gets any (memory.py). With
+        the owner's store named, it gets that store -- if this person has
+        a key of their own there; without one, none this turn, said once.
+        """
+        try:
+            remembers = person(self.state, who.id)
+        except MemoryProblem as exc:
+            self._note(f"dvara: memory is off for this turn -- {exc}")
+            return replace(spec, memory="off"), Person(user=who.id)
+        if self.memory is None or spec.memory in (None, "off"):
+            return spec, remembers
+        if remembers.key is None:
+            self._note(f"dvara: {who.id}: no memory this turn -- no key of their "
+                       f"own for {self.memory.name!r} in {self.state / PEOPLE_FILE}")
+            return replace(spec, memory="off"), remembers
+        return replace(spec, memory=self.memory.name, memory_verbs=()), remembers
+
+    async def _remembering(self, agent, manager, *, who: Actor, remembers: Person) -> None:
+        """The owner's store, started for this person with their own key.
+        A store that will not start costs the turn its memory, never the
+        turn (Yantra's memory fails open, and says so)."""
+        from yantra.mcp import MCPError
+        from yantra.memory.mcp import bind_memory_server
+
+        assert self.memory is not None
+        try:
+            config = self.memory.config_for(remembers)
+            await asyncio.to_thread(manager.connect, config)
+        except (MCPError, MemoryProblem) as exc:
+            self._note(f"dvara: {who.id}: memory is off for this turn -- "
+                       f"{self.memory.name}: {exc}")
+            return
+        if problem := bind_memory_server(agent, manager):
+            self._note(f"dvara: {who.id}: {problem}")
 
     async def _account_words(self, who: Actor, spec: AgentSpec, text: str) -> str | None:
         """``/connect``, ``/accounts``, ``/disconnect`` or a pasted
