@@ -874,6 +874,17 @@ whether example.com is up once an hour and only tell me if it's down"*.
 It previews the schedule, reads it back, and waits for your yes before
 the card comes.
 
+When the job itself changes something (*"turn off the stairs light at
+4"*), the card names exactly what it may change unasked: *call_service —
+only with domain=switch, service=turn_off, entity_id=switch.lights_2*,
+not every device that tool reaches. If the agent left that out, the card
+says so in capitals. At its time, anything nobody allowed comes to the
+person as a Yes/No in their chat and waits the schedule's wait; a run
+refused something comes back *not allowed*, with how to allow it next
+time. A schedule made at the computer, on Samay's direct road, asks
+through this service the same way (`POST /ask`,
+[notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)).
+
 It's off unless the owner turns it on, because it lets everyone the bot
 serves put work on a timer the owner pays for. The package has to ask
 (`[permissions] mode = "ask"`), and Samay needs `SAMAY_DVARA_URL` and
