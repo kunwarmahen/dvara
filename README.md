@@ -683,8 +683,9 @@ dvara's page for owner:
 The page has a card for each person in the actors file (today's spend
 against their daily allowance, the past seven days, their agents, how
 they're reached), the agents and who may use each, and every turn newest
-first, filtered by person or agent, with the tools it called and the
-refused ones in red.
+first, filtered by person, agent or the way it came in (Telegram, Web,
+Samay, CLI), with the tools it called and the refused ones in red
+([notes/36](notes/36-which-way-it-came-in.md)).
 
 * **What was said is shown only for your own turns** (`--as`, default
   `owner`). Everyone else's turns show their shape (agent, cost, tools,

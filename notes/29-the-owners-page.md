@@ -27,8 +27,9 @@ dvara's page for owner:
 The page has a card for each person: what they've spent today against
 their daily allowance (with a meter), the past seven days, which agents
 they may use, and how they're reached. Below that are the agents and who
-may use each, then every turn newest first, filtered by person or agent,
-with the tools each called and the refused ones in red.
+may use each, then every turn newest first, filtered by person or agent
+(and by the way it came in, [note 36](36-which-way-it-came-in.md)), with
+the tools each called and the refused ones in red.
 
 **A SEPARATE PROCESS, AND IT ONLY READS.** `dvara page` reads what `dvara
 serve` writes (the actors file, the runs ledger) and claims nothing
