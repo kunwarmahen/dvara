@@ -737,6 +737,9 @@ switch and not the front door — and one that doesn't read as a grant is
 a 400. They grant only what the person could have been asked about (a
 deny rule still refuses), the call is recorded as `[ahead]` in `dvara
 runs`, and the reply carries `needs_person`, `busy` and `refused`.
+A caller may name itself with `"came_by"`, one short lowercase word
+(Samay sends `"samay"`); the page labels the turn with it, and a turn
+that names nothing is `http` ([notes/36](notes/36-which-way-it-came-in.md)).
 `/notify` sends a text to a person's channels from the actors file; a
 channel with no adapter in this process collects from `/notices`, each
 one once, kept in memory ([notes/17](notes/17-nobody-wrote-first.md)).
@@ -1005,7 +1008,7 @@ print(reply.text, reply.cost_usd)
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
-| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), and how many turns had no price ([notes/29](notes/29-the-owners-page.md)) |
+| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), and which way each came in ([notes/36](notes/36-which-way-it-came-in.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | fifteen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)) |
@@ -1013,7 +1016,7 @@ print(reply.text, reply.cost_usd)
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
-| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
+| `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay` and `--sparsh` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

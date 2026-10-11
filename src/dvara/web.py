@@ -207,7 +207,7 @@ class WebChannel:
             raise Refused("say something and I will answer it")
         line = self.book.add(actor, "you", text, agent=agent)
         self._start(actor, agent, self.service.deliver(
-            actor=actor, agent=agent, thread=THREAD, text=text))
+            actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND))
         return line
 
     def carry_on(self, hold_id: str, actor: str, answers: dict) -> None:

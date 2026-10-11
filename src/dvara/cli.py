@@ -217,6 +217,9 @@ def build_parser() -> argparse.ArgumentParser:
     runs = subs.add_parser("runs", help="what this service has been doing")
     runs.add_argument("--actor", default=None)
     runs.add_argument("--agent", default=None)
+    runs.add_argument("--came-by", default=None, metavar="WAY",
+                      help="only turns that came in this way: telegram, web, "
+                           "samay, cli, http")
     runs.add_argument("--limit", type=int, default=20)
 
     case = subs.add_parser(
@@ -600,7 +603,8 @@ def _say(service: Service, args) -> int:
         try:
             return await service.deliver(actor=args.actor, via=via,
                                          agent=args.agent,
-                                         thread=args.thread, text=args.text)
+                                         thread=args.thread, text=args.text,
+                                         came_by="cli")
         finally:
             await service.aclose()
 
@@ -643,7 +647,7 @@ def _say(service: Service, args) -> int:
 
 def _runs(service: Service, args) -> int:
     rows = service.runs.recent(actor=args.actor, agent=args.agent,
-                               limit=args.limit)
+                               came_by=args.came_by, limit=args.limit)
     if not rows:
         print("no runs recorded yet")
         return 0
@@ -656,8 +660,8 @@ def _runs(service: Service, args) -> int:
     for run in rows:
         cost = f"${run.cost_usd:.4f}" if run.cost_usd is not None else "unpriced"
         stamp = run.started_at.strftime("%Y-%m-%d %H:%M")
-        print(f"{stamp}  {run.actor}/{run.agent}  {run.stop_reason:<14} "
-              f"{cost:>9}  {run.message[:48]!r}")
+        print(f"{stamp}  {run.came_by or '-':<8}  {run.actor}/{run.agent}  "
+              f"{run.stop_reason:<14} {cost:>9}  {run.message[:48]!r}")
         if run.resumes:
             # Two rows, one piece of work: the answer an hour later is
             # its own turn, and this is the thread back (notes/16).

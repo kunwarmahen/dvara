@@ -61,6 +61,7 @@ pending questions live in memory, so this is the only way to have both.
 from __future__ import annotations
 
 import asyncio
+import re
 import secrets
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
@@ -251,13 +252,22 @@ def create_app(service: Service, *, token: str,
                                 detail="phone, phone_steps and wait go with unattended: true")
         if phone_steps and not phone:
             raise HTTPException(status_code=400, detail="phone_steps go with phone: true")
+        # Which way the turn came in, for the page (runs.py): the caller's
+        # own word (Samay says "samay"), else its channel's kind, else http.
+        came_by = body.get("came_by")
+        if came_by is not None and (not isinstance(came_by, str)
+                                    or not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", came_by)):
+            raise HTTPException(status_code=400,
+                                detail="came_by is one short lowercase word, like samay")
+        came_by = came_by or (via.kind if via is not None else "http")
         reply = await service.deliver(actor=actor, via=via,
                                       agent=body["agent"],
                                       thread=body["thread"], text=body["text"],
                                       unattended=unattended,
                                       allow_tools=allow_tools,
                                       phone=phone, phone_steps=phone_steps,
-                                      wait=float(wait) if wait is not None else None)
+                                      wait=float(wait) if wait is not None else None,
+                                      came_by=came_by)
         return {
             "text": reply.text,
             "ok": reply.ok,

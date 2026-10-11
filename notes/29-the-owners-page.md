@@ -231,5 +231,7 @@ words aren't.
   schedules](#files-and-schedules).
 * ~~**Started by Sarathi** beside the door~~: `sarathi up` starts it, and
   Sarathi's home page links it.
+* ~~**Which way a turn came in.**~~ Each turn is labelled and filtered
+  by it: [note 36](36-which-way-it-came-in.md).
 * **A file that isn't text** opens nowhere on the page. `/file NAME` in
   the chat sends it.

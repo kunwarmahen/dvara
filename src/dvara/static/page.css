@@ -180,6 +180,7 @@ select {
 .run.bad { border-left: 3px solid var(--clay); }
 .run-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
 .run-who { font-weight: 600; overflow-wrap: anywhere; }
+.run-who .came { margin-right: 6px; font-size: 11px; vertical-align: 1px; }
 .run-meta { color: var(--ink-3); font-size: 13px; }
 .steps { display: flex; flex-wrap: wrap; gap: 4px; }
 .step { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 6px;

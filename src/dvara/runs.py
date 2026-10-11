@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS runs (
     agent_version TEXT,           -- the package's own version, that turn
     waited_seconds REAL,          -- how long it waited on a person
     resumes      TEXT,            -- the held Run this one carried on
-    unattended   INTEGER          -- 1: a program asked for it, nobody typed it
+    unattended   INTEGER,         -- 1: a program asked for it, nobody typed it
+    came_by      TEXT             -- telegram, web, samay, cli, http
 );
 -- Conversations a program started and nobody will continue, whose
 -- history and workspace were let go (Service.tidy). The runs stay.
@@ -111,7 +112,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
            "answered_from, agent_version, waited_seconds, resumes, "
-           "unattended")
+           "unattended, came_by")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -121,7 +122,13 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 #: rows honest -- they have no trajectory, and NULL is what that means.
 ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
          ("agent_version", "TEXT"), ("waited_seconds", "REAL"),
-         ("resumes", "TEXT"), ("unattended", "INTEGER"))
+         ("resumes", "TEXT"), ("unattended", "INTEGER"),
+         ("came_by", "TEXT"))
+
+#: The ways a turn can come in, as ``came_by`` writes them. Not enforced
+#: -- an HTTP bridge may name its own -- but these are the ones Dvara's
+#: own channels and Samay write, and the page has a word for each.
+CAME_BY = ("telegram", "web", "samay", "cli", "http")
 
 
 @dataclass(frozen=True)
@@ -211,6 +218,12 @@ class Run:
     #: nobody started (``finished_unattended``). False on every row
     #: written before this was kept, which tidies nothing.
     unattended: bool = False
+    #: Which way the turn came in: ``telegram``, ``web``, ``samay``,
+    #: ``cli``, ``http`` (or a bridge's own word). None for a caller that
+    #: said nothing (Python calling ``Service.deliver`` itself) and for a
+    #: row older than this field that the migration could not read it
+    #: off (``_backfill_came_by``).
+    came_by: str | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -282,6 +295,26 @@ class RunStore:
             if column not in have:
                 self._db.execute(
                     f"ALTER TABLE runs ADD COLUMN {column} {kind}")
+        if "came_by" not in have:
+            self._backfill_came_by()
+
+    def _backfill_came_by(self) -> None:
+        """Fill ``came_by`` on old rows where the row already says it.
+
+        Once, when the column is added, and only where the thread itself
+        recorded the way in: a channel's turn is keyed ``kind:thread``
+        (``Service.deliver``), and Samay names every run's thread
+        ``samay-<schedule>-<time>`` and marks it unattended. Anything
+        else stays NULL -- a guess written into an audit is worse than a
+        gap in it.
+        """
+        self._db.execute(
+            "UPDATE runs SET came_by = substr(thread, 1, instr(thread, ':') - 1) "
+            "WHERE came_by IS NULL AND (thread LIKE 'telegram:%' "
+            "OR thread LIKE 'web:%')")
+        self._db.execute(
+            "UPDATE runs SET came_by = 'samay' WHERE came_by IS NULL "
+            "AND unattended = 1 AND thread LIKE 'samay-%'")
 
     def close(self) -> None:
         with self._lock:
@@ -296,8 +329,8 @@ class RunStore:
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
                 "cost_usd, stop_reason, detail, tools, answered_from, "
-                "agent_version, waited_seconds, resumes, unattended) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "agent_version, waited_seconds, resumes, unattended, came_by) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
@@ -307,7 +340,8 @@ class RunStore:
                  _dump([[step.name, step.refusal, step.decided_by]
                         for step in run.tools]),
                  _dump(list(run.answered_from)), run.agent_version,
-                 run.waited_seconds, run.resumes, int(run.unattended)),
+                 run.waited_seconds, run.resumes, int(run.unattended),
+                 run.came_by),
             )
             self._db.commit()
         return run.id
@@ -428,9 +462,12 @@ class RunStore:
             self._db.commit()
 
     def recent(self, *, actor: str | None = None, agent: str | None = None,
-               limit: int = 20) -> list[Run]:
+               came_by: str | None = None, limit: int = 20) -> list[Run]:
         """The last ``limit`` runs, newest first."""
         where, params = [], []
+        if came_by is not None:
+            where.append("came_by = ?")
+            params.append(came_by)
         if actor is not None:
             where.append("actor = ?")
             params.append(actor)
@@ -476,6 +513,7 @@ def _row_to_run(row: tuple) -> Run:
         waited_seconds=row[19],
         resumes=row[20],
         unattended=bool(row[21]),
+        came_by=row[22],
     )
 
 

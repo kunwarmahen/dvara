@@ -289,8 +289,10 @@ class Api:
         if parts == ["runs"]:
             actor = (query.get("actor") or [None])[0] or None
             agent = (query.get("agent") or [None])[0] or None
+            came_by = (query.get("came_by") or [None])[0] or None
             limit = _int((query.get("limit") or ["50"])[0], "limit")
-            return 200, {"runs": self.recent(actor, agent, max(1, min(limit, MAX_RUNS)))}
+            return 200, {"runs": self.recent(actor, agent, max(1, min(limit, MAX_RUNS)),
+                                             came_by=came_by)}
         if parts == ["files"]:
             return 200, {"folders": self.folders()}
         if parts == ["file"]:
@@ -465,10 +467,10 @@ class Api:
                  "people": [i for i in book.ids() if book.get(i).may_use(name)]}
                 for name in names]
 
-    def recent(self, actor: str | None, agent: str | None, limit: int
-               ) -> list[dict[str, Any]]:
+    def recent(self, actor: str | None, agent: str | None, limit: int,
+               came_by: str | None = None) -> list[dict[str, Any]]:
         return [self._run(r) for r in self.runs.recent(actor=actor, agent=agent,
-                                                       limit=limit)]
+                                                       came_by=came_by, limit=limit)]
 
     def _run(self, run: Run) -> dict[str, Any]:
         mine = run.actor == self.owner
@@ -478,6 +480,7 @@ class Api:
             "ended_at": run.ended_at.isoformat() if run.ended_at else None,
             "stop_reason": run.stop_reason, "ok": run.ok, "model": run.model,
             "cost_usd": run.cost_usd, "unattended": run.unattended,
+            "came_by": run.came_by,
             "waited_seconds": run.waited_seconds, "resumes": run.resumes,
             "tools": [{"name": s.name, "refusal": s.refusal} for s in run.tools],
             # the owner's own words, and nobody else's

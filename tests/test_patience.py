@@ -239,5 +239,5 @@ def test_runs_shows_who_was_kept_waiting(make_service, agents_root, capsys):
                             stop_reason="end_turn", waited_seconds=20.005,
                             tools=[ToolStep("write_file", "timeout",
                                             "asked")]))
-    _runs(service, SimpleNamespace(actor=None, agent=None, limit=5))
+    _runs(service, SimpleNamespace(actor=None, agent=None, came_by=None, limit=5))
     assert "[waited 20s]" in capsys.readouterr().out

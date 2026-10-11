@@ -174,15 +174,20 @@ const HOW = { end_turn: "finished", held: "waiting for an answer", error: "faile
               refused: "turned away", cancelled: "cancelled", max_tokens: "ran out of room",
               files: "/files", new: "/new", accounts: "/accounts" };
 const FINE = new Set(["end_turn", "held", "files", "new", "accounts", "cancelled"]);
+// the way each turn came in (runs.py came_by); a bridge's own word shows as it is
+const CAME = { telegram: "Telegram", web: "Web", samay: "Samay", cli: "CLI", http: "HTTP" };
 
 function runCard(r) {
   const cost = r.cost_usd === null ? "no price" : usd(r.cost_usd);
   const how = HOW[r.stop_reason] || r.stop_reason;
   const card = h("article.run" + (FINE.has(r.stop_reason) ? "" : ".bad"), {},
     h("div.run-head", {},
-      h("span.run-who", {}, `${r.actor} → ${r.agent}`),
+      h("span.run-who", {},
+        r.came_by ? h("span.chip.came", { title: "came in by" }, CAME[r.came_by] || r.came_by)
+                  : null,
+        `${r.actor} → ${r.agent}`),
       h("span.run-meta", { title: r.started_at }, `${ago(r.started_at)} · ${how} · ${cost}`
-        + (r.unattended ? " · scheduled" : ""))),
+        + (r.unattended && r.came_by !== "samay" ? " · scheduled" : ""))),
     r.tools.length ? h("div.steps", {}, r.tools.map((t) => h(
       "span.step" + (t.refusal && t.refusal !== "held" ? ".refused" : ""),
       { title: t.refusal ? `refused: ${t.refusal}` : "ran" }, t.name))) : null);
@@ -200,9 +205,11 @@ function runCard(r) {
 async function drawRuns() {
   const who = document.getElementById("who").value;
   const which = document.getElementById("which").value;
+  const came = document.getElementById("came").value;
   const q = new URLSearchParams({ limit: "60" });
   if (who) q.set("actor", who);
   if (which) q.set("agent", which);
+  if (came) q.set("came_by", came);
   const data = await api(`/api/runs?${q}`);
   document.getElementById("runs").replaceChildren(...(data.runs.length
     ? data.runs.map(runCard) : [h("p.empty", {}, "No turns recorded yet.")]));
@@ -437,7 +444,11 @@ async function refresh() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  for (const id of ["who", "which"]) {
+  fill("came", Object.keys(CAME), "every way");
+  for (const option of document.getElementById("came").options) {
+    if (option.value) option.textContent = CAME[option.value];
+  }
+  for (const id of ["who", "which", "came"]) {
     document.getElementById(id).addEventListener("change", () => drawRuns().catch(() => {}));
   }
   refresh();

@@ -504,7 +504,8 @@ class Service:
                       allow_tools: Sequence[str] = (),
                       phone: bool = False,
                       phone_steps: Sequence[str] = (),
-                      wait: float | None = None) -> Reply:
+                      wait: float | None = None,
+                      came_by: str | None = None) -> Reply:
         """Run one turn for one person, and answer them either way.
 
         Never raises for anything a person could have caused. A refusal is
@@ -551,8 +552,13 @@ class Service:
         use, locked, asleep) and the run skipped when it isn't free.
         ``phone_steps`` are the held taps the person let it do unasked,
         handed to Sparsh, which checks each (its rules.py).
+
+        ``came_by`` is the way the turn came in, for the Run (``runs.py``):
+        the caller's word for itself, or the channel's kind when it came
+        ``via`` one.
         """
         started = datetime.now(UTC)
+        came_by = came_by or (via.kind if via is not None else None)
         self.refresh()
         try:
             actor, thread = self._whom(actor, via, thread)
@@ -613,7 +619,8 @@ class Service:
             # reached a model is the store admitting to a doubt it does
             # not have.
             run = Run(actor=actor, agent=agent, thread=thread, message=text,
-                      started_at=started, cost_usd=0.0, unattended=unattended)
+                      started_at=started, cost_usd=0.0, unattended=unattended,
+                      came_by=came_by)
             try:
                 if not unattended:
                     return await self._turn(spec=spec, who=who, key=key,
@@ -703,8 +710,11 @@ class Service:
             # hold must not both carry it on.
             if self.holds.get(hold_id) is None:
                 raise NoSuchHold("that turn was answered a moment ago")
+            # The answer's way in, not the held turn's: this turn is the
+            # one the answer started. The CLI's door is "terminal".
             run = Run(actor=actor, agent=hold.agent, thread=hold.thread,
-                      message="", started_at=started, cost_usd=0.0)
+                      message="", started_at=started, cost_usd=0.0,
+                      came_by="cli" if door == "terminal" else door)
             try:
                 return await self._turn(spec=spec, who=who, key=hold.key,
                                         run=run, resuming=hold,

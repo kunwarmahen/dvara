@@ -527,9 +527,9 @@ cannot answer the owner's first question.
 
 ```
 $ dvara runs
-2026-09-15 17:46  guest/greeter  end_turn          $0.0584  'and again?'
-2026-09-15 17:46  guest/greeter  end_turn          $0.0468  'hello'
-2026-09-18 01:19  owner/scribe   end_turn          $0.0007  'write a haiku…'
+2026-09-15 17:46  telegram  guest/greeter  end_turn          $0.0584  'and again?'
+2026-09-15 17:46  telegram  guest/greeter  end_turn          $0.0468  'hello'
+2026-09-18 01:19  cli       owner/scribe   end_turn          $0.0007  'write a haiku…'
                   write_file -> write_file(refused)  [answered from terminal]
 ```
 
@@ -979,8 +979,11 @@ dvara's page for owner:
 
 Open the address. You'll see a card for each person with today's spend
 against their allowance, the agents and who may use them, and every turn,
-newest first, with its tools. A refused call is red. Pick a person or an
-agent to narrow the list.
+newest first, with its tools. A refused call is red. Each turn starts with
+the way it came in — **Telegram**, **Web**, **Samay** or **CLI** — and you
+can narrow the list by person, agent, or **Came by**
+([notes/36](notes/36-which-way-it-came-in.md)). `dvara runs --came-by samay`
+does the same in the terminal.
 
 At the top, **Waiting for you** shows what your agents are asking you
 right now, with **Allow** and **Refuse**. Pressing one is the same as
