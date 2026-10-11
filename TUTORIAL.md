@@ -1244,6 +1244,14 @@ Smritikosh and out of reach of Priya's key. Someone with no key in
 `memory.json` gets no memory, and the owner sees one line saying so
 ([notes/37](notes/37-their-own-memories.md)).
 
+**An account you made yourself.** To give someone a Smritikosh account
+you made in its dashboard: sign in as them, make a key under **Settings →
+API keys** (shown once), and add `"<their id>": {"user": "<the account's
+name>", "key": "sk-smriti-…"}` to `memory.json`. It is read again on every
+turn, so there's no restart. Always their own key, never an admin's: a
+key opens only its own account's memories, and that is the wall between
+two people.
+
 ---
 
 # Where to read next
