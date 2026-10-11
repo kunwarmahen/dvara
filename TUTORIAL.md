@@ -1402,5 +1402,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 773 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 785 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*
