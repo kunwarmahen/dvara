@@ -916,6 +916,18 @@ def test_the_account_words_are_offered_only_where_the_package_asks_for_accounts(
                              "lock", "unlock"]
 
 
+def test_the_memory_words_are_offered_only_where_the_package_remembers(
+        make_bot, make_service, actors, agents_root):
+    write_package(agents_root, "keeper", body=(
+        '[agent]\nname = "keeper"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["web_fetch"]\n'
+        '[memory]\nvia = "local"\n'))
+    fake = FakeTelegram([])
+    asyncio.run(make_bot(fake, service=make_service([], actors=actors),
+                         agent="keeper").run())
+    assert menu_of(fake) == ["new", "memory", "remember"]
+
+
 def test_a_menu_telegram_refuses_costs_the_menu_never_the_bot(make_bot):
     fake = FakeTelegram([message("hi")])
     fake.status["setMyCommands"] = [httpx.Response(

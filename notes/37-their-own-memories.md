@@ -101,11 +101,11 @@ GET /memory/asha-scratch?app_ids=default&limit=100 HTTP/1.1" 200 OK
 
 ## What is not here yet
 
-* **A look back at the end of a conversation.** At Yantra's own page,
-  what was said in passing is caught when a conversation ends (Yantra's
-  memory/reflect.py). Here a conversation has no end anyone marks, so
-  only what the agent writes down with `remember`, after a yes, is kept.
-* **`/memory` in the chat.** A person can't list or remove what is kept
-  about them from Telegram yet; the owner can, in Smritikosh.
+* ~~**A look back at the end of a conversation.**~~ At `/new`, and what
+  Yantra notices on the way, listed for the person to keep with
+  `/remember` ([note 38](38-what-they-said-in-passing.md)).
+* ~~**`/memory` in the chat.**~~ `/memory` lists what is kept about
+  them, `/memory forget ID` takes one back
+  ([note 38](38-what-they-said-in-passing.md)).
 * **The example packages.** None of them asks for memory, so turning
   `--memory` on changes nothing until a package says `[memory] via`.

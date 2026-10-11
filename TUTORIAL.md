@@ -1254,6 +1254,46 @@ turn, so there's no restart. Always their own key, never an admin's: a
 key opens only its own account's memories, and that is the wall between
 two people.
 
+### What they said in passing
+
+People rarely say "remember this". They mention it. Try it with the
+greeter remembering, as the guest:
+
+```bash
+dvara say --actor guest --agent greeter "I just moved to Pune, and I work night shifts as a nurse. Any tip for a sleepy 7am dog walk?"
+dvara say --actor guest --agent greeter "/new"
+```
+
+The answer to `/new` starts as always (*"Starting fresh…"*), then lists
+what the agent noticed, numbered:
+
+```
+Before we started over, I noticed this about you:
+1. Lives in Pune, India (relocated there in the recent past).
+2. Works night shifts as a nurse, which shapes their daily schedule (…).
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do.
+```
+
+That list is one call to the agent's own model, on the guest's
+allowance, and it shows in `dvara runs` as `looked_back`. Nothing is
+kept yet. Keep the first and look:
+
+```bash
+dvara say --actor guest --agent greeter "/remember 1"
+dvara say --actor guest --agent greeter "/memory"
+```
+
+```
+What I remember about you (1):
+#1  Lives in Pune, India (relocated there in the recent past).
+Send /memory forget ID to remove one (/memory forget 1).
+```
+
+`/memory forget 1` takes it back. Mid-conversation, what the agent
+notices joins the same list, and the answer gets one line saying so.
+On Telegram both words are in the `/` menu of an agent that remembers
+([notes/38](notes/38-what-they-said-in-passing.md)).
+
 ---
 
 # Where to read next
@@ -1289,6 +1329,7 @@ Each topic, and the note that argues it:
 | `notes/31-their-own-page.md` | `/accounts page`: a one-time link to a person's own Setu page, and the owner's one switch |
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 | `notes/37-their-own-memories.md` | each person's memories under their own name, and `--memory`: the owner's store, opened per turn with that person's own key |
+| `notes/38-what-they-said-in-passing.md` | `/memory`, `/remember`: the look back at `/new`, listed and kept only on the person's word, and what is kept, theirs to see and take back |
 
 ---
 

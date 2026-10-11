@@ -84,7 +84,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -112,7 +113,7 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import files, fresh, money, patience, ready
+from dvara import files, fresh, money, patience, ready, remembering
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -289,6 +290,8 @@ class Service:
         # silence holds is a policy for new questions, not a way to
         # strand old ones (holds.py).
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
+        #: What a look back noticed, waiting for the person's /remember.
+        self.offered = remembering.Offered(self.state)
         #: Telling a person something nobody asked about (notices.py).
         self.notices = NoticeDesk()
         #: The web channel (web.py), when the owner turned it on: a page's
@@ -584,9 +587,17 @@ class Service:
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="files", files=(found,) if found else ())
         if not unattended and fresh.is_new_word(text):
-            # Starting over: theirs to ask for, not a turn.
-            return Reply(text=self._start_over(key), run_id=None, agent=agent,
-                         actor=actor, stop_reason="new")
+            # Starting over: theirs to ask for, not a turn -- though a
+            # package that remembers looks back first (remembering.py).
+            said = await self._start_over(key, spec=spec, who=who, thread=thread,
+                                          text=text, came_by=came_by, started=started)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="new")
+        if not unattended and remembering.word_of(text):
+            # What is kept about them: theirs to see, keep and forget.
+            said = await self._memory_words(spec, who, key, text)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="memory")
         if not unattended:
             # The person's own accounts: theirs to act on, not a turn.
             # Nothing of it is kept -- no run, no history -- because a
@@ -1126,6 +1137,9 @@ class Service:
             run.reply = waiting_text(held)
         if not run.reply:
             run.reply = _explain(run.stop_reason, run.detail, ceiling)
+        noticed = self._noticed(agent, run)
+        if noticed:
+            run.reply = f"{run.reply}\n\n{noticed}"
         self.runs.record(run)
         return Reply(text=run.reply, run_id=run.id, agent=run.agent,
                      actor=run.actor, stop_reason=run.stop_reason,
@@ -1275,15 +1289,172 @@ class Service:
             gone += 1
         return gone
 
-    def _start_over(self, key: str) -> str:
+    async def _start_over(self, key: str, *, spec: AgentSpec, who: Actor, thread: str,
+                          text: str, came_by: str | None, started: datetime) -> str:
         """``/new`` (fresh.py): this conversation forgotten, and anything
         it was holding for the person with it -- never while a turn is
-        still working on it."""
+        still working on it. A package that remembers looks back over it
+        first, and what it noticed is listed under the answer."""
         if key in self._locks:
             return fresh.STILL_ANSWERING
-        self.holds.drop_key(key)
-        gone = self.sessions.forget(key)
-        return fresh.STARTED_OVER if gone else fresh.NOTHING_YET
+        async with self._locks.hold(key):
+            noticed = ""
+            if self.sessions.load_latest(key) is not None:
+                noticed = await self._look_back(spec, who, key, thread=thread,
+                                                text=text, came_by=came_by,
+                                                started=started)
+            self.holds.drop_key(key)
+            gone = self.sessions.forget(key)
+        said = fresh.STARTED_OVER if gone else fresh.NOTHING_YET
+        return f"{said}\n\n{noticed}" if noticed else said
+
+    async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
+                         text: str, came_by: str | None, started: datetime) -> str:
+        """Yantra's look back over the conversation ``/new`` ends: one call
+        to the agent's own model, on the person's allowance and recorded
+        as a Run like any turn. Never costs the start-over: a look back
+        that fails is a line for the owner, and the conversation still goes."""
+        from yantra.memory.reflect import areflect
+
+        ceiling = self._ceiling(spec=spec, who=who)
+        if ceiling.amount is not None and ceiling.amount <= 0:
+            return ""                       # no allowance left to look back with
+        run = Run(actor=who.id, agent=workspace_parts(key)[1], thread=thread,
+                  message=text, started_at=started, cost_usd=0.0, came_by=came_by)
+        async with self._remembered(spec, who, key, history=True) as agent:
+            if agent is None:
+                return ""
+            run.model = agent.model
+            before_total = _copy(agent.total_usage)
+            before_models = {m: _copy(u) for m, u in agent.usage_by_model.items()}
+            found = []
+            try:
+                found = await areflect(agent)
+                run.stop_reason = "looked_back"
+            except Exception as exc:  # noqa: BLE001 -- the start-over still happens
+                run.stop_reason, run.detail = "error", f"{type(exc).__name__}: {exc}"
+                self._note(f"dvara: {who.id}: the look back at /new failed -- {run.detail}")
+            finally:
+                run.usage = _delta(before_total, agent.total_usage)
+                run.cost_usd = _cost(before_models, agent.usage_by_model,
+                                     provider_name=agent.provider_name)
+                run.ended_at = datetime.now(UTC)
+        if found:
+            # the whole conversation, read once: it replaces its parts
+            self.offered.add(who.id, run.agent,
+                             [remembering.Offer(c.statement, c.kind) for c in found],
+                             replace=True)
+        waiting = self.offered.get(who.id)
+        said = remembering.looked_back(waiting) if waiting else ""
+        run.reply = said or ("Looked back; nothing new to remember."
+                             if run.stop_reason == "looked_back" else "")
+        self.runs.record(run)
+        return said
+
+    def _noticed(self, agent, run: Run) -> str:
+        """What Yantra noticed about the person during this turn
+        (``memory.pending``: before shortening the conversation, or in a
+        learned task's write-up), listed for them to keep; a run nobody
+        is at lets it go, since nobody is there to say which."""
+        memory = getattr(agent, "memory", None)
+        pending = list(getattr(memory, "pending", None) or [])
+        if not pending:
+            return ""
+        memory.pending.clear()
+        if run.unattended:
+            return ""
+        new = self.offered.add(run.actor, run.agent,
+                               [remembering.Offer(c.statement, c.kind) for c in pending])
+        return remembering.noticed(new) if new else ""
+
+    @asynccontextmanager
+    async def _remembered(self, spec: AgentSpec, who: Actor, key: str, *,
+                          history: bool = False) -> AsyncIterator[object | None]:
+        """An agent built for this person as a turn would be, with their
+        memory open (their name, their own key) and no message sent; None
+        when this package keeps none for them. ``history``: this
+        conversation loaded too, for a look back over it."""
+        provider_name = self.provider_name or spec.provider or guess_provider()
+        model = self.model or spec.model or default_model(provider_name)
+        spec, remembers = self._memory_for(spec, who)
+        if spec.memory in (None, "off"):
+            yield None
+            return
+        try:
+            agent = spec.build_async(cwd=self._workspace(key),
+                                     provider=self._provider(provider_name),
+                                     provider_name=provider_name, model=model,
+                                     memory_user=remembers.user)
+        except ConfigError as exc:
+            self._note(f"dvara: {who.id}: memory could not be opened -- {exc}")
+            yield None
+            return
+        agent.provider_name = provider_name
+        manager = None
+        if self.memory is not None and getattr(agent, "memory", None) is not None:
+            from yantra.mcp import MCPManager
+
+            manager = MCPManager(agent.registry, agent=agent,
+                                 memory_path=self._workspace(key) / ".yantra" / "mcp.json")
+            await self._remembering(agent, manager, who=who, remembers=remembers)
+        try:
+            if history:
+                self._rehydrate(agent, key)
+            yield agent if getattr(agent, "memory", None) is not None else None
+        finally:
+            if manager is not None:
+                await asyncio.to_thread(manager.shutdown)
+
+    async def _memory_words(self, spec: AgentSpec, who: Actor, key: str, text: str) -> str:
+        """``/memory``, ``/memory forget ID``, ``/remember …`` (remembering.py)."""
+        from yantra.memory import MemoryStoreError, short_id
+        from yantra.memory.reflect import Candidate, keep
+
+        name = workspace_parts(key)[1]
+        if spec.memory in (None, "off"):
+            return remembering.NOTHING_HERE.format(agent=name)
+        word, rest = remembering.word_of(text), remembering.rest_of(text)
+        offers = self.offered.get(who.id)
+        picked: list[int] = []
+        if word == "/remember":
+            if not rest and offers:
+                return remembering.listing(offers, head="I noticed this about you:")
+            pick = remembering.chosen(rest, len(offers))
+            if isinstance(pick, str):
+                return pick
+            picked = pick
+        forget = None
+        if word == "/memory" and rest:
+            verb, _, target = rest.partition(" ")
+            if verb.lower() not in ("forget", "remove", "delete") or not target.strip():
+                return "Send /memory to see what I remember, or /memory forget ID."
+            forget = target.strip()
+        async with self._remembered(spec, who, key) as agent:
+            if agent is None:
+                return remembering.NO_STORE
+            memory = agent.memory
+            try:
+                if picked:
+                    chosen = [offers[n - 1] for n in picked]
+                    await asyncio.to_thread(
+                        keep, memory, [Candidate(o.statement, o.kind) for o in chosen])
+                    self.offered.take(who.id, picked)
+                    return remembering.kept_words([o.statement for o in chosen])
+                if forget is not None:
+                    if "forget" in memory.cannot():
+                        return "Where your memories are kept, I can't remove one from here."
+                    gone = await asyncio.to_thread(memory.forget, forget)
+                    return (f"Forgot #{forget.lstrip('#')}." if gone else
+                            f"There's no memory #{forget.lstrip('#')}. Send /memory to see them.")
+                if "list" in memory.cannot():
+                    return "Where your memories are kept, I can't list them from here."
+                items = await asyncio.to_thread(memory.list, 100)
+                return remembering.memory_list(items, short_id)
+            except MemoryStoreError as exc:
+                return f"That didn't work: {exc}"
+            except Exception as exc:  # noqa: BLE001 -- a store down is a sentence
+                self._note(f"dvara: {who.id}: {word} failed -- {type(exc).__name__}: {exc}")
+                return "I couldn't reach where your memories are kept just now. Try again soon."
 
     def _tidy_quietly(self) -> None:
         """``tidy`` after an unattended turn, which is when there is more

@@ -102,9 +102,10 @@ channel adapter usually goes wrong.
   a person prefixing every message forever. A second agent is a second
   token from BotFather and a second process, and dvara invents no command
   dialect. (The exceptions are the person's own accounts --
-  ``/connect``, ``/accounts``, ``/disconnect`` -- and their own files --
-  ``/files``, ``/file NAME`` -- which are not for the agent at all:
-  ``accounts.py``, ``files.py``.)
+  ``/connect``, ``/accounts``, ``/disconnect`` -- their own files --
+  ``/files``, ``/file NAME`` -- and what is remembered about them --
+  ``/memory``, ``/remember`` -- which are not for the agent at all:
+  ``accounts.py``, ``files.py``, ``remembering.py``.)
 * **An unknown identity gets SILENCE, not a sentence.** The roster's
   refusal is polite and says nothing about who else exists, but saying it
   to every stranger who finds the bot makes a service out of the
@@ -722,6 +723,8 @@ class TelegramBot:
         if _writes_files(self.spec):
             lines.append("Send /files to see the files I keep for you, and "
                          "/file NAME to get one.")
+        if _remembers(self.spec):
+            lines.append("Send /memory to see what I remember about you.")
         lines.append("Send /new to start our conversation over.")
         return "\n\n".join(lines)
 
@@ -1077,6 +1080,9 @@ def _menu(spec) -> list[tuple[str, str]]:
     if _writes_files(spec):
         words += [("files", "What I keep for you"),
                   ("file", "Send one of them: /file NAME")]
+    if _remembers(spec):
+        words += [("memory", "What I remember about you"),
+                  ("remember", "Keep what I noticed: /remember 1 2")]
     if spec.connections:
         words += [("accounts", "Your connected accounts"),
                   ("connect", "Connect one: /connect NAME"),
@@ -1084,6 +1090,11 @@ def _menu(spec) -> list[tuple[str, str]]:
                   ("lock", "Lock your accounts with a passphrase"),
                   ("unlock", "Unlock them for a while")]
     return words
+
+
+def _remembers(spec) -> bool:
+    """Whether this agent's package keeps memories about people at all."""
+    return getattr(spec, "memory", None) not in (None, "off")
 
 
 def _writes_files(spec) -> bool:

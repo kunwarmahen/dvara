@@ -122,3 +122,8 @@ costs the menu, never the bot.
 ## What is not here yet
 
 * ~~**Telegram's command menu.**~~ Above.
+* ~~**What the conversation showed about them, let go with it.**~~ An
+  agent whose package keeps memories now looks back first, and lists
+  what it noticed under "Starting fresh" for the person to keep with
+  `/remember` ([note 38](38-what-they-said-in-passing.md)). Only that
+  case asks a model; every other `/new` still costs nothing.
