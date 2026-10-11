@@ -409,6 +409,12 @@ behind a tunnel); without one they're connected at the machine
 person's tokens sit on your disk, where you could read them; say so to
 anyone you give a folder ([notes/19](notes/19-their-own-accounts.md)).
 
+A sign-in the site refused later (Google expires a Testing app's after
+seven days) is marked by Setu, and the person's agent stops offering that
+account and tells them to sign in again: `/connect gmail` once more, or
+the owner, for a folder the owner looks after. The next message has it
+back; nothing is restarted (Yantra's notes/127).
+
 ### The policy file
 
 Optional, and with none the service behaves exactly as it did before
