@@ -399,7 +399,8 @@ bot; `/new` does ([notes/28](notes/28-starting-over.md)).
 These go to dvara, never to an agent, and the pasted address goes only to
 the waiting sign-in ([notes/20](notes/20-signing-in-from-the-chat.md)).
 Their folder borrows your Google client file; while your Google app is in
-Testing mode, add each person's address as a test user. A folder you
+Testing mode, add each person's address as a test user (publishing the
+app ends that, and the weekly sign-out too; Setu's README). A folder you
 pointed them at (priya's, above) stays yours to change, at the machine:
 `SETU_HOME=<folder> setu connect gmail`. Sites signed in to through a
 browser window (Amazon, X) are streamed to their phone when you give

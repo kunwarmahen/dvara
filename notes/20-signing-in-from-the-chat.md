@@ -121,7 +121,12 @@ whatever the owner's own Setu was told with `setu config client-file`.
 That also means Google's own rule applies. While the owner's app is in
 Google's "Testing" mode, only the people listed as its test users can
 sign in, and their sign-ins expire after 7 days. Add each person's Gmail
-address under *Audience → Test users* in the Google Cloud console.
+address under *Audience → Test users* in the Google Cloud console. Or
+publish the app (*Audience → Publish app*): for a household that needs no
+verification from Google, only a click past its "unverified app" warning,
+and then anyone may sign in and nobody is signed out weekly. A sign-in
+that does expire is marked by Setu, and the person's agent tells them to
+`/connect` again ([Yantra's note 127](https://github.com/kunwarmahen/yantra/blob/main/notes/127-a-sign-in-that-ran-out.md)).
 
 ## Home Assistant, the same way
 

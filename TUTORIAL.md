@@ -934,7 +934,9 @@ address (`SETU_WINDOW_HOST`; see
 [notes/22](notes/22-a-window-sent-to-their-phone.md) for which address
 is safe for what). raj's fresh folder borrows your Google client file;
 while your Google app is in Testing mode, add his address as a test
-user ([notes/20](notes/20-signing-in-from-the-chat.md)).
+user, and his sign-in expires every 7 days (his agent tells him to
+`/connect gmail` again). Publishing the app ends both
+([notes/20](notes/20-signing-in-from-the-chat.md)).
 
 **Your own phone, your own folder.** If you are an actor too, pointed at
 the folder your desktop uses so the page and the chat share one set of
