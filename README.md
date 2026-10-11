@@ -1023,6 +1023,11 @@ reply = await service.deliver(actor="mahen", agent="researcher",
 print(reply.text, reply.cost_usd)
 ```
 
+A store for people's memories goes in as `memory=Store.load(path)`
+(`from dvara.memory import Store`), the same as `--memory`; each turn
+reads that person's key from `<state>/memory.json`
+([notes/37](notes/37-their-own-memories.md)).
+
 ## The source tree
 
 | module | what it holds |
