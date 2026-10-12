@@ -16,9 +16,10 @@ Refusing every scheduled phone run was safe and useless.
 ## Only when the schedule says so
 
 **A RUN GETS THE PHONE WHEN ITS SCHEDULE WORKS IT.** Samay's schedule
-says `phone` (Samay's note 06): one the agent made in a chat turn that
+says `phone` (Samay's note 06): one the agent made, in a chat turn that
 had the phone (this service starts the person's Samay tools with
-`--phone`), or `samay add --phone`. `POST /message` then carries
+`--phone`), for a job that works the phone, or `samay add --phone`. A
+light switched through Home Assistant from that chat is not one. `POST /message` then carries
 `phone: true`. Without it a scheduled run gets no phone, as before. The
 run's person must be the phone's (`phone = true`); anyone else is
 refused before anything runs.

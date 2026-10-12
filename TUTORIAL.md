@@ -1137,8 +1137,9 @@ it's off unless you start the door with `--sparsh`
 ([notes/30](notes/30-do-this-on-my-phone.md)).
 
 **On a schedule.** A scheduled run gets the phone only when its schedule
-says so: one your agent made in a chat that had the phone, or `samay add
---phone`. Before it starts, the door looks at the phone. In your hand: it
+says so: one your agent made in a chat that had the phone, for a job that
+works the phone, or `samay add --phone`. A schedule that switches a light
+through Home Assistant isn't one, and doesn't wait for the phone. Before it starts, the door looks at the phone. In your hand: it
 waits up to ten minutes, then skips. Locked with a PIN: it asks you in
 your chat to unlock it, and waits the schedule's wait. Asleep, or behind
 a swipe lock with no PIN: it wakes it and goes, without asking. A Send the

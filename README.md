@@ -894,7 +894,7 @@ phone = true            # the phone on this machine is yours
   it. Not the screen's numbered list: that's the model's (Sparsh's
   notes/10).
 * **In a scheduled run only when its schedule says so** (made in a chat
-  that had the phone, or `samay add --phone`). The phone is checked
+  that had the phone, for a job that works it, or `samay add --phone`). The phone is checked
   first: in your hand, it waits up to ten minutes, then skips; locked,
   it asks you to unlock it; asleep (or a lock with no PIN), it wakes it. Steps you granted with
   the schedule (*"send in Messages when the screen shows 555-0123"*) go
