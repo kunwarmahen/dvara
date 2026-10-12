@@ -70,7 +70,9 @@ it can open is theirs.
 `[connections] needs` names its connector, and only up to the package's
 level: `needs = ["gmail:read"]` gets search and read, never send, even
 when the person signed in with send. A package that needs nothing gets
-nothing.
+nothing. A need brings its own tools: a package whose `[tools] allow`
+is narrowed doesn't also have to name them (Yantra's note 110), which it
+once did, under names only Setu knew.
 
 **A SCHEDULED TURN GETS THE SAME.** A schedule the person made runs as
 them (note 17), so it reads what their chat turns read; the schedule's
