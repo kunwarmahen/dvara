@@ -51,6 +51,7 @@ import contextlib
 import json
 import os
 import sys
+import tomllib
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -72,7 +73,7 @@ from dvara.telegram import POLL_SECONDS, TelegramBot
 
 DEFAULT_ROOT = "~/dvara/agents"
 DEFAULT_ACTORS = "~/dvara/actors.toml"
-DEFAULT_POLICY = "~/dvara/policy.toml"
+DEFAULT_POLICY = "policy.toml"     # beside the actors file
 DEFAULT_STATE = "~/dvara/state"
 
 
@@ -93,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
                              f"matched per tool call. Optional: with none, "
                              f"every call that could change something is "
                              f"decided by the rung alone (default "
-                             f"{DEFAULT_POLICY} if it exists)")
+                             f"{DEFAULT_POLICY} beside the actors file, if it exists)")
     parser.add_argument("--state", default=os.environ.get("DVARA_STATE",
                                                           DEFAULT_STATE),
                         help="where sessions, run history and each person's "
@@ -284,6 +285,19 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"how long each long poll holds the connection open "
              f"(default {POLL_SECONDS})")
 
+    sets = subs.add_parser("settings", help="the owner's files, for a page: show them, "
+                           "or change a person, the rules, an agent or a whole file "
+                           "(JSON or text on stdin; checked before it's written)")
+    sets.add_argument("what", choices=("show", "person", "rules", "agent", "text"))
+    sets.add_argument("name", nargs="?", help="the person, the agent, or the kind of "
+                      "file for text (actors, policy, agent, prompt)")
+    sets.add_argument("--agent", help="for text: which agent's agent.toml or prompt")
+    sets.add_argument("--remove", action="store_true", help="the person or agent, gone "
+                      "(an agent's folder is moved aside, never deleted)")
+    sets.add_argument("--from-example", dest="from_example", metavar="NAME",
+                      help="a new agent, copied from this example")
+    sets.add_argument("--examples", metavar="DIR", help="where the example agents are")
+
     serve = subs.add_parser("serve", help="listen for channel adapters")
     serve.add_argument("--host", default="127.0.0.1",
                        help="localhost by default, deliberately: reaching the "
@@ -330,7 +344,7 @@ def _service(args) -> Service:
     # way to tell; an owner who has never written one is not missing
     # anything.
     named = bool(args.policy)
-    rules = RuleBook.from_toml(Path(args.policy or DEFAULT_POLICY),
+    rules = RuleBook.from_toml(_policy_path(args),
                                required=named)
     if args.keep_unattended < 0:
         raise ConfigProblem("--keep-unattended is a number of days, 0 or more")
@@ -423,6 +437,73 @@ def _sparsh(asked: str | None) -> str | None:
     return program
 
 
+def _policy_path(args) -> Path:
+    """The rules: the file named, else policy.toml beside the actors file,
+    so a page that writes it and the running service read the same one."""
+    if args.policy:
+        return Path(args.policy).expanduser()
+    return Path(args.actors).expanduser().parent / DEFAULT_POLICY
+
+
+def _settings(args) -> int:
+    """``dvara settings``: the owner's files, for a page (settings.py).
+    JSON out; a refusal is {"ok": false, "error": ...} and exit 2."""
+    from dvara import settings
+
+    root, actors = Path(args.root).expanduser(), Path(args.actors).expanduser()
+    policy = _policy_path(args)
+    examples = Path(args.examples).expanduser() if args.examples else None
+    try:
+        if args.what == "show":
+            out = settings.show(root=root, actors=actors, policy=policy, examples=examples)
+        else:
+            body = sys.stdin.read()
+            data = json.loads(body) if args.what != "text" and body.strip() else None
+            if args.what == "person":
+                if args.remove:
+                    settings.remove_person(actors, args.name)
+                    out = {"removed": args.name}
+                else:
+                    out = {"person": settings.set_person(actors, args.name, data or {})}
+            elif args.what == "rules":
+                settings.set_rules(policy, list(data or []))
+                out = {"rules": len(data or [])}
+            elif args.what == "agent":
+                if args.remove:
+                    out = {"moved_to": str(settings.remove_agent(root, args.name))}
+                elif args.from_example:
+                    if examples is None:
+                        raise ConfigProblem("--from-example needs --examples DIR")
+                    settings.add_agent(root, args.name, examples / args.from_example)
+                    out = {"added": args.name}
+                else:
+                    settings.set_agent(root, args.name, (data or {}).get("tables", {}),
+                                       (data or {}).get("prompt"))
+                    out = {"changed": args.name}
+            else:
+                kind = args.name
+                if kind == "actors":
+                    path = actors
+                elif kind == "policy":
+                    path = policy
+                elif kind in ("agent", "prompt") and args.agent:
+                    folder = root / settings._name(args.agent, "an agent's")
+                    path = folder / "agent.toml"
+                    if kind == "prompt":
+                        meta = tomllib.loads(path.read_text(encoding="utf-8"))
+                        path = folder / meta.get("agent", {}).get("prompt", "prompt.md")
+                else:
+                    raise ConfigProblem("text needs a kind: actors, policy, or agent / "
+                                        "prompt with --agent NAME")
+                settings.write_text(kind, path, body, root=root)
+                out = {"written": str(path)}
+    except (ConfigProblem, ValueError, OSError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 2
+    print(json.dumps({"ok": True, **out}))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     # THE COMMAND CLAIMS, NOT THE SERVICE. A `Service` an embedder built
@@ -434,6 +515,8 @@ def main(argv: list[str] | None = None) -> int:
         return _status(args)
     if args.command == "page":
         return _page(args)
+    if args.command == "settings":
+        return _settings(args)
     claim = None
     try:
         if args.command in CLAIMS:

@@ -134,7 +134,8 @@ waits for them; and what an agent remembers about a person is filed
 under that person, in Yantra's own file or, with `--memory`, behind a
 key of their own; and while nobody is writing, a quiet conversation is
 looked back over and every sign-in checked daily, with notices reaching
-phones through the house's own ntfy — covered by 798 tests. The API is not stable.
+phones through the house's own ntfy; and the owner's files changed from
+a page, each checked before it's written — covered by 809 tests. The API is not stable.
 
 ## The shape of it
 
@@ -471,9 +472,19 @@ Three rules hold it up, and the third is the one worth carrying away:
   matches `~/notes/../../.ssh/id_rsa`. Write the exact strings — a near
   miss is still *asked*, not refused.
 
-`--policy` is required if you name it and optional at
-`~/dvara/policy.toml`, so a typo in the path is an error rather than a
-file that silently does nothing.
+`--policy` is required if you name it and optional as `policy.toml`
+beside the actors file (`~/dvara/policy.toml` by default), so a typo in
+the path is an error rather than a file that silently does nothing. One
+written later, by hand or from Sarathi's home page, is picked up without
+a restart.
+
+**Changed from a page.** `dvara settings` shows and changes the actors
+file, the rules and each agent for a page (Sarathi's home page uses it):
+a person, all the rules, or an agent's tables and prompt as JSON on
+stdin, or a whole file as text. Each change is parsed the way Dvara
+parses it before it's written, the rest of the file (comments included)
+is kept, and the file before stays as `.bak`
+([notes/41](notes/41-the-owners-files-from-a-page.md)).
 
 **What each rule has actually done.** A deny announces itself; an allow
 is invisible by construction, because the call just runs. So a policy
@@ -1108,6 +1119,7 @@ reads that person's key from `<state>/memory.json`
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
 | `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it ([notes/40](notes/40-a-notice-on-their-phone.md)) |
+| `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)) |
@@ -1131,7 +1143,7 @@ reads that person's key from `<state>/memory.json`
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
-| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`; `--samay`, `--sparsh` and `--memory` checked at the start |
+| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

@@ -1376,6 +1376,35 @@ The phone hears notices while it can reach your house, which means home
 Wi-Fi, or anywhere your own Tailscale reaches. An iPhone shows them when
 the app is opened ([notes/40](notes/40-a-notice-on-their-phone.md)).
 
+## 23 · Your files, from a page
+
+Everything in this tutorial that meant editing `actors.toml`,
+`policy.toml` or an agent's `agent.toml` can be done by a program
+instead. `dvara settings` is what Sarathi's home page uses, and you can
+use it too:
+
+```
+$ echo '{"agents": ["greeter"], "setu": "own", "telegram": ["8675309"], "max_usd_per_day": 0.5}' \
+    | dvara --actors examples/actors.toml settings person priya
+{"ok": true, "person": {"id": "priya", "agents": ["greeter"], "setu": "own", ...}}
+```
+
+Open the file: Priya's table is at the end, and every line above it,
+comments included, is as it was. The file before is beside it as
+`actors.toml.bak`. Now try one Dvara wouldn't load:
+
+```
+$ echo '{"telegram": ["@priya"]}' | dvara --actors examples/actors.toml settings person priya
+{"ok": false, "error": "a Telegram id is a number (the bot shows it), not '@priya'"}
+```
+
+Nothing was written. The same goes for rules (`settings rules`, a JSON
+list), an agent (`settings agent greeter` with `{"tables": {"memory":
+{"via": "local"}}}`), and a whole file (`settings text actors`, the file
+on stdin). `settings show` prints everything as JSON. With Sarathi,
+you'll use **Settings** on the home page instead
+([notes/41](notes/41-the-owners-files-from-a-page.md)).
+
 ---
 
 # Where to read next
@@ -1413,6 +1442,7 @@ Each topic, and the note that argues it:
 | `notes/37-their-own-memories.md` | each person's memories under their own name, and `--memory`: the owner's store, opened per turn with that person's own key |
 | `notes/38-what-they-said-in-passing.md` | `/memory`, `/remember`: the look back at `/new`, listed and kept only on the person's word, and what is kept, theirs to see and take back |
 | `notes/39-while-nobody-is-writing.md` | a quiet conversation looked back over without `/new`, and every sign-in checked daily, told once to whoever can fix it |
+| `notes/41-the-owners-files-from-a-page.md` | `dvara settings`: people, rules and agents changed by a page, each checked by the code that reads it, comments kept |
 | `notes/40-a-notice-on-their-phone.md` | `--ntfy`: notices on the ntfy app, through a server in the house, each person on a topic nobody can guess; the accounts-page button |
 
 ---

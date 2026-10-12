@@ -438,19 +438,21 @@ class RunStore:
         run -- and a person answering a question it held later does not
         make it theirs. A thread a PERSON started is never in this list,
         even if a program wrote into it afterwards: that is their
-        conversation, and it stays. (SQLite returns the bare column from
-        the row that MIN picked.)
+        conversation, and it stays. Stamps are to the second, so two runs
+        in one second are ordered by which was written first.
         """
         with self._lock:
             rows = self._db.execute(
-                "SELECT r.actor, r.agent, r.thread, r.unattended, "
-                "MIN(r.started_at), MAX(r.ended_at) FROM runs r "
+                "SELECT r.actor, r.agent, r.thread, "
+                "(SELECT f.unattended FROM runs f WHERE f.actor = r.actor AND "
+                "f.agent = r.agent AND f.thread = r.thread "
+                "ORDER BY f.started_at, f.rowid LIMIT 1), MAX(r.ended_at) FROM runs r "
                 "LEFT JOIN tidied t ON t.actor = r.actor AND "
                 "t.agent = r.agent AND t.thread = r.thread "
                 "WHERE t.at IS NULL GROUP BY r.actor, r.agent, r.thread",
             ).fetchall()
         cutoff = _stamp(before)
-        return [(a, g, t) for a, g, t, first, _, last in rows
+        return [(a, g, t) for a, g, t, first, last in rows
                 if first == 1 and last <= cutoff]
 
     def gone_quiet(self, before: datetime, since: datetime
