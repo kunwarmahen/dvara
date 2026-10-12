@@ -453,6 +453,43 @@ class RunStore:
         return [(a, g, t) for a, g, t, first, _, last in rows
                 if first == 1 and last <= cutoff]
 
+    def gone_quiet(self, before: datetime, since: datetime
+                   ) -> list[tuple[str, str, str, str]]:
+        """``(actor, agent, thread, ended_at)`` for every conversation whose
+        last run was a person's turn that ended between ``since`` and
+        ``before``, and that nothing has looked back over since.
+
+        THE LAST RUN DECIDES. A look back is recorded as a run of its own
+        (``looked_back``), so a conversation looked back over leaves this
+        list until the person says something again. A program's run last
+        (Samay's, a carried-on hold nobody typed) is nobody's
+        conversation to look back over. ``since`` keeps a service started
+        for the first time from looking back over every conversation it
+        ever had. Stamps are to the second, so the later-written row wins a tie.
+        """
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT r.actor, r.agent, r.thread, r.ended_at, r.stop_reason, "
+                "r.unattended FROM runs r "
+                "LEFT JOIN tidied t ON t.actor = r.actor AND "
+                "t.agent = r.agent AND t.thread = r.thread "
+                "WHERE t.at IS NULL AND r.rowid = (SELECT l.rowid FROM runs l "
+                "WHERE l.actor = r.actor AND l.agent = r.agent AND l.thread = r.thread "
+                "ORDER BY l.ended_at DESC, l.rowid DESC LIMIT 1)",
+            ).fetchall()
+        low, high = _stamp(since), _stamp(before)
+        return [(a, g, t, last) for a, g, t, last, stop, unattended in rows
+                if not unattended and stop != "looked_back" and low <= last <= high]
+
+    def last_stop(self, actor: str, agent: str, thread: str) -> str | None:
+        """How the newest run in this conversation ended, or None."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT stop_reason FROM runs WHERE actor = ? AND agent = ? AND "
+                "thread = ? ORDER BY ended_at DESC, rowid DESC LIMIT 1", (actor, agent, thread),
+            ).fetchone()
+        return row[0] if row else None
+
     def mark_tidied(self, actor: str, agent: str, thread: str) -> None:
         with self._lock:
             self._db.execute(

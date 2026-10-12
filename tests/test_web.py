@@ -144,3 +144,10 @@ def test_a_held_turn_answered_on_the_page_leaves_its_answer_as_a_line(
             "answers": {"call-a": True, "call-b": "not b"}}).json() == {"started": True}
         after = settled(client)
         assert after["lines"][-1]["text"] == "wrote a." and after["holds"] == []
+
+
+def test_the_accounts_page_button_says_why_when_there_is_no_link(page):
+    got = page.post("/web/accounts-page", json={"actor": "owner"}, headers=AUTH).json()
+    assert got["url"] is None and "No accounts are set up for you" in got["said"]
+    assert page.post("/web/accounts-page", json={"actor": "nobody"},
+                     headers=AUTH).status_code == 404

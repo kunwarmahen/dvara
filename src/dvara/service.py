@@ -83,9 +83,10 @@ happened and the gate knows why, and neither of them knows both.
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -113,7 +114,7 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import files, fresh, money, patience, ready, remembering
+from dvara import files, fresh, money, patience, ready, remembering, signins
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -132,6 +133,11 @@ from dvara.runs import Run, RunStore, ToolStep
 #: How long a finished conversation that a program started is kept
 #: before ``Service.tidy`` lets it go: a week to look at what it did.
 KEEP_UNATTENDED = 7 * 24 * 3600.0
+#: How long nobody writes in a conversation before it is looked back over
+#: (``Service.look_back_quiet``): long enough that a pause is not an end.
+QUIET_FOR = 30 * 60.0
+#: How long after the service starts every sign-in is first checked.
+FIRST_CHECK_AFTER = 10 * 60.0
 
 
 #: Where a person on a channel sees their schedules: by asking.
@@ -238,6 +244,10 @@ class Service:
                  keep_unattended: float = KEEP_UNATTENDED,
                  web: bool = False,
                  memory: Store | None = None,
+                 quiet_for: float = QUIET_FOR,
+                 check_every: float = signins.EVERY,
+                 ntfy: str | None = None,
+                 ntfy_click: str | None = None,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -280,6 +290,12 @@ class Service:
         #: How long a conversation a program started is kept once it is
         #: over, before ``tidy`` lets its history and workspace go.
         self.keep_unattended = keep_unattended
+        #: How long a conversation goes unwritten in before it is looked
+        #: back over (``look_back_quiet``); 0: only at /new.
+        self.quiet_for = quiet_for
+        #: How often every Setu folder is checked (``check_sign_ins``); 0: never.
+        self.check_every = check_every
+        self._looked: dict[str, str] = {}
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
@@ -292,6 +308,8 @@ class Service:
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
         #: What a look back noticed, waiting for the person's /remember.
         self.offered = remembering.Offered(self.state)
+        #: Each refused sign-in told, so none is told twice (signins.py).
+        self.signins_told = signins.Told(self.state)
         #: Telling a person something nobody asked about (notices.py).
         self.notices = NoticeDesk()
         #: The web channel (web.py), when the owner turned it on: a page's
@@ -301,6 +319,13 @@ class Service:
             from dvara.web import KIND, WebBook, WebChannel
             self.web = WebChannel(self, WebBook(self.state / "web.sqlite3"))
             self.notices.route(KIND, self.web.notice)
+        #: ntfy on the house's own server (push.py), when the owner gave
+        #: one: every person's notices posted to their own topic.
+        self.push = None
+        if ntfy:
+            from dvara.push import KIND as PUSH, Pusher
+            self.push = Pusher(ntfy, self.state, click=ntfy_click)
+            self.notices.route(PUSH, self.push.notice)
         # The one seam between this service and the network. Injected so
         # tests exercise the real assembly against a scripted provider,
         # and so an embedder that already holds a provider does not open
@@ -476,13 +501,18 @@ class Service:
                       request.code or "unspecified", via=via)
 
     def _told_at(self, who: Actor) -> tuple[tuple[str, str], ...]:
-        """Where a notice for ``who`` goes: their channels, and the web
-        channel's lines when it is on (web.py) -- every person has those,
-        with no line in the actors file."""
-        if self.web is None:
-            return who.reach()
-        from dvara.web import KIND
-        return who.reach() + ((KIND, who.id),)
+        """Where a notice for ``who`` goes: their channels, the web
+        channel's lines when it is on (web.py), and their ntfy topic when
+        there is a server (push.py) -- every person has those two, with no
+        line in the actors file."""
+        reach = who.reach()
+        if self.web is not None:
+            from dvara.web import KIND
+            reach += ((KIND, who.id),)
+        if self.push is not None:
+            from dvara.push import KIND as PUSH
+            reach += ((PUSH, self.push.topic(who.id)),)
+        return reach
 
     # ---- the verb ----------------------------------------------------------
 
@@ -931,6 +961,19 @@ class Service:
         if problem := bind_memory_server(agent, manager):
             self._note(f"dvara: {who.id}: {problem}")
 
+    async def accounts_page(self, actor: str) -> tuple[str | None, str]:
+        """(the one-time link to this person's own Setu page, or None; the
+        words ``/accounts page`` would answer) -- for a page's button,
+        which must say exactly what the chat word says (accounts.py)."""
+        self.refresh()
+        who = self.actors.get(actor)
+        said = await self.accounts.handle(
+            actor=who.id, text="/accounts page", home=self.setu_home(who),
+            own=who.manages_setu, narrowed=who.setu_accounts, needs={},
+            may_lock=who.setu == OWN_SETU)
+        found = re.search(r"https?://\S+", said or "")
+        return (found.group(0) if found else None), said or ""
+
     async def _account_words(self, who: Actor, spec: AgentSpec, text: str) -> str | None:
         """``/connect``, ``/accounts``, ``/disconnect`` or a pasted
         address, answered for this person; None for anything else."""
@@ -1299,7 +1342,12 @@ class Service:
             return fresh.STILL_ANSWERING
         async with self._locks.hold(key):
             noticed = ""
-            if self.sessions.load_latest(key) is not None:
+            if (self.runs.last_stop(who.id, workspace_parts(key)[1], thread)
+                    == "looked_back"):
+                # looked back over already, when it went quiet: nothing new
+                waiting = self.offered.get(who.id)
+                noticed = remembering.looked_back(waiting) if waiting else ""
+            elif self.sessions.load_latest(key) is not None:
                 noticed = await self._look_back(spec, who, key, thread=thread,
                                                 text=text, came_by=came_by,
                                                 started=started)
@@ -1309,7 +1357,8 @@ class Service:
         return f"{said}\n\n{noticed}" if noticed else said
 
     async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
-                         text: str, came_by: str | None, started: datetime) -> str:
+                         text: str, came_by: str | None, started: datetime,
+                         quiet: bool = False) -> str:
         """Yantra's look back over the conversation ``/new`` ends: one call
         to the agent's own model, on the person's allowance and recorded
         as a Run like any turn. Never costs the start-over: a look back
@@ -1333,7 +1382,8 @@ class Service:
                 run.stop_reason = "looked_back"
             except Exception as exc:  # noqa: BLE001 -- the start-over still happens
                 run.stop_reason, run.detail = "error", f"{type(exc).__name__}: {exc}"
-                self._note(f"dvara: {who.id}: the look back at /new failed -- {run.detail}")
+                when = "after a quiet while" if quiet else "at /new"
+                self._note(f"dvara: {who.id}: the look back {when} failed -- {run.detail}")
             finally:
                 run.usage = _delta(before_total, agent.total_usage)
                 run.cost_usd = _cost(before_models, agent.usage_by_model,
@@ -1345,7 +1395,9 @@ class Service:
                              [remembering.Offer(c.statement, c.kind) for c in found],
                              replace=True)
         waiting = self.offered.get(who.id)
-        said = remembering.looked_back(waiting) if waiting else ""
+        said = remembering.looked_back(waiting, quiet=quiet) if waiting else ""
+        if quiet and not found:
+            said = ""        # unasked: only news is worth a message
         run.reply = said or ("Looked back; nothing new to remember."
                              if run.stop_reason == "looked_back" else "")
         self.runs.record(run)
@@ -1455,6 +1507,108 @@ class Service:
             except Exception as exc:  # noqa: BLE001 -- a store down is a sentence
                 self._note(f"dvara: {who.id}: {word} failed -- {type(exc).__name__}: {exc}")
                 return "I couldn't reach where your memories are kept just now. Try again soon."
+
+    # ---- chores: what happens with nobody writing ----------------------------
+
+    async def chores(self, *, tick: float = 60.0) -> None:
+        """Runs beside the channels for as long as the service is up: a
+        look back over each conversation gone quiet (``look_back_quiet``)
+        every ``tick``, and every sign-in checked once a day
+        (``check_sign_ins``). A chore that fails is a line for the owner;
+        the loop goes on."""
+        loop = asyncio.get_running_loop()
+        # the first check a few minutes in, not at every restart's first second
+        checked = loop.time() - max(0.0, self.check_every - FIRST_CHECK_AFTER)
+        while True:
+            await self._chore(self.look_back_quiet)
+            if self.check_every and loop.time() - checked >= self.check_every:
+                checked = loop.time()
+                await self._chore(self.check_sign_ins)
+            await asyncio.sleep(tick)
+
+    async def _chore(self, job: Callable[[], Awaitable[int]]) -> None:
+        try:
+            await job()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- the next tick tries again
+            self._note(f"dvara: {job.__name__} failed -- {type(exc).__name__}: {exc}")
+
+    async def look_back_quiet(self, now: datetime | None = None) -> int:
+        """A look back over every conversation nobody has written in for
+        ``quiet_for`` (30 minutes by default), as ``/new`` does but keeping
+        the conversation: a chat on Telegram is never ended by anybody, so
+        waiting for ``/new`` kept nothing. What it noticed is sent to the
+        person as a notice, numbered for ``/remember``. Conversations
+        quiet for more than a day are left alone (a service started for
+        the first time does not look back over its past). Returns how
+        many were looked back over."""
+        if not self.quiet_for:
+            return 0
+        now = now or datetime.now(UTC)
+        quiet = self.runs.gone_quiet(now - timedelta(seconds=self.quiet_for),
+                                     now - timedelta(days=1))
+        done = 0
+        for actor, agent, thread, ended in quiet:
+            key = session_key(actor, agent, thread)
+            if self._looked.get(key) == ended or key in self._locks:
+                continue
+            self._looked[key] = ended
+            try:
+                who = self.actors.get(actor)
+                spec = self.roster.spec(agent)
+            except (Refused, ConfigProblem, KeyError):
+                continue
+            if self.sessions.load_latest(key) is None:
+                continue                     # /new already let it go
+            async with self._locks.hold(key):
+                said = await self._look_back(spec, who, key, thread=thread,
+                                             text="(quiet for a while: looked back)",
+                                             came_by="dvara", started=now, quiet=True)
+            done += 1
+            if said:
+                try:
+                    await self.notify(text=f"{agent}: {said}", actor=actor)
+                except Refused:
+                    pass
+        return done
+
+    async def check_sign_ins(self) -> int:
+        """Every Setu folder this service reads, checked now (signins.py);
+        each refusal not told before told to whoever can fix it. Returns
+        how many were told."""
+        program = self.accounts._program()
+        if program is None:
+            return 0
+        folders: dict[Path, list[Actor]] = {}
+        for actor_id in self.actors.ids():
+            who = self.actors.get(actor_id)
+            if who.setu is None:
+                continue
+            home = (self.state / "setu" / who.id if who.setu == OWN_SETU
+                    else Path(who.setu).expanduser())
+            if home.is_dir():
+                folders.setdefault(home.resolve(), []).append(who)
+        told = 0
+        for home, people in folders.items():
+            try:
+                found = await signins.check(program, home)
+            except RuntimeError as exc:
+                self._note(f"dvara: could not check the sign-ins in {home} -- {exc}")
+                continue
+            for gone in self.signins_told.news(home, found):
+                fixers = [p for p in people if p.manages_setu]
+                if not fixers:
+                    self._note(f"dvara: {signins.message(gone, from_chat=False)} "
+                               f"(folder {home}, used by {', '.join(p.id for p in people)})")
+                for who in fixers:
+                    try:
+                        await self.notify(text=signins.message(gone, from_chat=True),
+                                          actor=who.id)
+                        told += 1
+                    except Refused:
+                        pass
+        return told
 
     def _tidy_quietly(self) -> None:
         """``tidy`` after an unattended turn, which is when there is more

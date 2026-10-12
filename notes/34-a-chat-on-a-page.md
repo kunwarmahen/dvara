@@ -132,8 +132,10 @@ agent : Done — `a.txt` now contains the word `hello`, verified by reading it b
   (an invite from the owner, a password chosen once) and names them on
   every call, as their id in the actors file (Sarathi's note 14).
   Nothing here changed for it.
-* **Push to a phone.** Lines wait until a page asks for them. A page
-  installed on a phone with notices pushed to it may come later.
+* ~~**Push to a phone.**~~ Every notice also goes to the person's own
+  topic on the house's ntfy server, for the ntfy app on their phone
+  ([note 40](40-a-notice-on-their-phone.md)). Lines still wait for the
+  page as before.
 * **Streaming.** An answer arrives whole, as a line. The page polls
   every few seconds; a turn's words as they are written would need a
   connection held open, and the page doesn't need it yet.

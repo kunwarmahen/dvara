@@ -57,7 +57,7 @@ from pathlib import Path
 
 from yantra import render_case
 
-from dvara import patience
+from dvara import patience, signins
 from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, ON_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run, unasserted
@@ -67,7 +67,7 @@ from dvara.gate import Policy
 from dvara.holds import DEFAULT_KEEP, age_text
 from dvara.roster import Roster
 from dvara.rules import RuleBook
-from dvara.service import KEEP_UNATTENDED, Service
+from dvara.service import KEEP_UNATTENDED, QUIET_FOR, Service
 from dvara.telegram import POLL_SECONDS, TelegramBot
 
 DEFAULT_ROOT = "~/dvara/agents"
@@ -158,6 +158,24 @@ def build_parser() -> argparse.ArgumentParser:
                              f"`dvara runs`, and its files in the person's "
                              f"folder with that agent (default "
                              f"{KEEP_UNATTENDED / 86400:g})")
+    parser.add_argument("--ntfy", default=None, metavar="URL",
+                        help="an ntfy server on your own network: every person's "
+                             "notices are also posted to a topic of their own there, "
+                             "for the ntfy app on their phone (also DVARA_NTFY)")
+    parser.add_argument("--ntfy-click", default=None, metavar="URL",
+                        help="where tapping such a notice opens, e.g. the home page "
+                             "(also DVARA_NTFY_CLICK)")
+    parser.add_argument("--quiet-for", type=float, default=QUIET_FOR / 60,
+                        metavar="MINUTES",
+                        help=f"look back over a conversation nobody has written "
+                             f"in for this long, and send the person what it "
+                             f"noticed for /remember; 0: only at /new (default "
+                             f"{QUIET_FOR / 60:g})")
+    parser.add_argument("--check-sign-ins", type=float, default=signins.EVERY / 3600,
+                        metavar="HOURS",
+                        help=f"how often every Setu folder's sign-ins are tried, "
+                             f"and a refused one told to whoever can fix it; 0: "
+                             f"never (default {signins.EVERY / 3600:g})")
     parser.add_argument("--hold-for", type=float, default=DEFAULT_KEEP,
                         metavar="SECONDS",
                         help=f"how long a held turn may wait for its answer "
@@ -333,6 +351,11 @@ def _service(args) -> Service:
             sparsh=sparsh,
             memory=memory,
             keep_unattended=args.keep_unattended * 86400,
+            quiet_for=max(0.0, getattr(args, "quiet_for", 0.0)) * 60,
+            check_every=max(0.0, getattr(args, "check_sign_ins", 0.0)) * 3600,
+            ntfy=getattr(args, "ntfy", None) or os.environ.get("DVARA_NTFY") or None,
+            ntfy_click=(getattr(args, "ntfy_click", None)
+                        or os.environ.get("DVARA_NTFY_CLICK") or None),
             web=getattr(args, "web", False),
         )
     except ValueError as exc:
@@ -939,9 +962,11 @@ def _telegram(service: Service, args) -> int:
         return 2
 
     async def go():
+        chores = asyncio.ensure_future(service.chores())
         try:
             await bot.run()
         finally:
+            chores.cancel()
             await service.aclose()
 
     try:

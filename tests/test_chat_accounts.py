@@ -322,6 +322,17 @@ class TestTheirOwnPage:
         assert "once, on the first device" in reply.text
         assert reply.stop_reason == "accounts" and service.scripted.requests == []
 
+    def test_the_pages_button_gets_the_same_link_and_words(self, make_service, fake_setu,
+                                                           agents_root, monkeypatch):
+        monkeypatch.setenv("SETU_PAGE_URL", "http://100.64.0.7:8775/")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        url, said = run(service.accounts_page("raj"))
+        assert url == "http://100.64.0.7:8775/#link=raj.CODE" and url in said
+        monkeypatch.setenv("FAKE_PEOPLE_PAGE", "off")
+        url, said = run(service.accounts_page("raj"))
+        assert url is None and "turned this page off" in said
+
     def test_off_in_the_owners_setu_means_no_link_is_made(self, make_service, fake_setu,
                                                           agents_root, monkeypatch):
         monkeypatch.setenv("SETU_PAGE_URL", "http://100.64.0.7:8775/")

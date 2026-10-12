@@ -132,7 +132,9 @@ one person from their chat, with Send held for their button; and with
 `--web`, a page can be a chat too, where everything sent to a person
 waits for them; and what an agent remembers about a person is filed
 under that person, in Yantra's own file or, with `--memory`, behind a
-key of their own — covered by 773 tests. The API is not stable.
+key of their own; and while nobody is writing, a quiet conversation is
+looked back over and every sign-in checked daily, with notices reaching
+phones through the house's own ntfy — covered by 798 tests. The API is not stable.
 
 ## The shape of it
 
@@ -693,6 +695,23 @@ line 3, column 13)
 At *startup* the opposite holds and a broken file is exit 2: nothing is
 serving yet, so there is nothing to lose.
 
+**While nobody is writing.** `serve` and `telegram` do two things on
+their own ([notes/39](notes/39-while-nobody-is-writing.md)). A
+conversation nobody has written in for 30 minutes is looked back over
+once, for a package that remembers, and the person is sent what it
+noticed for `/remember` (`--quiet-for MINUTES`, `0`: only at `/new`).
+And once a day every Setu folder Dvara reads is checked with `setu
+check`. A sign-in the site refused is told once to whoever can fix it,
+with the words that do: `Send /connect gmail as work to sign in again`
+(`--check-sign-ins HOURS`, `0`: never).
+
+**Notices on a phone.** `--ntfy URL` posts every notice to each person's
+own topic on an ntfy server in your house, for the ntfy app on their
+phone. `--ntfy-click URL` is where tapping one opens. A topic is
+`dvara-<id>-<16 hex>`, which nobody can guess, and `GET /web/push` gives
+it to that person's page. Sarathi starts the server with `[dvara] ntfy =
+true` ([notes/40](notes/40-a-notice-on-their-phone.md)).
+
 ### The owner's page
 
 `dvara page` shows your door in a browser. It's a separate process that
@@ -757,6 +776,8 @@ POST /web/message  {actor, agent, text}          -> {line}
 POST /web/asks/{id}  {actor, approve}            -> {answered, approved}
 POST /web/holds/{id} {actor, answers}            -> {started}
 GET  /web/file?actor=&line=&n=                   -> a file a line carried
+GET  /web/push?actor=                            -> {topic}  (their ntfy topic, or null)
+POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts page)
 ```
 
 A program that runs turns for people who are not there — a scheduler —
@@ -949,7 +970,8 @@ for each person in the actors file, and you as yourself
 ([notes/37](notes/37-their-own-memories.md)).
 
 **What they said in passing.** Nobody says "remember I live in Pune";
-they say it on the way to something else. When a person sends `/new`, a
+they say it on the way to something else. When a person sends `/new`
+(or nobody has written for 30 minutes, [notes/39](notes/39-while-nobody-is-writing.md)), a
 package that remembers looks back over the conversation once (Yantra's
 look back, on the agent's own model and their allowance, recorded as a
 `looked_back` run) and lists what it noticed under the answer. What
@@ -1078,12 +1100,14 @@ reads that person's key from `<state>/memory.json`
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)) or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
+| `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
+| `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it ([notes/40](notes/40-a-notice-on-their-phone.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
 | `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)) |
@@ -1098,7 +1122,7 @@ reads that person's key from `<state>/memory.json`
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), and which way each came in ([notes/36](notes/36-which-way-it-came-in.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | fifteen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
+| `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)) |

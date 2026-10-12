@@ -168,9 +168,15 @@ def create_app(service: Service, *, token: str,
         # why two of these may not share a state directory (claim.py).
         job = (asyncio.ensure_future(alongside())
                if alongside is not None else None)
+        # What happens with nobody writing: a look back over a quiet
+        # conversation, a daily check of every sign-in (Service.chores).
+        chores = asyncio.ensure_future(service.chores())
         try:
             yield
         finally:
+            chores.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await chores
             # Sockets back on the way out. A lifespan rather than the
             # on_event decorator: the older hook is deprecated, and a
             # DeprecationWarning in a service is a warning nobody sees.
@@ -461,6 +467,28 @@ def create_app(service: Service, *, token: str,
         except NoSuchHold as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
         return {"started": True}
+
+    @app.get("/web/push")
+    async def web_push(actor: str = "",
+                       authorization: str | None = Header(default=None)) -> dict:
+        """The person's own ntfy topic, for their page to show them how to
+        subscribe (push.py); ``topic`` None when there is no ntfy server."""
+        check(authorization)
+        web_for(actor)
+        return {"topic": service.push.topic(actor) if service.push else None}
+
+    @app.post("/web/accounts-page")
+    async def web_accounts_page(request: Request,
+                                authorization: str | None = Header(default=None)) -> dict:
+        """The person's one-time link to their own Setu page, as
+        ``/accounts page`` makes it: ``url`` (None when there is none to
+        make) and ``said``, the words that explain either way."""
+        check(authorization)
+        body = await request.json()
+        actor = body.get("actor")
+        web_for(actor)
+        url, said = await service.accounts_page(actor)
+        return {"url": url, "said": said}
 
     @app.get("/web/file")
     async def web_file(actor: str = "", line: int = 0, n: int = 0,

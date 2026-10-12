@@ -1302,6 +1302,80 @@ the bot starts, so restart Dvara for the menu to show them (`sarathi
 down && sarathi up`, or `systemctl --user restart sarathi-dvara` on
 Sarathi's Podman road), then reopen the chat.
 
+## 21 · While nobody is writing
+
+Nobody sends `/new` on Telegram, so a look back that waits for it never
+comes. And a sign-in that ran out on Sunday is found on Tuesday, when
+somebody needs it. `serve` and `telegram` now do two things on their own.
+
+**A quiet conversation is looked back over.** Talk to the remembering
+greeter from §20, then leave it for 30 minutes. You get a message,
+on Telegram, on the page, and on the phone if §22 is set up:
+
+```
+greeter: Looking back over our conversation, I noticed this about you:
+1. Lives in Raleigh (near RDU airport).
+2. Works night shifts at a hospital.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do.
+```
+
+The conversation is still there: carry on as before. It happens once
+until you write again, and if the look back found nothing, you get no
+message. To wait longer, start with `--quiet-for 120` (minutes); `0`
+looks back only at `/new`.
+
+**Every sign-in is checked once a day.** A few minutes after it starts,
+and then daily, Dvara runs `setu check` in every Setu folder it reads.
+If Google refused one of yours, you're told once:
+
+```
+Your gmail sign-in (priya@example.com) stopped working on 2026-10-12: the site refused it. Send /connect gmail as work to sign in again.
+```
+
+Send exactly that and sign in (§16). A folder the owner shared is told
+to whoever may manage it from the chat (`setu_manage`), or else is a
+line on Dvara's log. You can try the same check by hand:
+
+```
+setu check          # each sign-in: ok, SIGN-IN EXPIRED (and the fix), skipped
+```
+
+`--check-sign-ins 6` checks every six hours; `0` never
+([notes/39](notes/39-while-nobody-is-writing.md)).
+
+## 22 · A notice on their phone
+
+A person who doesn't use Telegram found a schedule's answer only when
+they next opened the page. With an ntfy server in the house, every
+notice also reaches the ntfy app on their phone.
+
+Start one (it's a single program: <https://docs.ntfy.sh/install/>, or
+Podman), then point Dvara at it:
+
+```
+podman run -d --name ntfy -p 192.168.1.44:8793:80 docker.io/binwiederhier/ntfy:v2.11.0 serve
+DVARA_TOKEN=... dvara --root examples/agents --actors examples/actors.toml \
+      --ntfy http://192.168.1.44:8793 serve --port 8798 --web
+```
+
+Each person has their own topic, which nobody can guess:
+
+```
+$ curl -H "Authorization: Bearer $DVARA_TOKEN" "localhost:8798/web/push?actor=owner"
+{"topic":"dvara-owner-4d9c1cb86bb148fa"}
+```
+
+On the phone: install ntfy, press +, turn on *Use another server*, and
+enter `http://192.168.1.44:8793` and that topic. Send a notice
+(`POST /notify` as in §19) and it shows on the phone. You won't usually
+type any of this: with Sarathi, `sarathi dvara --ntfy` starts the server,
+and each person finds their server and topic under **Notices on this
+phone** on the home page.
+
+The phone hears notices while it can reach your house, which means home
+Wi-Fi, or anywhere your own Tailscale reaches. An iPhone shows them when
+the app is opened ([notes/40](notes/40-a-notice-on-their-phone.md)).
+
 ---
 
 # Where to read next
@@ -1338,6 +1412,8 @@ Each topic, and the note that argues it:
 | `notes/21-a-passphrase-only-they-know.md` | `/lock`, `/unlock`: a person's folder sealed with their passphrase, opened for the days they choose |
 | `notes/37-their-own-memories.md` | each person's memories under their own name, and `--memory`: the owner's store, opened per turn with that person's own key |
 | `notes/38-what-they-said-in-passing.md` | `/memory`, `/remember`: the look back at `/new`, listed and kept only on the person's word, and what is kept, theirs to see and take back |
+| `notes/39-while-nobody-is-writing.md` | a quiet conversation looked back over without `/new`, and every sign-in checked daily, told once to whoever can fix it |
+| `notes/40-a-notice-on-their-phone.md` | `--ntfy`: notices on the ntfy app, through a server in the house, each person on a topic nobody can guess; the accounts-page button |
 
 ---
 

@@ -94,6 +94,9 @@ parts refused, the switch.
 
 ## What is not here yet
 
+* ~~**Only from the chat.**~~ Sarathi's home page has a My accounts
+  button for each person signed in to it, which gets the same link
+  through `POST /web/accounts-page` ([note 40](40-a-notice-on-their-phone.md)).
 * ~~**The owner's page doesn't list people's open pages.**~~ Setu's own
   page now does (Setu `21c222a`): People's pages shows each person's
   devices in two words and since when, an unopened link until when, and

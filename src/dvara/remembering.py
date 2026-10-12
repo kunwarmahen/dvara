@@ -209,8 +209,10 @@ def listing(offers: list[Offer], *, head: str) -> str:
     return "\n".join(lines)
 
 
-def looked_back(offers: list[Offer]) -> str:
-    return listing(offers, head="Before we started over, I noticed this about you:")
+def looked_back(offers: list[Offer], *, quiet: bool = False) -> str:
+    return listing(offers, head=("Looking back over our conversation, I noticed this "
+                                 "about you:" if quiet else
+                                 "Before we started over, I noticed this about you:"))
 
 
 def noticed(new: int) -> str:
