@@ -1451,7 +1451,12 @@ Telegram and a page show **Keep** and **Not now** buttons too. A kept
 skill is saved in that person's own folder for that agent, so nobody
 else's agent changes. Ask for the same job again and the agent uses it.
 `/skills` lists theirs, how each has done, and what is waiting;
-`/skills forget NAME` removes one. The look is a run of its own in
+`/skills forget NAME` removes one. Besides their own, an agent has only
+its package's skills: folders you put in its `skills/` (for example
+`agents/minder/skills/check-orders/SKILL.md`), there for everyone who
+uses it. Skills in `~/.yantra/skills` on this computer (what you keep on
+Yantra's own page) are not used here, not even in your own chat; copy
+one into the package's `skills/` to share it. The look is a run of its own in
 `dvara runs` (`looked_for_skill`), paid from the person's allowance.
 `YANTRA_LEARN=off` stops the looks.
 

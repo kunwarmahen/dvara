@@ -74,7 +74,17 @@ asks if it must, while the person is there to answer.
 skill one of them keeps is saved in their own folder for that agent,
 never beside the package and never in the computer's own skills, so one
 person's yes never changes the agent for anyone else. Making a recipe
-everybody's is the owner's job, done by hand.
+everybody's is the owner's job, done by hand: a folder in the package's
+`skills/`.
+
+**AN AGENT SEES TWO KINDS OF SKILL, AND ONLY TWO.** The package's own
+(its `skills/` folder, there for everyone who uses it) and the person's
+own (what they kept). Never the computer's: `~/.yantra/skills`, where
+Yantra's page keeps what the owner learned, and `$YANTRA_SKILLS_PATH`.
+Both belong to whoever runs the process, and this process serves
+everybody. Every agent here is built with Yantra's `own_skills_only`,
+the owner's own chat included; a recipe the owner wants here goes into
+the package.
 
 What waits is kept on disk in Yantra's own tray format,
 `state/skills/<person>/<agent>.json`, beside the staged files in their
@@ -156,15 +166,21 @@ listed `bash`, `load_skill`, `read_file` and `write_file` under *built
 in*. `/schedules` said *"Schedules aren't switched on here."*, because
 this scratch Dvara had no Samay.
 
-## Found by the run, and left open
+## Found by the run
 
 `/skills` listed four skills under the package that the package doesn't
 have: `linkedin-top-posts`, `whatsapp-send-message` and two for X. They
-are the computer's owner's learned skills, in `~/.yantra/skills`, which
-Yantra scans for any agent built on this computer, including every
-person's agent here. `/skills` now names them *From this computer's own
-skills*. Whether people behind this service should get them at all is
-the owner's decision, and it hasn't been made yet.
+were the owner's learned skills, in `~/.yantra/skills`, which Yantra
+scanned for any agent built on the computer, so every person's agent
+here got them. And a package's own `skills/` reached Yantra through the
+environment, so in this one process it would have reached every other
+package too. Both are closed by the rule above. The owner's real
+`minder`, built both ways:
+
+```
+own_skills_only=False: ['linkedin-top-posts', 'whatsapp-send-message', 'x-latest-post', 'x-profile-posts-by-date']
+own_skills_only=True: []
+```
 
 ## What is not here yet
 

@@ -21,7 +21,15 @@ A KEPT SKILL IS THEIRS ALONE. One package serves several people. A skill
 one of them keeps is saved in THEIR folder for that agent (Yantra's
 "project" scope there), never beside the package or in the computer's
 own skills, so one person's yes never changes the agent for anyone else.
-Making a recipe everybody's is the owner's, by hand.
+Making a recipe everybody's is the owner's, by hand: a folder in the
+package's ``skills/``.
+
+AND AN AGENT SEES ONLY TWO KINDS: the package's skills and the person's
+own. Never the computer's (``~/.yantra/skills``, where the owner's page
+keeps what the owner learned) nor ``$YANTRA_SKILLS_PATH``: both belong
+to whoever runs the process, and here that process serves everybody.
+Every agent this service builds says so (``own_skills_only``), the owner's
+included -- a recipe the owner wants here goes into the package.
 
 WHAT WAITS IS KEPT ON DISK, per person per agent, in Yantra's own tray
 format (``state/skills/<person>/<agent>.json``) beside the staged files
@@ -306,7 +314,7 @@ class Learning:
             built = replace(spec, memory=None).build_async(
                 **({"permissions": permissions} if permissions is not None else {}),
                 cwd=service._workspace(key), provider=service._provider(provider_name),
-                provider_name=provider_name, model=model)
+                provider_name=provider_name, model=model, own_skills_only=True)
         except ConfigError as exc:
             return f"That agent can't be opened right now: {exc}"
         if getattr(built, "skills", None) is None:
@@ -349,11 +357,9 @@ def _clip(text: str, cap: int = 600) -> str:
 
 
 def _listing(built: Any, waiting: dict) -> str:
-    from yantra.skills.loader import LEARNED_SOURCES
-
     """What ``/skills`` answers: theirs, the agent's, and what waits."""
     own = Path(built.ctx.cwd).resolve()
-    mine, its, computers = [], [], []
+    mine, its = [], []
     for skill in sorted(built.skills, key=lambda s: s.name):
         if skill.is_learned and own in Path(skill.directory).resolve().parents:
             record = skill.learned
@@ -362,10 +368,6 @@ def _listing(built: Any, waiting: dict) -> str:
             stale = " — set aside after failing; it will be offered again" \
                 if skill.is_stale else ""
             mine.append(f"• {skill.name}{counts}{stale}: {skill.description}")
-        elif skill.source in ("user", LEARNED_SOURCES["user"]):
-            # the home folder's own (~/.yantra/skills): said as such, since
-            # it is the computer's owner's, not this agent's package's
-            computers.append(f"• {skill.name}: {skill.description}")
         else:
             its.append(f"• {skill.name}: {skill.description}")
     out = []
@@ -381,7 +383,4 @@ def _listing(built: Any, waiting: dict) -> str:
     if its:
         out.append("This agent's own:")
         out += its
-    if computers:
-        out.append("From this computer's own skills:")
-        out += computers
     return "\n".join(out)

@@ -876,6 +876,9 @@ class Service:
                 provider_name=provider_name,
                 model=model,
                 memory_user=remembers.user,
+                # The package's skills and this person's own, never the
+                # computer's (~/.yantra/skills): see learning.py.
+                own_skills_only=True,
             )
         except ConfigError as exc:
             # The commonest one: a ceiling on a model nobody can price.
@@ -1486,7 +1489,7 @@ class Service:
             agent = spec.build_async(cwd=self._workspace(key),
                                      provider=self._provider(provider_name),
                                      provider_name=provider_name, model=model,
-                                     memory_user=remembers.user)
+                                     memory_user=remembers.user, own_skills_only=True)
         except ConfigError as exc:
             self._note(f"dvara: {who.id}: memory could not be opened -- {exc}")
             yield None

@@ -239,3 +239,27 @@ class TestToolsAndSchedules:
         reply, = run(service, say(service, "/schedules", agent="greeter"))
         assert "the weather" in reply.text and "every day at 08:00" in reply.text
         assert "Last time: ok" in reply.text and "maya's own" not in reply.text
+
+
+class TestWhichSkills:
+    """Only the package's skills and the person's own: never the
+    computer's (~/.yantra/skills, where the owner's page keeps what the
+    owner learned), the owner's own chat included."""
+
+    @staticmethod
+    def skill(root, name):
+        folder = root / name
+        folder.mkdir(parents=True)
+        (folder / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: Does {name}. Use when asked.\n---\n\n1. Do it.\n")
+
+    def test_the_computers_skills_reach_nobody(self, make_service, helper, agents_root,
+                                                tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        self.skill(tmp_path / "home" / ".yantra" / "skills" / "learned", "owners-linkedin")
+        self.skill(agents_root / "helper" / "skills", "check-the-orders")
+        service = make_service([], actors=PEOPLE)
+        for person in ("owner", "maya"):
+            listed, = run(service, say(service, "/skills", actor=person))
+            assert "check-the-orders" in listed.text
+            assert "owners-linkedin" not in listed.text
