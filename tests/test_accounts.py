@@ -193,6 +193,29 @@ class TestWhoGetsNone:
         ask(service, "priya")
         assert not any(n.startswith("mcp__gmail") for n in tools_sent(service))
 
+    def test_a_star_needs_every_account_the_person_has_at_its_level(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        # a household's own agent: "*:read" names no connector, and still
+        # reaches every account -- read tools only
+        mailer(agents_root, needs='["*:read"]')
+        priya = home_with(tmp_path / "homes" / "priya", "personal")
+        service = make_service([says("ok")], actors=book(priya={"setu": str(priya)}))
+        ask(service, "priya")
+        sent = tools_sent(service)
+        assert "mcp__gmail-personal__search_threads" in sent
+        assert "mcp__gmail-personal__send_message" not in sent
+
+    def test_an_account_the_package_did_not_ask_for_is_named_not_given(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        # so the agent says so rather than going to the phone for it
+        mailer(agents_root, needs='["outlook:read"]')
+        priya = home_with(tmp_path / "homes" / "priya", "personal")
+        service = make_service([says("ok")], actors=book(priya={"setu": str(priya)}))
+        ask(service, "priya")
+        system = service.scripted.requests[0]["system"]
+        assert "but this agent was not given it" in system and "Gmail" in system
+        assert not any(n.startswith("mcp__gmail") for n in tools_sent(service))
+
     def test_the_packages_level_is_a_ceiling(self, make_service, fake_setu,
                                              agents_root, tmp_path):
         mailer(agents_root)                               # gmail:read

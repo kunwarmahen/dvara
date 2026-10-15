@@ -271,7 +271,7 @@ class AccountDesk:
         if narrowed is not None and ref not in narrowed:
             return (f"The owner set your accounts here to {', '.join(narrowed) or 'none'}; "
                     f"{ref} isn't one of them.")
-        level = level or needs.get(connector)
+        level = level or needs.get(connector) or needs.get("*")
         try:
             status = await self._status(program, home)
         except (RuntimeError, ValueError):

@@ -31,6 +31,13 @@ prompt      = "prompt.md"
 # asked in a chat, and in a schedule only if the card listed it.
 allow = ["web_fetch", "read_file", "write_file", "send_file", "mcp__samay__*"]
 
+# The person's own accounts, through their Setu folder: none unless named.
+# "*:read" is every account they connect, now and later, read only -- for
+# a household's own agent; name connectors instead ("gmail:read") for one
+# you'd share. A need brings its tools past the allow list above.
+#[connections]
+#needs = ["*:read"]
+
 [env]
 # The date and time, from this machine. A record is only as good as its
 # timestamps, and an agent that is not told the date makes one up. LOCAL

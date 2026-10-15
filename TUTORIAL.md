@@ -977,6 +977,10 @@ accounts, and only what the package asks for in `[connections] needs`,
 at the package's level. Scheduled runs get the same. An account the
 package needs that they haven't connected is named to the agent with the
 truth: they send `/connect` for it (or, for priya, the owner connects it).
+A package that should read everything they connect says `needs =
+["*:read"]`, and an account they have that the package didn't ask for is
+named to the agent as not given, so the agent says so instead of looking
+for it on their phone.
 
 Live, with two people asking *"how many unread emails do I have?"*: priya
 got her count from `gmail-personal` alone, with the owner's other account

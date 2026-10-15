@@ -1008,15 +1008,16 @@ class Service:
         ``setu_accounts`` can narrow it to the accounts meant.
 
         BOTH MUST ALLOW. A connection is used only when the package's
-        ``[connections] needs`` names its connector, at the package's
-        level at most: the person's sign-in is not a reason for an agent
-        that never asked to read their mail. A scheduled turn gets the
+        ``[connections] needs`` names its connector (or ``*``, every
+        one), at the package's level at most: the person's sign-in is
+        not a reason for an agent that never asked to read their mail. A scheduled turn gets the
         same, because the person made the schedule (its card said what
         it reads). A Setu that cannot be read costs the accounts, never
         the turn.
         """
         from yantra.mcp import MCPError
-        from yantra.setu_link import Setu, SetuLinkError, account_of, load, needs_allow
+        from yantra.setu_link import (Setu, SetuLinkError, account_of, ceiling_of, load,
+                                      needs_allow)
 
         needs = needs_allow(spec.connections)
         home = str(self.setu_home(who))
@@ -1032,8 +1033,8 @@ class Service:
             account = f"{row.get('connector')}:{account_of(row)}"
             if who.setu_accounts is not None and account not in who.setu_accounts:
                 continue
-            if row.get("connector") in needs:
-                allow[account] = needs[row["connector"]]
+            if level := ceiling_of(needs, row):      # "*:read" reaches every one
+                allow[account] = level
         setu = Setu(mode="on", home=home, link=link, allow=allow,
                     package=spec.name, mention=frozenset(needs),
                     connect_how=CONNECT_HERE if who.manages_setu else CONNECT_THERE,

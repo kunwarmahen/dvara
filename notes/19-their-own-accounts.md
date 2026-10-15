@@ -139,3 +139,8 @@ this design doesn't pretend otherwise.
   the person holds would mean a scheduled run, with nobody there, could
   not open it. A real tradeoff against "scheduled turns get the same",
   and it needs its own design.
+
+A package may ask for every account at once, `needs = ["*:read"]`, and
+an account the person has that the package didn't ask for is named to
+the agent as not given. Without that line, an owner's agent asked about
+Yahoo from Telegram went to the phone for it (Yantra's note 128).

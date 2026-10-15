@@ -135,7 +135,7 @@ under that person, in Yantra's own file or, with `--memory`, behind a
 key of their own; and while nobody is writing, a quiet conversation is
 looked back over and every sign-in checked daily, with notices reaching
 phones through the house's own ntfy; and the owner's files changed from
-a page, each checked before it's written — covered by 809 tests. The API is not stable.
+a page, each checked before it's written — covered by 811 tests. The API is not stable.
 
 ## The shape of it
 
@@ -357,7 +357,11 @@ both.
 Each turn reads Setu in that person's folder and starts their
 connections there, so their agent can only open their accounts, and only
 those the package asks for in `[connections] needs`, at the package's
-level.
+level. `"*:read"` there asks for every account the person has, at read.
+That's for a household's own agent, and a named connector keeps its own
+higher level beside it. An account the package didn't ask for is named
+to the agent as not given, so it says so rather than reaching the
+account some other way, such as the phone.
 
 A person with a folder of their own -- or one the owner let them manage
 -- signs in from the chat:
