@@ -61,6 +61,7 @@ pending questions live in memory, so this is the only way to have both.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import secrets
 from collections.abc import Awaitable, Callable
@@ -68,7 +69,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from yantra import parse_grant
 
@@ -266,45 +267,16 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=400,
                                 detail="came_by is one short lowercase word, like samay")
         came_by = came_by or (via.kind if via is not None else "http")
-        reply = await service.deliver(actor=actor, via=via,
-                                      agent=body["agent"],
-                                      thread=body["thread"], text=body["text"],
-                                      unattended=unattended,
-                                      allow_tools=allow_tools,
-                                      phone=phone, phone_steps=phone_steps,
-                                      wait=float(wait) if wait is not None else None,
-                                      came_by=came_by)
-        return {
-            "text": reply.text,
-            "ok": reply.ok,
-            "run_id": reply.run_id,
-            "agent": reply.agent,
-            # Who the turn actually ran as. A caller that arrived with a
-            # channel identity has never seen an actor id, and needs one
-            # to answer a question this turn may have raised.
-            "actor": reply.actor,
-            "stop_reason": reply.stop_reason,
-            "detail": reply.detail,
-            "cost_usd": reply.cost_usd,
-            # A rendered line, beside the raw number rather than instead
-            # of it. A channel can only print prose; anything that draws
-            # a meter wants the float. Yantra's note 43 settled that
-            # shape -- parsing the sentence back into the number is how
-            # the two drift apart.
-            "receipt": reply.receipt,
-            # The turn stopped for approval nobody gave in time. The id is
-            # what POST /holds/{id} answers; the calls are what to show.
-            "held": reply.held.as_dict() if reply.held else None,
-            # What only a person can fix, what was busy, what was refused
-            # (Yantra's unattended.py) -- for the program that asked.
-            "needs_person": list(reply.needs),
-            "busy": list(reply.busy),
-            "refused": list(reply.refused),
-            # ``/file NAME`` answered: where the file is on this machine.
-            # Named, not sent -- a bridge that wants the bytes is here and
-            # can read it (files.py).
-            "files": [str(f) for f in reply.files],
-        }
+        stream = body.get("stream", False)
+        if not isinstance(stream, bool):
+            raise HTTPException(status_code=400, detail="stream is true or false")
+        turn = dict(actor=actor, via=via, agent=body["agent"], thread=body["thread"],
+                    text=body["text"], unattended=unattended, allow_tools=allow_tools,
+                    phone=phone, phone_steps=phone_steps,
+                    wait=float(wait) if wait is not None else None, came_by=came_by)
+        if stream:
+            return _streamed(service, turn)
+        return answer_of(await service.deliver(**turn))
 
     @app.post("/ask")
     async def ask(request: Request,
@@ -637,3 +609,72 @@ def create_app(service: Service, *, token: str,
                 "held": reply.held.as_dict() if reply.held else None}
 
     return app
+
+
+def answer_of(reply) -> dict:
+    """A turn's reply as ``POST /message`` answers it."""
+    return {
+
+        "text": reply.text,
+        "ok": reply.ok,
+        "run_id": reply.run_id,
+        "agent": reply.agent,
+        # Who the turn actually ran as. A caller that arrived with a
+        # channel identity has never seen an actor id, and needs one
+        # to answer a question this turn may have raised.
+        "actor": reply.actor,
+        "stop_reason": reply.stop_reason,
+        "detail": reply.detail,
+        "cost_usd": reply.cost_usd,
+        # A rendered line, beside the raw number rather than instead
+        # of it. A channel can only print prose; anything that draws
+        # a meter wants the float. Yantra's note 43 settled that
+        # shape -- parsing the sentence back into the number is how
+        # the two drift apart.
+        "receipt": reply.receipt,
+        # The turn stopped for approval nobody gave in time. The id is
+        # what POST /holds/{id} answers; the calls are what to show.
+        "held": reply.held.as_dict() if reply.held else None,
+        # What only a person can fix, what was busy, what was refused
+        # (Yantra's unattended.py) -- for the program that asked.
+        "needs_person": list(reply.needs),
+        "busy": list(reply.busy),
+        "refused": list(reply.refused),
+        # ``/file NAME`` answered: where the file is on this machine.
+        # Named, not sent -- a bridge that wants the bytes is here and
+        # can read it (files.py).
+        "files": [str(f) for f in reply.files],
+    }
+
+
+def _streamed(service: Service, turn: dict) -> StreamingResponse:
+    """``POST /message`` with ``"stream": true``: one JSON object a line.
+
+    The turn's events as watch.py shapes them -- ``text``, ``using``,
+    ``step`` -- then ``{"kind": "reply", ...}`` with exactly what the
+    plain request would have answered. OPT IN, because the callers here
+    are programs, and a program that reads one JSON body must keep
+    getting one. A caller that hangs up mid-turn ends the stream, not the
+    turn: it is answered and recorded as any other.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def run() -> None:
+        try:
+            reply = await service.deliver(**turn, watch=queue.put_nowait)
+            queue.put_nowait({"kind": "reply", **answer_of(reply)})
+        except Exception as exc:  # noqa: BLE001 -- the stream must end
+            queue.put_nowait({"kind": "reply", "ok": False, "stop_reason": "error",
+                              "text": "that went wrong at my end",
+                              "detail": f"{type(exc).__name__}: {exc}"})
+        finally:
+            queue.put_nowait(None)
+
+    job = asyncio.ensure_future(run())
+
+    async def lines():
+        while (item := await queue.get()) is not None:
+            yield json.dumps(item) + "\n"
+        await job
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")

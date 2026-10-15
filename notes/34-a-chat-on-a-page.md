@@ -136,7 +136,8 @@ agent : Done — `a.txt` now contains the word `hello`, verified by reading it b
   topic on the house's ntfy server, for the ntfy app on their phone
   ([note 40](40-a-notice-on-their-phone.md)). Lines still wait for the
   page as before.
-* **Streaming.** An answer arrives whole, as a line. The page polls
-  every few seconds; a turn's words as they are written would need a
-  connection held open, and the page doesn't need it yet.
+* ~~**Streaming.**~~ A running turn is in every look as `live`: the
+  answer so far and its steps, which the page polls for every 0.7 s while
+  it runs. No connection is held open
+  ([note 42](42-seeing-the-work.md)).
 * **One conversation across channels.** Deliberate, as above.

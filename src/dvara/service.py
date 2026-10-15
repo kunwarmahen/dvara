@@ -62,9 +62,9 @@ comes to that. ``resume`` carries it on with the person's answers.
 Sending something else instead is allowed and means "never mind": the
 waiting calls are set aside and the new message is answered.
 
-No streaming in v1. One message, one reply: channels are turn-shaped, and
-a bot that streams is a bot that edits the same message forty times and
-gets rate-limited for it.
+One message, one reply: channels are turn-shaped. A channel that wants
+the turn while it runs passes ``watch`` (watch.py) and draws it its own
+way. The reply is still the one record.
 
 **A TURN IS WATCHED, NOT JUST AWAITED.** The event loop here reads two
 kinds of event, not one. ``TurnEnd`` is the answer; every ``ToolExecuted``
@@ -114,7 +114,8 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import files, fresh, money, patience, ready, remembering, signins
+from dvara import (files, fresh, learning, money, patience, ready, remembering, seen,
+                   signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -124,11 +125,14 @@ from dvara.gate import Decisions, Policy
 from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
                          NotYourHold, Waiting, waiting_text)
 from dvara.keys import session_key, workspace_parts
+from dvara.learning import Learning
 from dvara.locks import KeyedLocks
 from dvara.memory import PEOPLE_FILE, MemoryProblem, Person, Store, person
 from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep
+from dvara.seen import Seen
+from dvara.watch import Safely, Watcher, shown
 
 #: How long a finished conversation that a program started is kept
 #: before ``Service.tidy`` lets it go: a week to look at what it did.
@@ -308,6 +312,11 @@ class Service:
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
         #: What a look back noticed, waiting for the person's /remember.
         self.offered = remembering.Offered(self.state)
+        #: Skills offered after an answer and kept on the person's word
+        #: (learning.py); the tools each turn was given, and schedules,
+        #: for ``/tools`` and ``/schedules`` (seen.py).
+        self.learning = Learning(self)
+        self.seen = Seen(self.state)
         #: Each refused sign-in told, so none is told twice (signins.py).
         self.signins_told = signins.Told(self.state)
         #: Telling a person something nobody asked about (notices.py).
@@ -380,6 +389,7 @@ class Service:
         loop over providers rather than a loop over their internals.
         """
         await self.accounts.aclose()
+        await self.learning.aclose()
         if self.web is not None:
             await self.web.aclose()
         for provider in self._providers.values():
@@ -441,7 +451,8 @@ class Service:
     # ---- telling, unasked ----------------------------------------------------
 
     async def notify(self, *, text: str, actor: str | None = None,
-                     via: Channel | None = None) -> tuple[str, Sent]:
+                     via: Channel | None = None,
+                     extra: dict | None = None) -> tuple[str, Sent]:
         """Send ``text`` to a person on their channels (notices.py).
 
         Who is named the two ways a turn names them, exactly one of the
@@ -456,7 +467,8 @@ class Service:
                else self.actors.resolve(via.kind, via.id))
         if not text.strip():
             raise Refused("a notice needs some text")
-        return who.id, await self.notices.send(who.id, self._told_at(who), text)
+        return who.id, await self.notices.send(who.id, self._told_at(who), text,
+                                               extra=extra)
 
     async def ask(self, *, actor: str, tool: str, summary: str,
                   arguments: dict, timeout: float, agent: str = "",
@@ -544,7 +556,8 @@ class Service:
                       phone: bool = False,
                       phone_steps: Sequence[str] = (),
                       wait: float | None = None,
-                      came_by: str | None = None) -> Reply:
+                      came_by: str | None = None,
+                      watch: Watcher | None = None) -> Reply:
         """Run one turn for one person, and answer them either way.
 
         Never raises for anything a person could have caused. A refusal is
@@ -595,6 +608,10 @@ class Service:
         ``came_by`` is the way the turn came in, for the Run (``runs.py``):
         the caller's word for itself, or the channel's kind when it came
         ``via`` one.
+
+        ``watch`` sees the turn as it runs (watch.py): the words as they
+        are written and each step as a line. A turn nobody is at is
+        watched by nobody, so an unattended one ignores it.
         """
         started = datetime.now(UTC)
         came_by = came_by or (via.kind if via is not None else None)
@@ -623,6 +640,18 @@ class Service:
                                           text=text, came_by=came_by, started=started)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="new")
+        if not unattended and learning.word_of(text):
+            # Skills offered and kept: theirs to see and answer, not a turn.
+            said = await self.learning.words(spec, who, key, text)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="skills")
+        if not unattended and (word := seen.word_of(text)):
+            # What it can use, and what they scheduled: read, not a turn.
+            said = (self.seen.tools(actor, agent) if word == seen.TOOLS else
+                    await self.seen.schedules(actor, self.samay,
+                                              enabled=self.samay is not None))
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="seen")
         if not unattended and remembering.word_of(text):
             # What is kept about them: theirs to see, keep and forget.
             said = await self._memory_words(spec, who, key, text)
@@ -671,7 +700,7 @@ class Service:
             try:
                 if not unattended:
                     return await self._turn(spec=spec, who=who, key=key,
-                                            run=run)
+                                            run=run, watch=watch)
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
@@ -706,7 +735,8 @@ class Service:
                      answers: Mapping[str, bool | str],
                      actor: str | None = None,
                      via: Channel | None = None,
-                     door: str | None = None) -> Reply:
+                     door: str | None = None,
+                     watch: Watcher | None = None) -> Reply:
         """Answer a held turn, and let it carry on (notes/16).
 
         ``answers`` has one entry per waiting call, by call id: True runs
@@ -765,7 +795,7 @@ class Service:
             try:
                 return await self._turn(spec=spec, who=who, key=hold.key,
                                         run=run, resuming=hold,
-                                        answers=answers, door=door)
+                                        answers=answers, door=door, watch=watch)
             except (NoSuchHold, NotYourHold):
                 raise
             except Refused as exc:
@@ -798,7 +828,8 @@ class Service:
                     door: str | None = None,
                     ahead: tuple[str, ...] = (),
                     phone_run: PhoneRun | None = None,
-                    wait_for: float | None = None) -> Reply:
+                    wait_for: float | None = None,
+                    watch: Watcher | None = None) -> Reply:
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
@@ -855,11 +886,13 @@ class Service:
         sent = self._send_file_tool(agent, who)
         servers = await self._servers(agent, who=who, run=run, key=key, spec=spec,
                                       phone_run=phone_run, remembers=remembers)
+        if not is_unattended():
+            self.seen.tools_were(who.id, run.agent, agent)
         try:
             reply = await self._run_turn(
                 agent, key=key, run=run, resuming=resuming, answers=answers,
                 door=door, decisions=decisions, wait=wait, ceiling=ceiling,
-                provider_name=provider_name, who=who)
+                provider_name=provider_name, who=who, watch=Safely(watch))
             return replace(reply, files=tuple(sent)) if sent else reply
         finally:
             if servers is not None:
@@ -1115,7 +1148,7 @@ class Service:
     async def _run_turn(self, agent, *, key: str, run: Run,
                         resuming: Hold | None, answers, door: str | None,
                         decisions: Decisions, wait, ceiling, provider_name: str,
-                        who: Actor) -> Reply:
+                        who: Actor, watch: Safely | None = None) -> Reply:
         self._rehydrate(agent, key)
         if resuming is not None:
             events = self._carry_on(agent, resuming, answers or {}, run,
@@ -1132,8 +1165,20 @@ class Service:
         before_models = {m: _copy(u) for m, u in agent.usage_by_model.items()}
 
         end: TurnEnd | None = None
+        tell = watch or Safely(None)
+
+        def streamed(event) -> None:
+            # Words and a chosen tool come through Yantra's callback, while
+            # the loop below drains the model's stream (its _atee).
+            seen = shown(event, agent)
+            if seen is not None:
+                tell(seen)
+
+        agent.on_stream_event = streamed
         try:
             async for event in events:
+                if isinstance(event, ToolExecuted):
+                    streamed(event)
                 if isinstance(event, TurnEnd):
                     end = event
                     if end.reason == "held" and agent.held is not None:
@@ -1185,6 +1230,10 @@ class Service:
         if noticed:
             run.reply = f"{run.reply}\n\n{noticed}"
         self.runs.record(run)
+        # Behind the answer: learned skills counted, and a look for one to
+        # keep (learning.py) -- started now, run after this returns.
+        self.learning.after_turn(agent, end, run=run, key=key, who=who,
+                                 provider_name=provider_name)
         return Reply(text=run.reply, run_id=run.id, agent=run.agent,
                      actor=run.actor, stop_reason=run.stop_reason,
                      detail=run.detail, cost_usd=run.cost_usd,

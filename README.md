@@ -135,7 +135,10 @@ under that person, in Yantra's own file or, with `--memory`, behind a
 key of their own; and while nobody is writing, a quiet conversation is
 looked back over and every sign-in checked daily, with notices reaching
 phones through the house's own ntfy; and the owner's files changed from
-a page, each checked before it's written — covered by 811 tests. The API is not stable.
+a page, each checked before it's written; and a turn watched while it
+runs on every channel, a job of several steps offered back as a skill
+the person keeps for themselves, and `/tools` and `/schedules` answered
+from the record — covered by 829 tests. The API is not stable.
 
 ## The shape of it
 
@@ -777,6 +780,7 @@ The reasoning is in [notes/29](notes/29-the-owners-page.md).
 
 ```
 POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, receipt, files, ...}
+                   (+ "stream": true -> NDJSON: text, using, step lines, then {kind: reply, ...})
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
@@ -786,7 +790,7 @@ POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /messa
 POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code, via}
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
-GET  /web?actor=&after=N                         -> {lines, agents, busy, asks, holds}
+GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}
 POST /web/message  {actor, agent, text}          -> {line}
 POST /web/asks/{id}  {actor, approve}            -> {answered, approved}
 POST /web/holds/{id} {actor, answers}            -> {started}
@@ -833,6 +837,17 @@ and answered with `/web/asks` and `/web/holds`. Sarathi's home page is
 one such page ([notes/34](notes/34-a-chat-on-a-page.md)): the owner's,
 and each person's in the house once they sign in there, as their id in
 `actors.toml` (Sarathi's own sign-in; nothing here decides who).
+
+**Seeing the work.** While a turn runs, `GET /web` carries it as `live`:
+the answer so far, and each step as a line (the tool and its one-line
+summary, never what it read). Telegram shows a *Working…* message with
+the last steps instead, edited every few seconds and deleted when the
+answer arrives. `"stream": true` on `/message` gives the same events as
+NDJSON. For a package with skills, a job of four steps or more is looked
+at after the answer and may come back as a skill to keep (`/skills keep
+ID`, or the Keep button on Telegram and a page), saved in that person's
+own folder only. `/tools` and `/schedules` answer from the record, with
+no turn ([notes/42](notes/42-seeing-the-work.md)).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person**: a caller is a channel adapter
@@ -1132,16 +1147,19 @@ reads that person's key from `<state>/memory.json`
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)); a scheduled run's own wait, after which a question lapses ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
 | `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
-| `gate.py` | three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
+| `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), and which way each came in ([notes/36](notes/36-which-way-it-came-in.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
-| `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)) |
+| `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)) |
+| `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
+| `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder ([notes/42](notes/42-seeing-the-work.md)) |
+| `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay ([notes/42](notes/42-seeing-the-work.md)) |
+| `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
-| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)) |
+| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |

@@ -435,3 +435,24 @@ def test_a_notice_needs_text_and_a_token(client):
                        json={"actor": "owner"}).status_code == 400
     assert client.post("/notify", json={"actor": "owner",
                                         "text": "hi"}).status_code == 401
+
+
+def test_a_stream_asked_for_is_lines_ending_in_the_reply(client):
+    import json
+
+    response = client.post("/message", headers=auth(), json={
+        "actor": "owner", "agent": "greeter", "thread": "t1", "text": "hi",
+        "stream": True})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    lines = [json.loads(line) for line in response.text.splitlines()]
+    assert "".join(e["text"] for e in lines if e["kind"] == "text") == "Hello."
+    assert lines[-1]["kind"] == "reply" and lines[-1]["text"] == "Hello."
+    assert lines[-1]["ok"] is True
+
+
+def test_stream_is_true_or_false(client):
+    response = client.post("/message", headers=auth(), json={
+        "actor": "owner", "agent": "greeter", "thread": "t1", "text": "hi",
+        "stream": "yes"})
+    assert response.status_code == 400

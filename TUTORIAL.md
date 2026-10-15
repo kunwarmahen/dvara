@@ -1409,6 +1409,59 @@ on stdin). `settings show` prints everything as JSON. With Sarathi,
 you'll use **Settings** on the home page instead
 ([notes/41](notes/41-the-owners-files-from-a-page.md)).
 
+## 24 · Seeing the work
+
+A turn shows what it is doing while it runs, on every channel. Give an
+agent a job of several steps and watch:
+
+* **On a page** (Sarathi's home page, through `serve --web`): each step
+  appears as a line under the agent's name, `✓ bash: $ wc -l people.csv`,
+  and then the answer word by word.
+* **On Telegram**: a *Working…* message lists the last few steps, is
+  updated every few seconds, and goes away when the answer arrives.
+* **Over HTTP**: add `"stream": true` to `POST /message` and the answer
+  comes back as one JSON object a line, ending in the usual reply:
+
+```
+$ curl -sN -H "Authorization: Bearer $DVARA_TOKEN" \
+    -d '{"actor":"owner","agent":"greeter","thread":"t","text":"hi","stream":true}' \
+    localhost:8765/message
+{"kind": "text", "text": "Hello"}
+{"kind": "text", "text": "! How can I help?"}
+{"kind": "reply", "text": "Hello! How can I help?", "ok": true, ...}
+```
+
+A step shows the tool and what it was asked to do, never what it read.
+
+**Skills.** Give a package skills (`[skills] enabled = true` in its
+`agent.toml`). When a job takes four steps or more, the agent looks at
+it after answering, writes down how it was done, tests that, and offers
+it:
+
+```
+I could keep what I just did as a skill, so next time it's one step:
+
+csv-people-report — Generates a short Markdown report ... from a name,age CSV.
+Test: passed
+
+Send /skills keep 080a to keep it, or /skills drop 080a.
+```
+
+Telegram and a page show **Keep** and **Not now** buttons too. A kept
+skill is saved in that person's own folder for that agent, so nobody
+else's agent changes. Ask for the same job again and the agent uses it.
+`/skills` lists theirs, how each has done, and what is waiting;
+`/skills forget NAME` removes one. The look is a run of its own in
+`dvara runs` (`looked_for_skill`), paid from the person's allowance.
+`YANTRA_LEARN=off` stops the looks.
+
+**`/tools` and `/schedules`.** `/tools` lists what the agent could use
+on your last message, grouped by where each tool came from. `/schedules`
+lists your schedules from Samay (with `--samay`). Neither is a turn, so
+they cost nothing. To change a schedule, ask the agent; to change what
+an agent may use, change its package
+([notes/42](notes/42-seeing-the-work.md)).
+
 ---
 
 # Where to read next
@@ -1447,6 +1500,7 @@ Each topic, and the note that argues it:
 | `notes/38-what-they-said-in-passing.md` | `/memory`, `/remember`: the look back at `/new`, listed and kept only on the person's word, and what is kept, theirs to see and take back |
 | `notes/39-while-nobody-is-writing.md` | a quiet conversation looked back over without `/new`, and every sign-in checked daily, told once to whoever can fix it |
 | `notes/41-the-owners-files-from-a-page.md` | `dvara settings`: people, rules and agents changed by a page, each checked by the code that reads it, comments kept |
+| `notes/42-seeing-the-work.md` | a turn watched on every channel (words and steps, never what a tool read), skills offered behind the answer and kept in the person's own folder, `/tools` and `/schedules` |
 | `notes/40-a-notice-on-their-phone.md` | `--ntfy`: notices on the ntfy app, through a server in the house, each person on a topic nobody can guess; the accounts-page button |
 
 ---
@@ -1466,9 +1520,9 @@ refusals and gaps, and each one is argued in the note that owns it.
 * **No approve-with-edits over a channel.** The round trip is long enough
   that the edit and the thing being edited drift apart in a person's head.
   Two buttons: approve or refuse.
-* **No streaming, no web UI, no registry, no scheduling.** Channels are
-  turn-shaped, and each of the others is a service of its own wearing this
-  one's clothes. Scheduling became exactly that: [Samay](https://github.com/kunwarmahen/samay), a program of its
+* **No web UI, no registry, no scheduling.** Each of these is a service
+  of its own wearing this one's clothes. (A turn is watched while it runs,
+  though, on every channel: §24.) Scheduling became exactly that: [Samay](https://github.com/kunwarmahen/samay), a program of its
   own. So did the owner's page (§17): `dvara page`, its own process, which
   only reads.
 * **Locks are never evicted** — one `asyncio.Lock` per session key the

@@ -322,9 +322,11 @@ message; an exception is a reply that silently never arrives.
   later note, and it only means anything once there is a human to
   escalate to. Inventing the dialect twice is how two incompatible
   dialects are born.
-* **No streaming.** One message in, one reply out. Channels are
-  turn-shaped, and a bot that streams is a bot that edits the same
-  message forty times and gets rate-limited for it.
+* ~~**No streaming.**~~ One message in, one reply out, still: a channel
+  that wants to show the turn while it runs passes a watcher, and each
+  shows it its own way. A page shows words and steps, Telegram a
+  "Working…" message edited every few seconds, and HTTP NDJSON when
+  asked ([note 42](42-seeing-the-work.md)).
 * **No web UI, no registry, no scheduling, no second process.** Each of
   those is a service of its own wearing this one's clothes. (Scheduling
   arrived exactly that way: Samay, a program of its own. What it needed

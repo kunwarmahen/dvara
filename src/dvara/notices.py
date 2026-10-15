@@ -46,7 +46,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 #: Sends one text to one address on one channel kind -- and, for a notice
-#: that carries one, a file (``file=`` the path).
+#: that carries one, a file (``file=`` the path), and what a channel may
+#: draw beside the words (``extra=``: a skill offered, with its id, for
+#: buttons). A channel that draws nothing ignores ``extra``; the words
+#: always say how to answer by typing.
 Sender = Callable[..., Awaitable[None]]
 
 #: Notices kept per channel kind for an adapter that has not collected
@@ -95,7 +98,8 @@ class NoticeDesk:
         self._routes[kind] = sender
 
     async def send(self, actor: str, reach: Sequence[tuple[str, str]],
-                   text: str, file: Path | None = None) -> Sent:
+                   text: str, file: Path | None = None,
+                   extra: dict | None = None) -> Sent:
         result = Sent()
         for kind, address in reach:
             notice = Notice(id=secrets.token_hex(4), actor=actor, kind=kind,
@@ -104,10 +108,11 @@ class NoticeDesk:
             sender = self._routes.get(kind)
             if sender is not None:
                 try:
+                    more = {"extra": extra} if extra else {}
                     if file is None:
-                        await sender(address, text)
+                        await sender(address, text, **more)
                     else:
-                        await sender(address, text, file=file)
+                        await sender(address, text, file=file, **more)
                     result.sent.append(kind)
                     continue
                 except Exception as exc:     # a channel down is not a crash

@@ -332,6 +332,7 @@ def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
                             "Send me a message and I will answer it.\n\n"
                             "Send /files to see the files I keep for you, "
                             "and /file NAME to get one.\n\n"
+                            "Send /tools to see what I can use.\n\n"
                             "Send /new to start our conversation over."]
 
 
@@ -884,8 +885,11 @@ def test_a_file_the_agent_sent_follows_its_answer(make_bot, make_service, actors
     fake = FakeTelegram([message("send me the report")])
     asyncio.run(make_bot(fake, service=service, agent="courier").run())
     order = [m for m, _ in fake.calls if m in ("sendMessage", "sendDocument")]
-    assert order == ["sendMessage", "sendDocument"]
-    assert fake.texts() == ["Here's this week's report."]
+    # the "Working…" message first, gone once the answer comes (Steps)
+    assert order == ["sendMessage", "sendMessage", "sendDocument"]
+    assert fake.texts() == ["Working…\n• send_file: send you the file report.md",
+                            "Here's this week's report."]
+    assert fake.of("deleteMessage")
     assert 'filename="report.md"' in fake.of("sendDocument")[0]["multipart"]
 
 
@@ -900,7 +904,7 @@ def menu_of(fake):
 def test_the_menu_offers_new_and_files_to_an_agent_that_writes_them(make_bot):
     fake = FakeTelegram([])
     asyncio.run(make_bot(fake).run())
-    assert menu_of(fake) == ["new", "files", "file"]
+    assert menu_of(fake) == ["new", "files", "file", "tools"]
 
 
 def test_the_account_words_are_offered_only_where_the_package_asks_for_accounts(
@@ -913,7 +917,7 @@ def test_the_account_words_are_offered_only_where_the_package_asks_for_accounts(
     asyncio.run(make_bot(fake, service=make_service([], actors=actors),
                          agent="reader").run())
     assert menu_of(fake) == ["new", "accounts", "connect", "disconnect",
-                             "lock", "unlock"]
+                             "lock", "unlock", "tools"]
 
 
 def test_the_memory_words_are_offered_only_where_the_package_remembers(
@@ -925,7 +929,7 @@ def test_the_memory_words_are_offered_only_where_the_package_remembers(
     fake = FakeTelegram([])
     asyncio.run(make_bot(fake, service=make_service([], actors=actors),
                          agent="keeper").run())
-    assert menu_of(fake) == ["new", "memory", "remember"]
+    assert menu_of(fake) == ["new", "memory", "remember", "tools"]
 
 
 def test_a_menu_telegram_refuses_costs_the_menu_never_the_bot(make_bot):
@@ -934,3 +938,41 @@ def test_a_menu_telegram_refuses_costs_the_menu_never_the_bot(make_bot):
         400, json={"ok": False, "description": "Bad Request"})]
     asyncio.run(make_bot(fake, script=[says("hello back")]).run())
     assert "hello back" in fake.texts()
+
+
+# ---- skills offered, and the work while it happens ----------------------------------
+
+
+def test_a_skill_offered_carries_keep_and_not_now(make_bot):
+    fake = FakeTelegram([])
+    bot = make_bot(fake)
+    offer = {"offer": {"id": "a1b2", "agent": "greeter", "name": "greet-someone"}}
+    asyncio.run(bot._deliver_notice(str(KNOWN), "I could keep this.", extra=offer))
+    sent = fake.sent()[-1]
+    buttons = sent["reply_markup"]["inline_keyboard"][0]
+    assert [b["text"] for b in buttons] == ["Keep", "Not now"]
+    assert [b["callback_data"] for b in buttons] == ["k:greeter:a1b2", "d:greeter:a1b2"]
+
+
+def test_pressing_one_is_the_word_typed(make_bot):
+    pressed = {"update_id": 1, "callback_query": {
+        "id": "cb1", "from": {"id": KNOWN}, "data": "d:greeter:a1b2",
+        "message": {"message_id": 7, "chat": {"id": KNOWN}, "text": "I could keep this."}}}
+    fake = FakeTelegram([pressed])
+    asyncio.run(make_bot(fake, script=[]).run())
+    assert fake.of("editMessageReplyMarkup")           # the buttons come off
+    assert fake.texts() == ["greeter doesn't use skills, so there is nothing to keep here."]
+
+
+def test_the_working_message_shows_the_last_steps_only():
+    from dvara.telegram import STEPS_SHOWN, Steps
+
+    steps = Steps(bot=None, chat=1)
+    steps._job = object()                  # no task: only the words are tested
+    for n in range(STEPS_SHOWN + 2):
+        steps({"kind": "step", "said": f"bash: echo {n}", "ok": n != 7})
+    steps({"kind": "text", "text": "never shown"})
+    text = steps.text()
+    assert text.startswith("Working… (2 earlier steps)")
+    assert "bash: echo 0" not in text and "• bash: echo 7 — didn't work" in text
+    assert "never shown" not in text

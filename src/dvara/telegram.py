@@ -141,6 +141,7 @@ import asyncio
 import contextlib
 import sys
 from fnmatch import fnmatch
+from typing import Any
 
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
@@ -188,6 +189,12 @@ CAPTION_LIMIT = 1024
 #: is thinking -- and cheaper than the alternative the service refused,
 #: which is a bot that edits one message forty times.
 TYPING_EVERY = 4.0
+#: The "Working…" message is edited no more often than this. Telegram
+#: limits edits like messages, and one edited every step of a busy turn
+#: spends the chat's limit on a progress bar.
+STEPS_EVERY = 3.0
+#: Steps the "Working…" message shows; earlier ones are counted.
+STEPS_SHOWN = 6
 
 #: The longest ``retry_after`` worth honouring. Past this the wait
 #: outlives the question it was going to deliver.
@@ -573,14 +580,16 @@ class TelegramBot:
         with contextlib.suppress(Exception):
             await self._api("sendChatAction", chat_id=chat, action="typing")
         typing = asyncio.ensure_future(self._typing(chat))
+        steps = Steps(self, chat)
         try:
             reply = await self.service.deliver(
                 via=Channel(kind="telegram", id=str(native)),
-                agent=self.agent, thread=str(chat), text=text)
+                agent=self.agent, thread=str(chat), text=text, watch=steps)
         finally:
             typing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await typing
+            await steps.close()
         if secret and message.get("message_id"):
             with contextlib.suppress(Exception):
                 await self._api("deleteMessage", chat_id=chat,
@@ -703,7 +712,8 @@ class TelegramBot:
         try:
             await self._api("setMyCommands", commands=[
                 {"command": word, "description": said}
-                for word, said in _menu(self.spec)])
+                for word, said in _menu(self.spec,
+                                        schedules=self.service.samay is not None)])
         except Exception as exc:  # noqa: BLE001 -- the bot still answers
             self._note(f"telegram: the / menu was not set: {exc}")
 
@@ -725,6 +735,12 @@ class TelegramBot:
                          "/file NAME to get one.")
         if _remembers(self.spec):
             lines.append("Send /memory to see what I remember about you.")
+        lines.append("Send /tools to see what I can use"
+                     + (", and /schedules for your schedules."
+                        if self.service.samay is not None else "."))
+        if getattr(self.spec, "skills", None):
+            lines.append("When a job takes several steps, I may offer to keep how it "
+                         "was done as a skill. Send /skills to see them.")
         lines.append("Send /new to start our conversation over.")
         return "\n\n".join(lines)
 
@@ -767,20 +783,27 @@ class TelegramBot:
 
     # ---- the question, and the button --------------------------------------
 
-    async def _deliver_notice(self, address: str, text: str, file=None) -> None:
+    async def _deliver_notice(self, address: str, text: str, file=None,
+                              extra: dict | None = None) -> None:
         """Something the person was not asked about, into their chat.
 
         Split the way an answer is, so a long finding arrives whole
         rather than cut at Telegram's limit. Raising is left to the desk,
         which keeps the text for collection rather than losing it. A
         notice carrying a file (a scheduled run's ``send_file``) is the
-        file, with the text as its caption."""
+        file, with the text as its caption. A skill offered (learning.py)
+        gets Keep and Not now under its last part; the words still say
+        what to type."""
         chat = int(address)
         if file is not None:
             await self._send_file(chat, file, caption=elide(text, CAPTION_LIMIT))
             return
-        for part in split_message(text):
-            await self._send(chat, part)
+        offer = (extra or {}).get("offer")
+        parts = split_message(text)
+        for count, part in enumerate(parts, start=1):
+            more = ({"reply_markup": _offer_buttons(offer)}
+                    if offer and count == len(parts) else {})
+            await self._send(chat, part, **more)
 
     async def _deliver_ask(self, ask: Ask) -> Withdraw:
         """Put one "may I?" in front of the person it was addressed to.
@@ -854,6 +877,9 @@ class TelegramBot:
         if verdict in ("h", "x") and ask_id:
             await self._carry_on(query, ask_id, approve=verdict == "h")
             return
+        if verdict in ("k", "d") and ask_id:
+            await self._skill(query, ask_id, keep=verdict == "k")
+            return
         if self.service.asks is None or not ask_id \
                 or verdict not in ("y", "n"):
             await self._toast(query_id, "that button means nothing here")
@@ -881,6 +907,28 @@ class TelegramBot:
         # the undo ``_deliver_ask`` handed it -- one writer, so a press
         # here and an answer from anywhere else go through the same code.
         await self._toast(query_id, "approved" if approve else "refused")
+
+    async def _skill(self, query: dict, data: str, *, keep: bool) -> None:
+        """Keep or Not now on a skill offered: the same words typed
+        (``/skills keep ID``), answered into the chat it was pressed in."""
+        query_id = query.get("id", "")
+        native = query.get("from", {}).get("id")
+        pressed = query.get("message") or {}
+        agent, _, offer_id = data.partition(":")
+        chat = int(pressed.get("chat", {}).get("id", 0))
+        if not agent or not offer_id or not chat:
+            await self._toast(query_id, "that button means nothing here")
+            return
+        await self._toast(query_id, "keeping it" if keep else "letting it go")
+        if pressed.get("message_id"):
+            with contextlib.suppress(TelegramError, httpx.HTTPError):
+                await self._api("editMessageReplyMarkup", chat_id=chat,
+                                message_id=pressed["message_id"])
+        reply = await self.service.deliver(
+            via=Channel(kind="telegram", id=str(native)), agent=agent,
+            thread=str(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
+        for part in split_message(reply.text):
+            await self._send(chat, part)
 
     async def _carry_on(self, query: dict, hold_id: str, *,
                         approve: bool) -> None:
@@ -912,10 +960,11 @@ class TelegramBot:
             agent=self.agent, chat=str(chat), sender=str(native),
             text=f"[{verb}: {', '.join(c.tool for c in hold.calls)}]")
         typing = asyncio.ensure_future(self._typing(chat))
+        steps = Steps(self, chat)
         try:
             reply = await self.service.resume(hold_id, actor=actor,
                                               answers=answers,
-                                              door="telegram")
+                                              door="telegram", watch=steps)
         except (NotYourHold, NoSuchHold, Refused) as exc:
             self.outbox.settled(row)
             await self._toast(query_id, str(exc))
@@ -924,6 +973,7 @@ class TelegramBot:
             typing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await typing
+            await steps.close()
         await self._toast(query_id, verb)
         if pressed.get("message_id") and pressed.get("chat", {}).get("id"):
             # The buttons come off the message that carried them, with
@@ -1074,7 +1124,7 @@ def ending(answer: Answer | None) -> str:
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
 
 
-def _menu(spec) -> list[tuple[str, str]]:
+def _menu(spec, *, schedules: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over")]
     if _writes_files(spec):
@@ -1089,6 +1139,11 @@ def _menu(spec) -> list[tuple[str, str]]:
                   ("disconnect", "Remove one: /disconnect NAME"),
                   ("lock", "Lock your accounts with a passphrase"),
                   ("unlock", "Unlock them for a while")]
+    if getattr(spec, "skills", None):
+        words += [("skills", "Skills I've learned, and ones to keep")]
+    words += [("tools", "What I can use for you")]
+    if schedules:
+        words += [("schedules", "Your schedules")]
     return words
 
 
@@ -1103,6 +1158,15 @@ def _writes_files(spec) -> bool:
     allowed = spec.tool_allow is None or any(fnmatch("write_file", p)
                                              for p in spec.tool_allow)
     return allowed and not any(fnmatch("write_file", p) for p in spec.tool_deny)
+
+
+def _offer_buttons(offer: dict) -> dict:
+    """Keep and Not now, under a skill offered (learning.py)."""
+    data = f"{offer.get('agent')}:{offer.get('id')}"
+    return {"inline_keyboard": [[
+        {"text": "Keep", "callback_data": f"k:{data}"[:CALLBACK_LIMIT]},
+        {"text": "Not now", "callback_data": f"d:{data}"[:CALLBACK_LIMIT]},
+    ]]}
 
 
 def _hold_buttons(hold: Hold) -> dict:
@@ -1142,3 +1206,62 @@ def _retry_after(response: httpx.Response) -> float:
         if isinstance(wait, int | float) and not isinstance(wait, bool):
             return float(wait)
     return 1.0
+
+
+class Steps:
+    """The "Working…" message: a turn's last few steps, while it runs.
+
+    STEPS, NOT WORDS. The answer arrives as a message of its own, so the
+    phone buzzes for it; typing it out word by word would be an edit a
+    second, and Telegram limits edits as it limits messages. A turn that
+    calls no tool shows only "typing", as before. Sent at the first step,
+    edited at most every ``STEPS_EVERY``, removed when the answer comes:
+    the chat keeps the answer, not the scaffolding. Every failure here is
+    swallowed -- a progress line never costs an answer.
+    """
+
+    def __init__(self, bot: Any, chat: int) -> None:
+        self.bot, self.chat = bot, chat
+        self.lines: list[str] = []
+        self.message_id: int | None = None
+        self.shown = ""
+        self._job: asyncio.Task | None = None
+
+    def __call__(self, event: dict) -> None:
+        if event.get("kind") != "step":
+            return
+        how = ("" if event.get("ok") else
+               " — refused" if event.get("refused") else " — didn't work")
+        self.lines.append(f"• {event.get('said', '')}{how}")
+        if self._job is None:
+            self._job = asyncio.ensure_future(self._keep_up())
+
+    def text(self) -> str:
+        earlier = len(self.lines) - STEPS_SHOWN
+        head = "Working…" + (f" ({earlier} earlier step{'s' if earlier > 1 else ''})"
+                             if earlier > 0 else "")
+        return "\n".join([head, *self.lines[-STEPS_SHOWN:]])
+
+    async def _keep_up(self) -> None:
+        while True:
+            text = self.text()
+            if text != self.shown:
+                with contextlib.suppress(Exception):
+                    if self.message_id is None:
+                        sent = await self.bot._send(self.chat, text)
+                        self.message_id = (sent or {}).get("message_id")
+                    else:
+                        await self.bot._api("editMessageText", chat_id=self.chat,
+                                            message_id=self.message_id, text=text)
+                    self.shown = text
+            await asyncio.sleep(STEPS_EVERY)
+
+    async def close(self) -> None:
+        if self._job is not None:
+            self._job.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._job
+        if self.message_id is not None:
+            with contextlib.suppress(Exception):
+                await self.bot._api("deleteMessage", chat_id=self.chat,
+                                    message_id=self.message_id)

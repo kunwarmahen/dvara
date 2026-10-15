@@ -26,7 +26,10 @@ A TURN RUNS BEHIND THE REQUEST. A message is written down and its turn
 started, and the request answers at once: a turn can take minutes, and
 a page reloaded mid-turn must not lose the answer. The answer is a line
 like any other, found by the next look. While a turn runs, ``busy``
-says which agent is working.
+says which agent is working, and ``live`` shows it working (watch.py):
+the answer so far and each step as a line. Live is kept in memory only
+-- the answer line is the record; a restart mid-turn loses the view of
+a turn that is lost anyway.
 
 KEPT ON DISK, AND CAPPED. One SQLite file next to ``runs.sqlite3``. The
 newest ``KEEP_PER_PERSON`` lines a person has are kept; older ones go.
@@ -52,6 +55,7 @@ from typing import TYPE_CHECKING
 
 from dvara.errors import Refused
 from dvara.holds import NoSuchHold, NotYourHold
+from dvara.watch import Live
 
 if TYPE_CHECKING:
     from dvara.service import Reply, Service
@@ -96,7 +100,7 @@ class Line:
         # number, never by a path on this machine
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
-        for name in ("receipt", "held", "stop_reason"):
+        for name in ("receipt", "held", "stop_reason", "offer"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         return out
@@ -176,12 +180,17 @@ class WebChannel:
         self.book = book
         #: (actor, agent) with a turn running now.
         self._busy: set[tuple[str, str]] = set()
+        #: What each of those turns has written and done so far.
+        self._live: dict[tuple[str, str], Live] = {}
         self._jobs: set[asyncio.Task] = set()
 
-    async def notice(self, address: str, text: str, file: Path | None = None) -> None:
-        """A notice for ``address`` (the actor id): a line, kept."""
+    async def notice(self, address: str, text: str, file: Path | None = None,
+                     extra: dict | None = None) -> None:
+        """A notice for ``address`` (the actor id): a line, kept. A skill
+        offered rides on it (``offer``), for the page's buttons."""
         self.book.add(address, "notice", text,
-                      extra={"files": [str(file)] if file else []})
+                      extra={"files": [str(file)] if file else [],
+                             "offer": (extra or {}).get("offer")})
 
     # -- the person, on the page ---------------------------------------------
 
@@ -194,6 +203,8 @@ class WebChannel:
         return {"actor": actor, "agents": agents,
                 "lines": [line.as_dict() for line in self.book.after(actor, after)],
                 "busy": sorted(agent for (a, agent) in self._busy if a == actor),
+                "live": [{"agent": agent, **live.as_dict()}
+                         for (a, agent), live in sorted(self._live.items()) if a == actor],
                 "asks": [ask.as_dict() for ask in asks],
                 "holds": [hold.as_dict()
                           for hold in self.service.holds.pending(actor)]}
@@ -206,8 +217,10 @@ class WebChannel:
         if not text.strip():
             raise Refused("say something and I will answer it")
         line = self.book.add(actor, "you", text, agent=agent)
+        live = Live()
         self._start(actor, agent, self.service.deliver(
-            actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND))
+            actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND,
+            watch=live), live)
         return line
 
     def carry_on(self, hold_id: str, actor: str, answers: dict) -> None:
@@ -221,11 +234,14 @@ class WebChannel:
             raise NoSuchHold("nothing is waiting under that id any more")
         if hold.actor != actor:
             raise NotYourHold(hold_id)
+        live = Live()
         self._start(actor, hold.agent, self.service.resume(
-            hold_id, answers=answers, actor=actor, door=KIND))
+            hold_id, answers=answers, actor=actor, door=KIND, watch=live), live)
 
-    def _start(self, actor: str, agent: str, turn) -> None:
+    def _start(self, actor: str, agent: str, turn, live: Live | None = None) -> None:
         self._busy.add((actor, agent))
+        if live is not None:
+            self._live[(actor, agent)] = live
 
         async def run() -> None:
             try:
@@ -240,6 +256,7 @@ class WebChannel:
                 self.answered(actor, agent, reply)
             finally:
                 self._busy.discard((actor, agent))
+                self._live.pop((actor, agent), None)
 
         job = asyncio.ensure_future(run())
         self._jobs.add(job)

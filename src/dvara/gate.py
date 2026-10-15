@@ -56,6 +56,7 @@ package asks for when it ships ``tools/*.py`` at all.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
@@ -82,6 +83,15 @@ from dvara import patience as waiting
 from dvara.asks import AskDesk
 from dvara.patience import Patience
 from dvara.rules import RuleBook
+
+#: True while something runs behind a turn that is over -- the look for a
+#: skill to keep (learning.py). A question put then would arrive from
+#: nowhere, after the answer: nothing is asked, the call is refused as
+#: unattended, and what needed the yes waits for the person to ask for it.
+#: A context variable, so it holds for that work alone in a process
+#: serving many people.
+NOBODY_ASKED: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "dvara_nobody_asked", default=False)
 
 #: Strictest first. One order, so that "tighten, never loosen" is a
 #: comparison instead of a paragraph.
@@ -327,6 +337,9 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         if decisions is not None:
             decisions.ahead(request.call_id)
         return True
+    if NOBODY_ASKED.get():
+        return refuse(request, f"{request.tool_name} was not run: nobody was asked, "
+                      f"the turn is over.", code=REFUSED_UNATTENDED)
     scheduled = patience is not None and patience.scheduled is not None
     # a scheduled run's question LAPSES when nobody answers: never held
     holds = desk.on_timeout == "hold" and not scheduled

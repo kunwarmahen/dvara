@@ -348,10 +348,12 @@ reading.
 
 ## What is deliberately not here
 
-* **No streaming, and no message that edits itself.** Unchanged from
-  [note 01](01-the-door.md), and the typing indicator is what replaces
-  it: renewed every four seconds for as long as the turn runs, which
-  costs one API call and says the one thing a person needs to know.
+* **No streaming of the answer.** The typing indicator is renewed every
+  four seconds for as long as the turn runs, and the answer arrives
+  whole. ~~No message that edits itself~~: a turn that calls tools shows
+  a "Working…" message with its last steps, edited at most every three
+  seconds and deleted when the answer comes
+  ([note 42](42-seeing-the-work.md)).
 * **No `parse_mode`.** Argued above. The cost is that code in an answer
   arrives as plain text, and the alternative cost is the answer arriving
   as nothing.

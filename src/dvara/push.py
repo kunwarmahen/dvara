@@ -82,7 +82,8 @@ class Pusher:
     def topic(self, actor: str) -> str:
         return topic(self.state, actor)
 
-    async def notice(self, address: str, text: str, file: Path | None = None) -> None:
+    async def notice(self, address: str, text: str, file: Path | None = None,
+                     extra: dict | None = None) -> None:
         words = text if file is None else f"{text}\n(a file came with it: {file.name})"
         await asyncio.to_thread(self._post, address, words)
 
