@@ -70,8 +70,8 @@ its line; data that isn't base64 is refused before any line.
 
 ## What is not here yet
 
-* **Voice notes.** Telegram's voice is audio; a model that hears
-  (Ollama lists "audio" for some) could take it the same way.
+* ~~**Voice notes.**~~ Heard into words before the turn by a local model
+  that hears ([notes/47](47-a-voice-note.md)).
 * **A file the person sends to a scheduled run.** Only a chat turn keeps
   what came with it; a schedule has nobody sending.
 * **Deleting from `from-you/`** from the chat (as for every file there,

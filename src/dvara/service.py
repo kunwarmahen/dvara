@@ -114,8 +114,8 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (attached, files, fresh, learning, money, past, patience, phoneview,
-                   ready, remembering, seen, signins)
+from dvara import (attached, files, fresh, heard, learning, money, past, patience,
+                   phoneview, ready, remembering, seen, signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -229,6 +229,9 @@ class Reply:
     #: A conversation opened again (``/chats N``, past.py): its words, for
     #: a page to draw in place. Empty for every other reply.
     transcript: tuple[dict, ...] = ()
+    #: What a voice note sent with the message was heard as (heard.py),
+    #: for the channel to show beside the answer.
+    heard: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -644,6 +647,13 @@ class Service:
                 return Reply(text=f"I couldn't keep that: {exc}", run_id=None,
                              agent=agent, actor=actor, stop_reason="refused")
             text = attached.said(text, kept)
+        heard_as: str | None = None
+        for note in (k for k in kept if k.voice):
+            words, why = await heard.hear(note.path)
+            if words is None:
+                self._note(f"dvara: {actor}: a voice note wasn't heard -- {why}")
+            heard_as = words if words is not None else heard_as
+            text = heard.said(words, text, note.relative)
         if not text.strip():
             return Reply(text="say something and I will answer it",
                          run_id=None, agent=agent, actor=actor,
@@ -740,8 +750,9 @@ class Service:
                       came_by=came_by)
             try:
                 if not unattended:
-                    return await self._turn(spec=spec, who=who, key=key,
-                                            run=run, watch=watch, kept=kept)
+                    reply = await self._turn(spec=spec, who=who, key=key,
+                                             run=run, watch=watch, kept=kept)
+                    return replace(reply, heard=heard_as) if heard_as else reply
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,

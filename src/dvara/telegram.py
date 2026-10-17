@@ -556,7 +556,8 @@ class TelegramBot:
 
         text = message.get("text")
         attachments: list[Attachment] = []
-        if text is None and (message.get("photo") or message.get("document")):
+        if text is None and (message.get("photo") or message.get("document")
+                             or message.get("voice") or message.get("audio")):
             # A photo or a file: kept in their folder, a picture shown to a
             # model that can see (attached.py). The caption is the words.
             try:
@@ -620,6 +621,8 @@ class TelegramBot:
             await self._answer_with_file(chat, row, reply.text, reply.files[0])
             return
         parts = self._reply_messages(reply.text, reply.receipt)
+        if reply.heard:                 # what the voice note was heard as, first
+            parts = [f'I heard: "{reply.heard}"', *parts]
         self.outbox.answered(row, parts)
         for count, chunk in enumerate(parts, start=1):
             last = count == len(parts)
@@ -963,6 +966,12 @@ class TelegramBot:
             biggest = max(message["photo"], key=lambda p: p.get("file_size") or 0)
             file_id = biggest.get("file_id")
             name = f"photo-{message.get('message_id') or 'sent'}.jpg"
+        elif message.get("voice") or message.get("audio"):
+            note = message.get("voice") or message.get("audio")
+            file_id = note.get("file_id")
+            name = note.get("file_name") or f"voice-{message.get('message_id') or 'sent'}.ogg"
+            if (note.get("file_size") or 0) > KEEP_LIMIT:
+                raise ValueError(f"{name} is over {KEEP_LIMIT // (1024 * 1024)} MB")
         else:
             document = message["document"]
             file_id, name = document.get("file_id"), document.get("file_name") or "file"

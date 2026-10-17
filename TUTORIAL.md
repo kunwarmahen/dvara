@@ -1517,6 +1517,7 @@ Each topic, and the note that argues it:
 | `notes/44-what-they-send.md` | a picture or file the person sends: kept in their folder under `from-you/`, a picture shown to a model that can see |
 | `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
+| `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |
 
 ---
 

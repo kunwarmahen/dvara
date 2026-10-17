@@ -39,10 +39,18 @@ AT_MOST = 10
 SAFE = re.compile(r"[^A-Za-z0-9._ -]+")
 
 
+#: A recording, by its name: a voice note (heard.py), not a file to read.
+VOICE = {".ogg", ".oga", ".opus", ".mp3", ".m4a", ".wav", ".webm"}
+
+
 @dataclass(frozen=True)
 class Attachment:
     name: str
     data: bytes
+
+    @property
+    def voice(self) -> bool:
+        return Path(self.name).suffix.lower() in VOICE
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,7 @@ class Kept:
     path: Path          # inside the folder
     relative: str       # what the agent is told: from-you/receipt.jpg
     picture: bool
+    voice: bool = False
 
 
 def safe_name(name: str) -> str:
@@ -82,12 +91,13 @@ def keep(folder: Path, attachments: list[Attachment]) -> list[Kept]:
         target.write_bytes(a.data)
         picture = (Path(name).suffix.lower() in MEDIA_TYPES
                    and len(a.data) <= MAX_IMAGE_BYTES)
-        out.append(Kept(target, f"{INBOX}/{target.name}", picture))
+        out.append(Kept(target, f"{INBOX}/{target.name}", picture, a.voice))
     return out
 
 
 def said(text: str, kept: list[Kept]) -> str:
     """The person's words, then a line for what came with them."""
+    kept = [k for k in kept if not k.voice]       # a voice note is heard.py's
     if not kept:
         return text
     names = ", ".join(k.relative + (" (a picture)" if k.picture else "") for k in kept)
