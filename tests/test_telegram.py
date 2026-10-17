@@ -976,3 +976,41 @@ def test_the_working_message_shows_the_last_steps_only():
     assert text.startswith("Working… (2 earlier steps)")
     assert "bash: echo 0" not in text and "• bash: echo 7 — didn't work" in text
     assert "never shown" not in text
+
+
+# ---- a sign-in word under the answer (accounts.taps) ----------------------------------
+
+
+def test_an_answer_that_says_connect_carries_the_button(make_bot):
+    fake = FakeTelegram([message("anything from the school?")])
+    told = "Gmail isn't connected yet. Send /connect gmail and sign in, then ask again."
+    asyncio.run(make_bot(fake, script=[says(told)]).run())
+    sent = fake.sent()[-1]
+    buttons = sent["reply_markup"]["inline_keyboard"][0]
+    assert [b["text"] for b in buttons] == ["Connect gmail"]
+    assert [b["callback_data"] for b in buttons] == ["w:/connect gmail"]
+
+
+def test_an_answer_that_says_nothing_of_signing_in_has_no_button(make_bot):
+    fake = FakeTelegram([message("hello")])
+    asyncio.run(make_bot(fake, script=[says("Hello! Connect with me any time.")]).run())
+    assert "reply_markup" not in fake.sent()[-1]
+
+
+def test_pressing_connect_is_the_word_typed_by_whoever_pressed(make_bot):
+    pressed = {"update_id": 1, "callback_query": {
+        "id": "cb1", "from": {"id": KNOWN}, "data": "w:/connect gmail",
+        "message": {"message_id": 7, "chat": {"id": KNOWN}, "text": "Send /connect gmail"}}}
+    fake = FakeTelegram([pressed])
+    asyncio.run(make_bot(fake, script=[]).run())
+    # answered by the account words, never by the model (the script is empty)
+    assert fake.texts() and "/connect" not in fake.texts()[0].split()[0]
+
+
+def test_a_pressed_word_that_is_not_a_sign_in_word_does_nothing(make_bot):
+    pressed = {"update_id": 1, "callback_query": {
+        "id": "cb1", "from": {"id": KNOWN}, "data": "w:delete everything",
+        "message": {"message_id": 7, "chat": {"id": KNOWN}, "text": "x"}}}
+    fake = FakeTelegram([pressed])
+    asyncio.run(make_bot(fake, script=[]).run())
+    assert fake.texts() == []

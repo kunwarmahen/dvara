@@ -918,7 +918,9 @@ setu = "~/.local/state/setu"         # an existing folder -- yours
 setu_accounts = ["gmail:personal"]   # ...narrowed to one account
 ```
 
-raj signs in from the chat. He sends `/connect gmail`, gets Google's
+raj signs in from the chat. If he asks about mail first, the agent says
+to send `/connect gmail` and the answer carries a **Connect gmail**
+button that sends it for him. He sends `/connect gmail`, gets Google's
 link, signs in on his phone, and sends back the address of the page that
 then fails to load (it starts `http://127.0.0.1`). dvara hands that to
 the waiting sign-in, never to an agent, and answers *"Connected

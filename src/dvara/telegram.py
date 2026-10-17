@@ -146,7 +146,7 @@ from typing import Any
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
-from dvara.accounts import is_command, scrub
+from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.files import is_file_word
 from dvara.fresh import is_new_word
 from dvara.actors import Channel
@@ -610,7 +610,9 @@ class TelegramBot:
         for count, chunk in enumerate(parts, start=1):
             last = count == len(parts)
             extra = ({"reply_markup": _hold_buttons(reply.held)}
-                     if last and reply.held is not None else {})
+                     if last and reply.held is not None else
+                     {"reply_markup": markup} if last and (markup := _tap_buttons(reply.text))
+                     else {})
             await self._send(chat, chunk, **extra)
             self.outbox.sent(row, count)
         # What the agent sent with send_file, after the words that
@@ -880,6 +882,9 @@ class TelegramBot:
         if verdict in ("k", "d") and ask_id:
             await self._skill(query, ask_id, keep=verdict == "k")
             return
+        if verdict == "w" and ask_id:
+            await self._tapped(query, ask_id)
+            return
         if self.service.asks is None or not ask_id \
                 or verdict not in ("y", "n"):
             await self._toast(query_id, "that button means nothing here")
@@ -929,6 +934,20 @@ class TelegramBot:
             thread=str(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
         for part in split_message(reply.text):
             await self._send(chat, part)
+
+    async def _tapped(self, query: dict, word: str) -> None:
+        """A sign-in word under an answer (accounts.taps), pressed: sent
+        as the presser's own message, in the chat it was pressed in, so
+        it is answered exactly as if they had typed it."""
+        query_id = query.get("id", "")
+        pressed = query.get("message") or {}
+        chat = pressed.get("chat", {}).get("id")
+        if not chat or not is_command(word):
+            await self._toast(query_id, "that button means nothing here")
+            return
+        await self._toast(query_id, word)
+        await self._message({"chat": {"id": chat}, "from": query.get("from", {}),
+                             "text": word})
 
     async def _carry_on(self, query: dict, hold_id: str, *,
                         approve: bool) -> None:
@@ -1158,6 +1177,14 @@ def _writes_files(spec) -> bool:
     allowed = spec.tool_allow is None or any(fnmatch("write_file", p)
                                              for p in spec.tool_allow)
     return allowed and not any(fnmatch("write_file", p) for p in spec.tool_deny)
+
+
+def _tap_buttons(text: str) -> dict | None:
+    """The sign-in words an answer told the person to send, as buttons
+    that send them (accounts.taps). None when it told them none."""
+    row = [{"text": tap_label(w), "callback_data": f"w:{w}"} for w in taps(text)
+           if len(f"w:{w}".encode()) <= CALLBACK_LIMIT]
+    return {"inline_keyboard": [row]} if row else None
 
 
 def _offer_buttons(offer: dict) -> dict:

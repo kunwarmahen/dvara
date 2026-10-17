@@ -123,6 +123,16 @@ def test_a_person_keeps_only_their_newest_lines(tmp_path):
     assert [ln.text for ln in book.after("guest")] == ["g"]
 
 
+def test_an_answer_that_says_connect_carries_the_words_for_buttons(make_service):
+    service = make_service([says("Send /connect gmail, then ask again.")], web=True)
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        client.post("/web/message", headers=AUTH, json={
+            "actor": "owner", "agent": "greeter", "text": "any mail?"})
+        mine, answer = settled(client)["lines"]
+    assert answer["taps"] == [{"word": "/connect gmail", "label": "Connect gmail"}]
+    assert "taps" not in mine                              # your own line has none
+
+
 # ---- a held turn, answered from the page ----------------------------------
 
 def test_a_held_turn_answered_on_the_page_leaves_its_answer_as_a_line(

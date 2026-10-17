@@ -83,6 +83,39 @@ PASTED = re.compile(r"https?://(127\.0\.0\.1|localhost)(:\d+)?/?\S*[?&](code|err
                     re.IGNORECASE)
 
 
+#: A word the agent told the person to send, found in its answer.
+TOLD = re.compile(r"(?<![\w/])(/connect\s+[a-z0-9][a-z0-9_.-]*(?:\s+as\s+[A-Za-z0-9_-]+)?"
+                  r"|/unlock)\b")
+#: Buttons under one answer, at most.
+TAPS_AT_MOST = 3
+
+
+def taps(text: str) -> list[str]:
+    """The sign-in words an answer told the person to send, as buttons.
+
+    The agent can't connect an account (it says how: CONNECT_HERE), and
+    typing ``/connect gmail`` on a phone is the step people got wrong. So
+    a channel puts the word under the answer, and a press sends it AS IF
+    TYPED, by the person who pressed: the same refusals, the same link
+    or window, and still never the agent's doing. Only words found in
+    the answer -- nothing a page invents -- and only these two."""
+    found: list[str] = []
+    for match in TOLD.finditer(text or ""):
+        word = " ".join(match.group(1).split())
+        if word not in found:
+            found.append(word)
+    return found[:TAPS_AT_MOST]
+
+
+def tap_label(word: str) -> str:
+    """``/connect gmail as work`` -> ``Connect gmail (work)``."""
+    if word == "/unlock":
+        return "Unlock my accounts"
+    rest = word.removeprefix("/connect").split()
+    name = rest[0] if rest else ""
+    return f"Connect {name}" + (f" ({rest[2]})" if len(rest) > 2 else "")
+
+
 def is_command(text: str) -> bool:
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].split("@")[0].lower() in COMMANDS

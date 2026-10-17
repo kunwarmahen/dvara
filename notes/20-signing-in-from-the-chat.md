@@ -142,6 +142,38 @@ and the owner's computer (where Setu trades the code). On a home network
 both usually can. A Home Assistant only reachable from the person's own
 house isn't one the owner's computer can use anyway.
 
+## A button for the word
+
+Typing `/connect gmail` on a phone was the step people got wrong: a
+space missed, the name misspelled, the slash forgotten. The agent
+already says the word (it was told to: it can't connect anything
+itself), so the channel puts it under the answer as a button.
+`accounts.taps` finds `/connect NAME` (with `as ACCOUNT`) and `/unlock`
+in the answer's text, at most three; Telegram draws them as inline
+buttons (**Connect gmail**), and the web channel hands them to the page
+with the line.
+
+A PRESS IS THE WORD TYPED BY WHOEVER PRESSED. Telegram's press becomes
+that person's own message in that chat (`w:` in the callback), and the
+page posts the word as its person; from there it is the sign-in above,
+refusals and all. Nothing the agent can do changes: it only ever says
+the word, and only these two words become buttons, so an answer can't
+put "/disconnect" or anything else under a person's thumb. A word the
+answer didn't say never becomes one.
+
+Receipt, a scratch Dvara on the web channel, `qwen3.8:latest`, a
+package needing `gmail:read` for a person with an empty folder:
+
+```
+you    anything from the school in my mail?
+mailer Gmail isn't connected yet — send `/connect gmail` and I'll be able
+       to check your mail.
+       taps: [{"word": "/connect gmail", "label": "Connect gmail"}]
+you    /connect gmail                       (the button)
+mailer To connect gmail:personal (Read only), open this and sign in:
+       https://accounts.google.com/o/oauth2/auth?...gmail.readonly...
+```
+
 ## What can't be done from the chat
 
 **Sites signed in to through a browser window** (Amazon, X): there's no

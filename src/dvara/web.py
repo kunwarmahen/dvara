@@ -53,6 +53,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from dvara.accounts import tap_label, taps
 from dvara.errors import Refused
 from dvara.holds import NoSuchHold, NotYourHold
 from dvara.watch import Live
@@ -100,7 +101,7 @@ class Line:
         # number, never by a path on this machine
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
-        for name in ("receipt", "held", "stop_reason", "offer"):
+        for name in ("receipt", "held", "stop_reason", "offer", "taps"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         return out
@@ -267,7 +268,10 @@ class WebChannel:
             "receipt": reply.receipt,
             "files": [str(f) for f in reply.files],
             "held": reply.held.id if reply.held else None,
-            "stop_reason": reply.stop_reason if not reply.ok else None})
+            "stop_reason": reply.stop_reason if not reply.ok else None,
+            # sign-in words it told them to send, as buttons (accounts.taps)
+            "taps": None if reply.held else [{"word": w, "label": tap_label(w)}
+                                             for w in taps(reply.text)]})
 
     def file(self, actor: str, line_id: int, n: int) -> Path | None:
         """A file a line carried, by line and number -- the path never

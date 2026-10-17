@@ -380,6 +380,11 @@ A person with a folder of their own -- or one the owner let them manage
                                their own only -- a shared one is locked at the computer
 ```
 
+When an agent's answer tells them to send `/connect gmail` (or
+`/unlock`), the word comes as a button under it, on Telegram and on the
+page; pressing it is the word typed, by them
+([notes/20](notes/20-signing-in-from-the-chat.md)).
+
 Anyone can ask for the files their agent keeps for them (a log a
 schedule writes, a report), whether or not they have accounts:
 
