@@ -19,6 +19,11 @@ on Telegram can be carried on on the page. Nothing else moves: the
 folder, the files, the schedules and the ledger never belonged to a
 conversation. Like ``/new``, never under a turn still working on it.
 
+WHAT YOU SEE IS THE CONVERSATION. The answer to ``/chats N`` ends with
+its last few exchanges, so a phone shows where it was; a page gets the
+whole of it (``transcript``: the person's words and the agent's answers,
+never a tool's output) to draw in place.
+
 THE PERSON'S WORDS, NOT THE MODEL'S, like ``/new`` and ``/files``:
 answered here, never a turn, nothing spent.
 """
@@ -174,9 +179,36 @@ def listing(agent: str, rows: list[Past]) -> str:
     return "\n".join(out)
 
 
-def reopened(payload: dict) -> str:
-    said = last_answer(payload)
-    if len(said) > 300:
-        said = said[:299] + "…"
-    head = f"Back in: {title_of(payload)}"
-    return f"{head}\n\nWhere we left it: {said}" if said else head
+#: Exchanges shown in the answer itself, and how long each line may be.
+SHOWN = 4
+LINE = 300
+
+
+def transcript(payload: dict) -> list[dict]:
+    """The person's words and the agent's answers, in order: what a page
+    draws. A tool's output, and a turn's in-between text, never shows."""
+    out: list[dict] = []
+    for message in payload.get("history") or []:
+        role = message.get("role")
+        words = " ".join(_texts(message).split())
+        if not words:
+            continue                  # a tool's result, or a call with no words
+        who = "you" if role == "user" else "agent" if role == "assistant" else None
+        if who is None:
+            continue
+        if who == "agent" and out and out[-1]["who"] == "agent":
+            out[-1] = {"who": "agent", "text": words}   # its last words, not its asides
+        else:
+            out.append({"who": who, "text": words})
+    return out
+
+
+def reopened(payload: dict, agent: str = "") -> str:
+    lines = [f"Back in: {title_of(payload)}"]
+    said = transcript(payload)[-SHOWN:]
+    if said:
+        lines += ["", "Where we left it:"]
+        for row in said:
+            text = row["text"] if len(row["text"]) <= LINE else row["text"][:LINE - 1] + "…"
+            lines.append(f"{'You' if row['who'] == 'you' else agent or 'Agent'}: {text}")
+    return "\n".join(lines)

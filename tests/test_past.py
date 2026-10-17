@@ -42,7 +42,10 @@ def test_going_back_shows_the_model_that_conversation_and_keeps_this_one(make_se
     say(service, "hi")
     back = say(service, "/chats 1")
     assert back.text.startswith("Back in: when is the school trip?")
-    assert "Where we left it: Friday." in back.text
+    assert back.text.endswith("Where we left it:\nYou: when is the school trip?\n"
+                              "greeter: Friday.")
+    assert back.transcript == ({"who": "you", "text": "when is the school trip?"},
+                               {"who": "agent", "text": "Friday."})
     say(service, "what should he bring?")
     assert shown(service) == ["when is the school trip?", "what should he bring?"]
     assert [r.title for r in service.past.listed("owner", "greeter")] == ["hi"]
@@ -86,3 +89,38 @@ def test_the_session_it_replaces_is_its_own_key(make_service):
     say(service, "/new")
     say(service, "/chats 1")
     assert service.sessions.load_latest(session_key("owner", "greeter", "chat"))
+
+
+def test_the_transcript_is_words_never_a_tools_output():
+    payload = {"history": [
+        {"role": "user", "content": [{"kind": "text", "text": "check the site"}]},
+        {"role": "assistant", "content": [{"kind": "text", "text": "Looking."},
+                                          {"kind": "tool_call", "name": "web_fetch"}]},
+        {"role": "user", "content": [{"kind": "tool_result", "content": "<html>secret"}]},
+        {"role": "assistant", "content": [{"kind": "text", "text": "It's up."}]}]}
+    assert past.transcript(payload) == [{"who": "you", "text": "check the site"},
+                                        {"who": "agent", "text": "It's up."}]
+
+
+def test_the_page_gets_the_whole_conversation_on_its_line(make_service):
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service([says("Friday."), says("Hi.")], web=True)
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    with TestClient(create_app(service, token=token)) as client:
+        for text in ("when is the trip?", "/new", "hello", "/chats 1"):
+            client.post("/web/message", headers=auth,
+                        json={"actor": "owner", "agent": "greeter", "text": text})
+            for _ in range(200):
+                seen = client.get("/web?actor=owner", headers=auth).json()
+                if not seen["busy"]:
+                    break
+                time.sleep(0.02)
+        last = seen["lines"][-1]
+    assert last["transcript"] == [{"who": "you", "text": "when is the trip?"},
+                                  {"who": "agent", "text": "Friday."}]

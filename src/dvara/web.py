@@ -102,7 +102,8 @@ class Line:
         # number, never by a path on this machine
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
-        for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent"):
+        for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent",
+                     "transcript"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         return out
@@ -275,6 +276,7 @@ class WebChannel:
             "files": [str(f) for f in reply.files],
             "held": reply.held.id if reply.held else None,
             "stop_reason": reply.stop_reason if not reply.ok else None,
+            "transcript": list(reply.transcript),
             # sign-in words it told them to send, as buttons (accounts.taps)
             "taps": None if reply.held else [{"word": w, "label": tap_label(w)}
                                              for w in taps(reply.text)]})

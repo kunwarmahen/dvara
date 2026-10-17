@@ -226,6 +226,9 @@ class Reply:
     #: Files from the person's folder to send with the words (files.py):
     #: ``/file NAME`` answered. Each channel decides how a file looks.
     files: tuple[Path, ...] = ()
+    #: A conversation opened again (``/chats N``, past.py): its words, for
+    #: a page to draw in place. Empty for every other reply.
+    transcript: tuple[dict, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -670,8 +673,9 @@ class Service:
             # Earlier conversations: theirs to list and go back into.
             said = await self._past_words(key, who=who, agent=agent, thread=thread,
                                           text=text)
+            said, shown = said if isinstance(said, tuple) else (said, ())
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
-                         stop_reason="new")
+                         stop_reason="new", transcript=tuple(shown))
         if not unattended and learning.is_learn(text):
             # A skill asked for now: the look starts; the offer follows.
             said = await self.learning.learn_now(spec, who, key, came_by)
@@ -1460,7 +1464,7 @@ class Service:
         return f"{said}\n\n{noticed}" if noticed else said
 
     async def _past_words(self, key: str, *, who: Actor, agent: str, thread: str,
-                          text: str) -> str:
+                          text: str) -> str | tuple[str, list[dict]]:
         """``/chats`` lists what ``/new`` kept; ``/chats N`` swaps it in for
         the conversation here, which is kept in its place (past.py)."""
         rows = self.past.listed(who.id, agent)
@@ -1482,7 +1486,7 @@ class Service:
                 self.past.keep_one(who.id, agent, thread, current)
             self.sessions.forget(key)
             self.sessions.save_payload(payload, session_id=key)
-        return past.reopened(payload)
+        return past.reopened(payload, agent), past.transcript(payload)
 
     async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
                          text: str, came_by: str | None, started: datetime,
