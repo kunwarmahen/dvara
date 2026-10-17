@@ -60,23 +60,18 @@ class Seen:
         registry = getattr(built, "registry", None)
         if registry is None:
             return
-        rows = []
-        for tool in registry:
-            if registry.is_disabled(tool.name):
-                continue
-            line = " ".join((getattr(tool, "description", "") or "").split())
-            line = line.split(". ")[0]
-            if len(line) > SAID_AT_MOST:
-                line = line[:SAID_AT_MOST - 1] + "…"
-            rows.append({"name": tool.name, "said": line,
-                         "group": _group(tool.name)})
+        rows = [_row(tool) for tool in registry if not registry.is_disabled(tool.name)]
+        # And what the package turned away: the settings page offers those
+        # to the owner by what they do (toolbox.py), never to the person.
+        away = getattr(registry, "turned_away", None)
+        could = [_row(tool) for tool in (away() if callable(away) else [])]
         target = self._file(actor, agent)
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             handle, staged = tempfile.mkstemp(dir=target.parent, prefix=".tools-")
             with os.fdopen(handle, "w", encoding="utf-8") as out:
                 json.dump({"at": datetime.now().astimezone().isoformat(timespec="minutes"),
-                           "tools": rows}, out)
+                           "tools": rows, "could": could}, out)
             os.replace(staged, target)
         except OSError:
             pass
@@ -137,6 +132,15 @@ class Seen:
         out.append("")
         out.append("To pause, change or remove one, just ask me.")
         return "\n".join(out)
+
+
+def _row(tool: Any) -> dict:
+    line = " ".join((getattr(tool, "description", "") or "").split())
+    line = line.split(". ")[0]
+    if len(line) > SAID_AT_MOST:
+        line = line[:SAID_AT_MOST - 1] + "…"
+    return {"name": tool.name, "said": line, "group": _group(tool.name),
+            "asks": not getattr(tool, "read_only", False)}
 
 
 def _group(name: str) -> str:

@@ -492,6 +492,11 @@ stdin, or a whole file as text. Each change is parsed the way Dvara
 parses it before it's written, the rest of the file (comments included)
 is kept, and the file before stays as `.bak`
 ([notes/41](notes/41-the-owners-files-from-a-page.md)).
+`show` also lists every tool an agent could be given, in plain words and
+marked *asks you first* or *runs unasked*, with each agent's boxes ticked
+from its allow list and anything no box stands for (`amazon_*`) kept
+apart, so the page draws checkboxes instead of a text box
+([notes/43](notes/43-a-box-for-each-tool.md)).
 
 **What each rule has actually done.** A deny announces itself; an allow
 is invisible by construction, because the call just runs. So a policy
@@ -1158,6 +1163,7 @@ reads that person's key from `<state>/memory.json`
 | `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)) |
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
 | `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
+| `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |
 | `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay ([notes/42](notes/42-seeing-the-work.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |

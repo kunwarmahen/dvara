@@ -36,7 +36,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-from dvara import tomledit
+from dvara import tomledit, toolbox
 from dvara.actors import OWN_SETU, ActorBook
 from dvara.errors import ConfigProblem
 from dvara.gate import LADDER
@@ -70,9 +70,14 @@ def person(actor) -> dict:
                                if c.kind != "telegram"]}
 
 
-def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None) -> dict:
-    """Everything the page draws: each file's text and what it says."""
+def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None,
+         state: Path | None = None) -> dict:
+    """Everything the page draws: each file's text and what it says, and
+    the tools an agent could be given (toolbox.py), ticked as each
+    agent's allow list says."""
     out: dict = {"ladder": list(LADDER)}
+    box = toolbox.toolbox(state)
+    out["toolbox"] = box["tools"]
     text = _read(actors)
     try:
         book = ActorBook.from_toml(actors)
@@ -100,9 +105,17 @@ def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None
             problem = None
         except tomllib.TOMLDecodeError as exc:
             tables, prompt_name, problem = {}, "prompt.md", str(exc)
+        allow = (tables.get("tools") or {}).get("allow")
+        allow = allow if isinstance(allow, list) else None
         agents.append({"name": folder.name, "path": str(manifest), "text": raw,
                        "tables": tables, "prompt": _read(folder / prompt_name),
-                       "prompt_file": prompt_name, "problem": problem})
+                       "prompt_file": prompt_name, "problem": problem,
+                       "tools": {"every": allow is None,
+                                 "ticked": [r["name"] for r in box["tools"]
+                                            if allow is not None
+                                            and toolbox.ticked(allow, r["name"])],
+                                 "advanced": toolbox.covered(allow, box["tools"]),
+                                 "seen": box["seen"].get(folder.name, [])}})
     out["agents"] = agents
     out["examples"] = sorted(p.name for p in examples.iterdir()
                              if (p / "agent.toml").is_file()) \

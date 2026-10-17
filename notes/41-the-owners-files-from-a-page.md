@@ -90,6 +90,8 @@ inside a multi-line string isn't taken for a header.
 
 * **Comments inside a changed table.** They go with the table: the page
   rewrites a person whole. Comments everywhere else stay.
+* ~~**Tools as a text box.**~~ Checkboxes, each in plain words and
+  marked asks / runs unasked ([notes/43](43-a-box-for-each-tool.md)).
 * **Every Yantra key in a form.** The agent form covers what people
   change (model, memory, tools, accounts, budget, rung, instructions).
   Sub-agents, MCP servers and skills folders are edited as text.

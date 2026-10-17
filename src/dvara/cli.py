@@ -455,7 +455,8 @@ def _settings(args) -> int:
     examples = Path(args.examples).expanduser() if args.examples else None
     try:
         if args.what == "show":
-            out = settings.show(root=root, actors=actors, policy=policy, examples=examples)
+            out = settings.show(root=root, actors=actors, policy=policy, examples=examples,
+                                state=Path(args.state).expanduser())
         else:
             body = sys.stdin.read()
             data = json.loads(body) if args.what != "text" and body.strip() else None
