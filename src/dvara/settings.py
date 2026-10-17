@@ -36,7 +36,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-from dvara import tomledit, toolbox
+from dvara import promoting, tomledit, toolbox
 from dvara.actors import OWN_SETU, ActorBook
 from dvara.errors import ConfigProblem
 from dvara.gate import LADDER
@@ -115,7 +115,9 @@ def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None
                                             if allow is not None
                                             and toolbox.ticked(allow, r["name"])],
                                  "advanced": toolbox.covered(allow, box["tools"]),
-                                 "seen": box["seen"].get(folder.name, [])}})
+                                 "seen": box["seen"].get(folder.name, [])},
+                       # what its people kept, for "make it a tool" (promoting.py)
+                       "learned": promoting.learned(state, folder.name)})
     out["agents"] = agents
     out["examples"] = sorted(p.name for p in examples.iterdir()
                              if (p / "agent.toml").is_file()) \

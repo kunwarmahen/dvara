@@ -212,9 +212,9 @@ own_skills_only=True: []
 * ~~**A list of past conversations.**~~ `/chats`
   ([notes/45](45-going-back.md)).
 * **Telegram word by word.** Steps only, for the rate limit above.
-* ~~**`/learn`**, asking for a skill now~~ -- below, *Asked for now*. A
-  kept skill becoming a tool (Yantra's notes/98) is still the owner's,
-  at the keyboard.
+* ~~**`/learn`**, asking for a skill now~~ -- below, *Asked for now*.
+  ~~A kept skill becoming a tool~~ -- the owner's, from the settings
+  page ([notes/46](46-a-tool-from-their-skill.md)).
 * ~~**Sending a file from a page into the person's folder.**~~ The
   paperclip, and a photo or document to the bot
   ([notes/44](44-what-they-send.md)).

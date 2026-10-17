@@ -288,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     sets = subs.add_parser("settings", help="the owner's files, for a page: show them, "
                            "or change a person, the rules, an agent or a whole file "
                            "(JSON or text on stdin; checked before it's written)")
-    sets.add_argument("what", choices=("show", "person", "rules", "agent", "text"))
+    sets.add_argument("what", choices=("show", "person", "rules", "agent", "text", "tool"))
     sets.add_argument("name", nargs="?", help="the person, the agent, or the kind of "
                       "file for text (actors, policy, agent, prompt)")
     sets.add_argument("--agent", help="for text: which agent's agent.toml or prompt")
@@ -297,6 +297,9 @@ def build_parser() -> argparse.ArgumentParser:
     sets.add_argument("--from-example", dest="from_example", metavar="NAME",
                       help="a new agent, copied from this example")
     sets.add_argument("--examples", metavar="DIR", help="where the example agents are")
+    sets.add_argument("--person", help="for tool: whose learned skill")
+    sets.add_argument("--skill", help="for tool: the learned skill to make a tool "
+                      "(its script runs once as a test; kept only if it passes)")
 
     serve = subs.add_parser("serve", help="listen for channel adapters")
     serve.add_argument("--host", default="127.0.0.1",
@@ -457,6 +460,17 @@ def _settings(args) -> int:
         if args.what == "show":
             out = settings.show(root=root, actors=actors, policy=policy, examples=examples,
                                 state=Path(args.state).expanduser())
+        elif args.what == "tool":
+            from dvara import promoting
+
+            if not (args.name and args.person and args.skill):
+                raise ConfigProblem("tool needs the agent, --person and --skill")
+            out = {"tool": promoting.make_tool(
+                root=root, state=Path(args.state).expanduser(),
+                agent=settings._name(args.name, "an agent's"),
+                person=settings._name(args.person, "a person's"),
+                skill=args.skill,
+                provider=args.provider, model=args.model)}
         else:
             body = sys.stdin.read()
             data = json.loads(body) if args.what != "text" and body.strip() else None
