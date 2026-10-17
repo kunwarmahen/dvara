@@ -90,6 +90,35 @@ An earlier try on the same model didn't get that far: Messages' "Start
 chat" screen kept moving under it, and it gave up without a word about
 why. Both emulators and the model were sharing one machine at the time.
 
+## The screen, asked for
+
+Yantra's page has a phone panel; behind Dvara the phone's person could
+only ask the agent "what's on my phone?", which spends a turn and moves
+its numbers. `/phone` (phoneview.py) answers from Sparsh directly: its
+`look --peek` (the screen without becoming the agent's last look) and
+`log` (the last five steps, the person's and the agent's). The picture
+is kept in their folder under `.phone/` (a dot folder, never in
+`/files`) and sent with the words: a photo on Telegram, a picture on
+the page. Only the actor marked `phone = true` gets it; anyone else gets
+*"the phone on this computer is another person's"*. Never a turn.
+
+Receipt, the emulator (`Medium_Phone_API_35`) on Settings, a scratch
+Dvara started with `--sparsh`:
+
+```
+you    /phone
+mailer Your phone (sdk_gphone64_x86_64) now shows com.android.settings:
+       …
+       10 item "Battery — Charged"
+       11 item "Storage — 40% used - 4.80 GB free"
+       …
+       Last done on it, newest first:
+       00:18 you: open_app → done (com.android.settings)
+       22:17 agent: tap → done (com.google.android.settings.intelligence)
+       …
+       files: ['screen.png']   (state/work/raj/mailer/.phone/screen.png)
+```
+
 ## What the tests hold
 
 `tests/test_phone.py`: the phone's person gets the tools and the prompt;

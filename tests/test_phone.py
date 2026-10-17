@@ -17,6 +17,7 @@ import asyncio
 import json
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,19 @@ FAKE = """\
         print(json.dumps({{"state": os.environ.get("FAKE_PHONE", "asleep")}}))
         sys.exit(0)
     if args == ["wake"]:
+        sys.exit(0)
+    if args[:2] == ["look", "--peek"]:
+        if "--shot" in args:
+            open(args[args.index("--shot") + 1], "wb").write(b"PNG of the screen")
+        print(json.dumps({{"app": "com.android.settings", "size": [1080, 1920],
+            "note": "", "remark": "", "elements": [
+                {{"n": 1, "kind": "button", "label": "Battery"}},
+                {{"n": 2, "kind": "text", "label": "98%"}}]}}))
+        sys.exit(0)
+    if args[:1] == ["log"]:
+        print(json.dumps([{{"at": "2026-10-17T09:12:30+01:00", "by": "agent",
+                            "action": "tap", "outcome": "done",
+                            "app": "com.android.settings"}}]))
         sys.exit(0)
     with open(LOG, "a") as out:
         out.write(json.dumps(["grants", os.environ.get("SPARSH_GRANTS", "")]) + "\\n")
@@ -365,3 +379,70 @@ class TestReady:
             pass
         why = asyncio.run(ready.ready(ready.Phone(state, wake), wait=60, ask=ask, about="x"))
         assert why == "skipped: the phone couldn't be reached (no phone attached)"
+
+
+class TestPhoneWord:
+    """``/phone``: its person sees the screen and the last steps; nobody
+    else does, and it is never a turn (phoneview.py)."""
+
+    def test_the_phones_person_gets_the_screen_and_the_steps(
+            self, make_service, sparsh, phone_book):
+        service = make_service([], sparsh=str(sparsh[0]), actors=phone_book)
+        reply = asyncio.run(service.deliver(actor="owner", agent="greeter", thread="t",
+                                            text="/phone"))
+        assert reply.run_id is None and reply.stop_reason == "phone"
+        assert reply.text.startswith("Your phone (sdk_gphone64) now shows "
+                                     "com.android.settings:")
+        assert '1 button "Battery"' in reply.text
+        assert "09:12 agent: tap → done" in reply.text
+        assert reply.files[0].read_bytes() == b"PNG of the screen"
+        assert reply.files[0].parent.name == ".phone"       # never in /files
+        assert ["look", "--peek", "--json", "--serial", "emulator-5554"] == \
+            [a for a in logged(sparsh[1]) if a[:1] == ["look"]][0][:5]
+
+    def test_anyone_else_gets_a_sentence_and_no_screen(
+            self, make_service, sparsh, phone_book):
+        service = make_service([], sparsh=str(sparsh[0]), actors=phone_book)
+        reply = asyncio.run(service.deliver(actor="guest", agent="greeter", thread="t",
+                                            text="/phone"))
+        assert "another person's" in reply.text and reply.files == ()
+        assert not [a for a in logged(sparsh[1]) if a[:1] == ["look"]]
+
+    def test_a_service_with_no_phone_says_so(self, make_service, phone_book):
+        service = make_service([], actors=phone_book)
+        reply = asyncio.run(service.deliver(actor="owner", agent="greeter", thread="t",
+                                            text="/phone"))
+        assert reply.text == "There's no phone on this service."
+
+
+def test_on_telegram_the_screen_is_a_photo_under_the_words(make_service, sparsh, phone_book,
+                                                           agents_root):
+    from tests.test_telegram import FakeTelegram, KNOWN, message
+    from dvara.telegram import TelegramBot
+
+    book = ActorBook.from_dict({"actor": {"owner": {"phone": True, "channel": [
+        {"kind": "telegram", "id": KNOWN}]}}})
+    service = make_service([], sparsh=str(sparsh[0]), actors=book)
+
+    class Patient(FakeTelegram):
+        """Polls that take a moment, so a turn that runs a program (Sparsh)
+        finishes before the fake runs out of patience."""
+
+        def _handle(self, request):
+            if request.url.path.endswith("/getUpdates"):
+                time.sleep(0.01)
+            return super()._handle(request)
+
+    fake = Patient([message("/phone")])
+
+    async def go():
+        client = fake.client()
+        bot = TelegramBot(service, token="8675309:AAtest", agent="greeter", client=client,
+                          send_gap=0.0, poll_seconds=0, catch_up=True)
+        fake.bot = bot
+        await bot.run()
+        await client.aclose()
+
+    asyncio.run(go())
+    methods = [m for m, _ in fake.calls if m in ("sendMessage", "sendPhoto", "sendDocument")]
+    assert methods == ["sendMessage", "sendPhoto"]

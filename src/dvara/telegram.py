@@ -148,6 +148,7 @@ from yantra import HELD, REFUSED_TIMEOUT
 
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
+from dvara.service import works_phone
 from dvara.files import is_file_word
 from dvara.fresh import is_new_word
 from dvara.actors import Channel
@@ -633,6 +634,9 @@ class TelegramBot:
         # answer already said it was sent -- the person can ask again.
         for path in reply.files:
             try:
+                if reply.stop_reason == "phone":    # the screen, to look at
+                    await self._send_photo(chat, path.read_bytes(), caption="")
+                    continue
                 await self._send_file(chat, path, caption=path.name)
             except (TelegramError, httpx.HTTPError, OSError) as exc:
                 self._note(f"telegram: sending {path.name} failed: {exc}")
@@ -728,7 +732,9 @@ class TelegramBot:
             await self._api("setMyCommands", commands=[
                 {"command": word, "description": said}
                 for word, said in _menu(self.spec,
-                                        schedules=self.service.samay is not None)])
+                                        schedules=self.service.samay is not None,
+                                        phone=self.service.sparsh is not None
+                                        and works_phone(self.spec))])
         except Exception as exc:  # noqa: BLE001 -- the bot still answers
             self._note(f"telegram: the / menu was not set: {exc}")
 
@@ -1176,7 +1182,7 @@ def ending(answer: Answer | None) -> str:
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
 
 
-def _menu(spec, *, schedules: bool = False) -> list[tuple[str, str]]:
+def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over"),
              ("chats", "Our earlier conversations")]
@@ -1196,6 +1202,8 @@ def _menu(spec, *, schedules: bool = False) -> list[tuple[str, str]]:
         words += [("skills", "Skills I've learned, and ones to keep"),
                   ("learn", "Keep what I just did as a skill")]
     words += [("tools", "What I can use for you")]
+    if phone:
+        words += [("phone", "Your phone's screen, and what was done on it")]
     if schedules:
         words += [("schedules", "Your schedules")]
     return words

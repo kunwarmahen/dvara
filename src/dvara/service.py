@@ -114,8 +114,8 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (attached, files, fresh, learning, money, past, patience, ready,
-                   remembering, seen, signins)
+from dvara import (attached, files, fresh, learning, money, past, patience, phoneview,
+                   ready, remembering, seen, signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -657,6 +657,15 @@ class Service:
                                           text=text, came_by=came_by, started=started)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="new")
+        if not unattended and phoneview.is_word(text):
+            # The phone's screen and last steps: its person's, not a turn.
+            if self.sparsh is None or not who.phone:
+                return Reply(text=phoneview.NOT_YOURS if self.sparsh is not None
+                             else "There's no phone on this service.", run_id=None,
+                             agent=agent, actor=actor, stop_reason="phone")
+            said, shot = await phoneview.look(self.sparsh, self._workspace(key))
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="phone", files=(shot,) if shot else ())
         if not unattended and past.is_word(text):
             # Earlier conversations: theirs to list and go back into.
             said = await self._past_words(key, who=who, agent=agent, thread=thread,

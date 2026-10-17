@@ -993,6 +993,10 @@ phone = true            # the phone on this machine is yours
 * Off unless asked for; asked for and not found stops the start. No
   phone attached yet is fine: plug one in and the next turn has it
   ([notes/30](notes/30-do-this-on-my-phone.md)).
+* `/phone`, from the phone's person: the screen now, as a picture and
+  Sparsh's numbered list, and the last steps done on it (theirs and the
+  agent's). A peek, so an agent at work keeps its numbers; never a turn.
+  Anyone else gets one sentence and no screen.
 
 ### What an agent remembers about each person
 
@@ -1160,6 +1164,7 @@ reads that person's key from `<state>/memory.json`
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
+| `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)) |
 | `past.py` | `/chats`: what `/new` ended, kept (30 per person per agent) and listed; `/chats N` swaps it back in, keeping the one it replaces ([notes/45](notes/45-going-back.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
