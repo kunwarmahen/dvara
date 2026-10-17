@@ -114,8 +114,8 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (attached, files, fresh, learning, money, patience, ready, remembering, seen,
-                   signins)
+from dvara import (attached, files, fresh, learning, money, past, patience, ready,
+                   remembering, seen, signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -303,6 +303,8 @@ class Service:
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
+        #: Conversations ``/new`` ended, for ``/chats`` (past.py).
+        self.past = past.PastBook(self.state / "past.sqlite3")
         self.runs = RunStore(self.state / "runs.sqlite3")
         # Always open, even when nothing is configured to hold: a turn
         # held yesterday by a service started with --on-timeout hold can
@@ -380,6 +382,7 @@ class Service:
         self._providers.clear()
         self.runs.close()
         self.holds.close()
+        self.past.close()
 
     async def aclose(self) -> None:
         """Give back BOTH pools. The shutdown a running service calls.
@@ -397,6 +400,7 @@ class Service:
         self._providers.clear()
         self.runs.close()
         self.holds.close()
+        self.past.close()
 
     # ---- the owner's files, read again -------------------------------------
 
@@ -651,6 +655,12 @@ class Service:
             # package that remembers looks back first (remembering.py).
             said = await self._start_over(key, spec=spec, who=who, thread=thread,
                                           text=text, came_by=came_by, started=started)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="new")
+        if not unattended and past.is_word(text):
+            # Earlier conversations: theirs to list and go back into.
+            said = await self._past_words(key, who=who, agent=agent, thread=thread,
+                                          text=text)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="new")
         if not unattended and learning.is_learn(text):
@@ -1433,9 +1443,37 @@ class Service:
                                                 text=text, came_by=came_by,
                                                 started=started)
             self.holds.drop_key(key)
+            ending = self.sessions.load_latest(key)
+            if ending is not None:
+                self.past.keep_one(who.id, workspace_parts(key)[1], thread, ending)
             gone = self.sessions.forget(key)
         said = fresh.STARTED_OVER if gone else fresh.NOTHING_YET
         return f"{said}\n\n{noticed}" if noticed else said
+
+    async def _past_words(self, key: str, *, who: Actor, agent: str, thread: str,
+                          text: str) -> str:
+        """``/chats`` lists what ``/new`` kept; ``/chats N`` swaps it in for
+        the conversation here, which is kept in its place (past.py)."""
+        rows = self.past.listed(who.id, agent)
+        pick = past.picked(text)
+        if not pick:
+            return past.listing(agent, rows)
+        if not pick.isdigit() or not 1 <= int(pick) <= len(rows):
+            return (f"There's no conversation {pick} to go back to. Send /chats to "
+                    f"see them." if rows else past.listing(agent, rows))
+        if key in self._locks:
+            return fresh.STILL_ANSWERING.replace("/new", f"/chats {pick}")
+        async with self._locks.hold(key):
+            payload = self.past.take(who.id, agent, rows[int(pick) - 1].id)
+            if payload is None:
+                return "That conversation just went. Send /chats to see what's kept."
+            self.holds.drop_key(key)
+            current = self.sessions.load_latest(key)
+            if current is not None:
+                self.past.keep_one(who.id, agent, thread, current)
+            self.sessions.forget(key)
+            self.sessions.save_payload(payload, session_id=key)
+        return past.reopened(payload)
 
     async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
                          text: str, came_by: str | None, started: datetime,

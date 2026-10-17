@@ -122,6 +122,8 @@ costs the menu, never the bot.
 ## What is not here yet
 
 * ~~**Telegram's command menu.**~~ Above.
+* ~~**Going back.**~~ What `/new` ends is now kept, and `/chats` opens
+  it again ([note 45](45-going-back.md)); the answer to `/new` says so.
 * ~~**What the conversation showed about them, let go with it.**~~ An
   agent whose package keeps memories now looks back first, and lists
   what it noticed under "Starting fresh" for the person to keep with

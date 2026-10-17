@@ -17,7 +17,8 @@ it is answered here, never a turn: no model reads it, nothing is spent,
 and it works the same whatever model is behind the door.
 
 THE CONVERSATION GOES, NOTHING ELSE DOES. Only the saved conversation
-(sessions.sqlite3) is let go, through Yantra's ``forget``. The ledger
+(sessions.sqlite3) is let go, through Yantra's ``forget`` -- kept first
+in past.py's book, so ``/chats`` can open it again. The ledger
 keeps every run's message and reply, so ``dvara runs`` and the day's
 spending are unchanged; the person's folder with this agent keeps its
 files; their schedules and their accounts are not conversations at all.
@@ -33,8 +34,9 @@ from __future__ import annotations
 
 WORDS = ("/new",)
 
-STARTED_OVER = ("Starting fresh: I won't remember what we said before. "
-                "Your files, schedules and accounts are all still here.")
+STARTED_OVER = ("Starting fresh. What we said before is kept: /chats lists it, if "
+                "you want to go back. Your files, schedules and accounts are all "
+                "still here.")
 NOTHING_YET = "Starting fresh. (There was nothing to forget yet.)"
 STILL_ANSWERING = ("I'm still working on your last message. Send /new "
                    "again once I've answered it.")

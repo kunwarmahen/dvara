@@ -209,8 +209,8 @@ own_skills_only=True: []
 
 ## What is not here yet
 
-* **A list of past conversations.** One per channel, and `/new`, as
-  before.
+* ~~**A list of past conversations.**~~ `/chats`
+  ([notes/45](45-going-back.md)).
 * **Telegram word by word.** Steps only, for the rate limit above.
 * ~~**`/learn`**, asking for a skill now~~ -- below, *Asked for now*. A
   kept skill becoming a tool (Yantra's notes/98) is still the owner's,

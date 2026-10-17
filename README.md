@@ -409,14 +409,19 @@ with "vision"); otherwise the agent says it can't look
 And anyone can start their conversation with an agent over:
 
 ```
-/new                           forget this conversation; files, schedules,
-                               accounts and the ledger all stay
+/new                           start over; files, schedules, accounts and
+                               the ledger all stay, and this conversation is kept
+/chats                         the earlier ones, newest first
+/chats 2                       go back into one (the one you're in is kept)
 ```
 
 A chat is one conversation for as long as it lasts, and a long one can
 teach a small model a habit (an old way of reading a site, kept after a
 better tool arrived). Telegram's own "Clear history" never reaches the
-bot; `/new` does ([notes/28](notes/28-starting-over.md)).
+bot; `/new` does ([notes/28](notes/28-starting-over.md)). What it ends
+is kept, the newest 30 per person per agent, and `/chats` goes back into
+one, on whichever channel you ask from
+([notes/45](notes/45-going-back.md)).
 
 With an agent that remembers people (below), anyone can see and choose
 what it keeps about them:
@@ -1155,6 +1160,7 @@ reads that person's key from `<state>/memory.json`
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
+| `past.py` | `/chats`: what `/new` ended, kept (30 per person per agent) and listed; `/chats N` swaps it back in, keeping the one it replaces ([notes/45](notes/45-going-back.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |

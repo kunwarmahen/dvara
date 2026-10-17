@@ -1273,7 +1273,8 @@ dvara say --actor guest --agent greeter "I just moved to Pune, and I work night 
 dvara say --actor guest --agent greeter "/new"
 ```
 
-The answer to `/new` starts as always (*"Starting fresh…"*), then lists
+The answer to `/new` starts as always (*"Starting fresh…"*: the
+conversation is kept, and `/chats` lists it to go back into), then lists
 what the agent noticed, numbered:
 
 ```
@@ -1512,6 +1513,9 @@ Each topic, and the note that argues it:
 | `notes/41-the-owners-files-from-a-page.md` | `dvara settings`: people, rules and agents changed by a page, each checked by the code that reads it, comments kept |
 | `notes/42-seeing-the-work.md` | a turn watched on every channel (words and steps, never what a tool read), skills offered behind the answer and kept in the person's own folder, `/tools` and `/schedules` |
 | `notes/40-a-notice-on-their-phone.md` | `--ntfy`: notices on the ntfy app, through a server in the house, each person on a topic nobody can guess; the accounts-page button |
+| `notes/43-a-box-for-each-tool.md` | the settings page's tool checkboxes: every tool an agent could have, in plain words, marked asks / runs unasked |
+| `notes/44-what-they-send.md` | a picture or file the person sends: kept in their folder under `from-you/`, a picture shown to a model that can see |
+| `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again |
 
 ---
 

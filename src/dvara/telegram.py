@@ -757,7 +757,8 @@ class TelegramBot:
             lines.append("When a job takes several steps, I may offer to keep how it "
                          "was done as a skill. Send /learn to ask for one now, and "
                          "/skills to see them.")
-        lines.append("Send /new to start our conversation over.")
+        lines.append("Send /new to start our conversation over; /chats lists the "
+                     "earlier ones, to go back into one.")
         return "\n\n".join(lines)
 
     def _reply_messages(self, text: str, receipt: str | None) -> list[str]:
@@ -1177,7 +1178,8 @@ def ending(answer: Answer | None) -> str:
 
 def _menu(spec, *, schedules: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
-    words = [("new", "Start our conversation over")]
+    words = [("new", "Start our conversation over"),
+             ("chats", "Our earlier conversations")]
     if _writes_files(spec):
         words += [("files", "What I keep for you"),
                   ("file", "Send one of them: /file NAME")]
