@@ -114,7 +114,7 @@ from yantra.hold import check_answers, held_task
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (files, fresh, learning, money, patience, ready, remembering, seen,
+from dvara import (attached, files, fresh, learning, money, patience, ready, remembering, seen,
                    signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
@@ -557,7 +557,8 @@ class Service:
                       phone_steps: Sequence[str] = (),
                       wait: float | None = None,
                       came_by: str | None = None,
-                      watch: Watcher | None = None) -> Reply:
+                      watch: Watcher | None = None,
+                      attachments: Sequence[attached.Attachment] = ()) -> Reply:
         """Run one turn for one person, and answer them either way.
 
         Never raises for anything a person could have caused. A refusal is
@@ -612,6 +613,10 @@ class Service:
         ``watch`` sees the turn as it runs (watch.py): the words as they
         are written and each step as a line. A turn nobody is at is
         watched by nobody, so an unattended one ignores it.
+
+        ``attachments`` are files the person sent with the message
+        (attached.py): kept in their folder under ``from-you/``, named in
+        the message, and a picture shown to a model that can see.
         """
         started = datetime.now(UTC)
         came_by = came_by or (via.kind if via is not None else None)
@@ -624,6 +629,14 @@ class Service:
         except Refused as exc:
             return Reply(text=str(exc), run_id=None, agent=agent,
                          actor=actor, stop_reason="refused")
+        kept: list[attached.Kept] = []
+        if attachments and not unattended:
+            try:
+                kept = attached.keep(self._workspace(key), list(attachments))
+            except (ValueError, OSError) as exc:
+                return Reply(text=f"I couldn't keep that: {exc}", run_id=None,
+                             agent=agent, actor=actor, stop_reason="refused")
+            text = attached.said(text, kept)
         if not text.strip():
             return Reply(text="say something and I will answer it",
                          run_id=None, agent=agent, actor=actor,
@@ -700,7 +713,7 @@ class Service:
             try:
                 if not unattended:
                     return await self._turn(spec=spec, who=who, key=key,
-                                            run=run, watch=watch)
+                                            run=run, watch=watch, kept=kept)
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
@@ -829,7 +842,8 @@ class Service:
                     ahead: tuple[str, ...] = (),
                     phone_run: PhoneRun | None = None,
                     wait_for: float | None = None,
-                    watch: Watcher | None = None) -> Reply:
+                    watch: Watcher | None = None,
+                    kept: Sequence[attached.Kept] = ()) -> Reply:
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
@@ -895,7 +909,8 @@ class Service:
             reply = await self._run_turn(
                 agent, key=key, run=run, resuming=resuming, answers=answers,
                 door=door, decisions=decisions, wait=wait, ceiling=ceiling,
-                provider_name=provider_name, who=who, watch=Safely(watch))
+                provider_name=provider_name, who=who, watch=Safely(watch),
+                kept=kept)
             return replace(reply, files=tuple(sent)) if sent else reply
         finally:
             if servers is not None:
@@ -1151,7 +1166,8 @@ class Service:
     async def _run_turn(self, agent, *, key: str, run: Run,
                         resuming: Hold | None, answers, door: str | None,
                         decisions: Decisions, wait, ceiling, provider_name: str,
-                        who: Actor, watch: Safely | None = None) -> Reply:
+                        who: Actor, watch: Safely | None = None,
+                        kept: Sequence[attached.Kept] = ()) -> Reply:
         self._rehydrate(agent, key)
         if resuming is not None:
             events = self._carry_on(agent, resuming, answers or {}, run,
@@ -1163,7 +1179,14 @@ class Service:
                 # (its note 88), and the queue follows the conversation
                 # rather than offering an answer nothing can take.
                 self.holds.drop_key(key)
-            events = agent.run_streaming(run.message)
+            message, images = run.message, None
+            if any(k.picture for k in kept):
+                base_url = getattr(getattr(agent.provider, "settings", None), "base_url", "")
+                if await attached.sees(provider_name, base_url or "", str(agent.model)):
+                    images = attached.pictures(list(kept))
+                else:
+                    message = f"{message}\n\n{attached.NOT_SEEN}"
+            events = agent.run_streaming(message, images=images)
         before_total = _copy(agent.total_usage)
         before_models = {m: _copy(u) for m, u in agent.usage_by_model.items()}
 

@@ -147,6 +147,7 @@ import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
 from dvara.accounts import is_command, scrub, tap_label, taps
+from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.files import is_file_word
 from dvara.fresh import is_new_word
 from dvara.actors import Channel
@@ -382,6 +383,7 @@ class TelegramBot:
         # are looking, instead of finding out from a stranger's silence.
         self.spec = service.roster.spec(agent)
         self._url = f"{API_BASE}/bot{token}"
+        self._files_url = f"{API_BASE}/file/bot{token}"
         self._client = client or httpx.AsyncClient(timeout=poll_seconds + 15)
         self._owns_client = client is None
         self._pacer = _Pacer(send_gap)
@@ -552,11 +554,21 @@ class TelegramBot:
             return
 
         text = message.get("text")
+        attachments: list[Attachment] = []
+        if text is None and (message.get("photo") or message.get("document")):
+            # A photo or a file: kept in their folder, a picture shown to a
+            # model that can see (attached.py). The caption is the words.
+            try:
+                attachments = [await self._download(message)]
+            except (TelegramError, httpx.HTTPError, ValueError) as exc:
+                await self._send(chat, f"I couldn't get that file: {exc}")
+                return
+            text = message.get("caption") or ""
         if text is None:
-            # A photo, a sticker, a voice note. One sentence rather than
-            # silence, because this person IS on the list and a bot that
-            # ignores them is a bot they think is broken.
-            await self._send(chat, "I can only read text.")
+            # A sticker, a voice note. One sentence rather than silence,
+            # because this person IS on the list and a bot that ignores
+            # them is a bot they think is broken.
+            await self._send(chat, "I can read words, pictures and files, not this.")
             return
         if text.strip().split()[:1] == ["/start"]:
             await self._send(chat, self._introduction())
@@ -584,7 +596,8 @@ class TelegramBot:
         try:
             reply = await self.service.deliver(
                 via=Channel(kind="telegram", id=str(native)),
-                agent=self.agent, thread=str(chat), text=text, watch=steps)
+                agent=self.agent, thread=str(chat), text=text, watch=steps,
+                attachments=attachments)
         finally:
             typing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -934,6 +947,24 @@ class TelegramBot:
             thread=str(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
         for part in split_message(reply.text):
             await self._send(chat, part)
+
+    async def _download(self, message: dict) -> Attachment:
+        """The photo (its largest size) or document a message carries, as
+        bytes. A bot may download up to 20 MB (the Bot API's limit)."""
+        if message.get("photo"):
+            biggest = max(message["photo"], key=lambda p: p.get("file_size") or 0)
+            file_id = biggest.get("file_id")
+            name = f"photo-{message.get('message_id') or 'sent'}.jpg"
+        else:
+            document = message["document"]
+            file_id, name = document.get("file_id"), document.get("file_name") or "file"
+            if (document.get("file_size") or 0) > KEEP_LIMIT:
+                raise ValueError(f"{name} is over {KEEP_LIMIT // (1024 * 1024)} MB")
+        found = await self._api("getFile", file_id=file_id)
+        response = await self._client.get(f"{self._files_url}/{found['file_path']}")
+        if response.status_code != 200:
+            raise TelegramError(f"download: {response.status_code}")
+        return Attachment(name=name, data=response.content)
 
     async def _tapped(self, query: dict, word: str) -> None:
         """A sign-in word under an answer (accounts.taps), pressed: sent

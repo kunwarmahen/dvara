@@ -513,7 +513,9 @@ instead means "never mind", and the waiting calls are set aside.
   file a schedule wrote is one their chat can read
   ([note 25](notes/25-the-persons-folder.md)). They can have a file
   from it sent to them: `/files` lists it, `/file NAME` sends one, on
-  Telegram as a document, and no agent is involved. An agent that lists
+  Telegram as a document, and no agent is involved. The other way, a
+  photo or file they send lands in the folder under `from-you/` and the
+  agent is told ([note 44](notes/44-what-they-send.md)). An agent that lists
   `send_file` can send one too, asked like any write
   ([note 26](notes/26-the-file-itself.md)). An agent that edits the folder you
   review and commit is an agent whose package has stopped being

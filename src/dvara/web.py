@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dvara.accounts import tap_label, taps
+from dvara.attached import Attachment, safe_name
 from dvara.errors import Refused
 from dvara.holds import NoSuchHold, NotYourHold
 from dvara.watch import Live
@@ -101,7 +102,7 @@ class Line:
         # number, never by a path on this machine
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
-        for name in ("receipt", "held", "stop_reason", "offer", "taps"):
+        for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         return out
@@ -210,18 +211,23 @@ class WebChannel:
                 "holds": [hold.as_dict()
                           for hold in self.service.holds.pending(actor)]}
 
-    def say(self, actor: str, agent: str, text: str) -> Line:
-        """Write down what they said and start the turn behind it."""
+    def say(self, actor: str, agent: str, text: str,
+            attachments: list[Attachment] | None = None) -> Line:
+        """Write down what they said and start the turn behind it. Files
+        sent with it are named on their line (kept in their folder by
+        the turn: attached.py)."""
         who = self.service.actors.get(actor)
         if not who.may_use(agent):
             raise Refused(f"you have no agent called {agent!r} here")
-        if not text.strip():
+        if not text.strip() and not attachments:
             raise Refused("say something and I will answer it")
-        line = self.book.add(actor, "you", text, agent=agent)
+        sent = [safe_name(a.name) for a in attachments or []]
+        line = self.book.add(actor, "you", text, agent=agent,
+                             extra={"sent": sent})
         live = Live()
         self._start(actor, agent, self.service.deliver(
             actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND,
-            watch=live), live)
+            watch=live, attachments=attachments or ()), live)
         return line
 
     def carry_on(self, hold_id: str, actor: str, answers: dict) -> None:

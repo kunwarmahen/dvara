@@ -85,6 +85,10 @@ class FakeTelegram:
         return httpx.AsyncClient(transport=httpx.MockTransport(self._handle))
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith("/file/bot"):
+            # A file the bot downloads (getFile's path), as its bytes.
+            self.calls.append(("download", {"path": request.url.path}))
+            return httpx.Response(200, content=b"bytes of " + request.url.path.encode())
         method = request.url.path.rsplit("/", 1)[-1]
         if request.headers.get("content-type", "").startswith("multipart/"):
             # A file: kept whole, for a test to look for the name and bytes.
@@ -100,6 +104,8 @@ class FakeTelegram:
             return outcome
         if method == "getMe":
             return _ok({"username": "testbot"})
+        if method == "getFile":
+            return _ok({"file_path": f"files/{payload.get('file_id')}.bin"})
         if method == "getUpdates":
             if payload.get("offset") == -1:
                 return _ok(self.backlog_tip())
@@ -310,7 +316,7 @@ def test_a_message_that_is_not_text_is_answered_rather_than_ignored(make_bot):
     fake = FakeTelegram([message(None, sticker={"file_id": "x"})])
     bot = make_bot(fake)
     asyncio.run(bot.run())
-    assert fake.texts() == ["I can only read text."]
+    assert fake.texts() == ["I can read words, pictures and files, not this."]
 
 
 def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
@@ -1014,3 +1020,42 @@ def test_a_pressed_word_that_is_not_a_sign_in_word_does_nothing(make_bot):
     fake = FakeTelegram([pressed])
     asyncio.run(make_bot(fake, script=[]).run())
     assert fake.texts() == []
+
+
+# ---- a picture or a file, sent to the agent (attached.py) -----------------------------
+
+
+def test_a_document_is_kept_in_their_folder_and_named_in_the_message(make_bot):
+    sent = message(None, document={"file_id": "doc1", "file_name": "school letter.pdf",
+                                   "file_size": 1000}, caption="what does this say?")
+    fake = FakeTelegram([sent])
+    bot = make_bot(fake, script=[says("It's about the trip.")])
+    asyncio.run(bot.run())
+    assert fake.texts() == ["It's about the trip."]
+    run = bot.service.runs.recent(limit=1)[0]
+    assert run.message.startswith("what does this say?")
+    assert "from-you/school letter.pdf" in run.message
+    kept = list(bot.service.state.rglob("from-you/school letter.pdf"))
+    assert len(kept) == 1 and kept[0].read_bytes() == b"bytes of /file/bot" + \
+        TOKEN.encode() + b"/files/doc1.bin"
+
+
+def test_a_photo_is_its_largest_size_and_needs_no_caption(make_bot):
+    sent = message(None, photo=[{"file_id": "small", "file_size": 10},
+                                {"file_id": "big", "file_size": 900}])
+    fake = FakeTelegram([sent])
+    bot = make_bot(fake, script=[says("A receipt.")])
+    asyncio.run(bot.run())
+    assert [p["file_id"] for m, p in fake.calls if m == "getFile"] == ["big"]
+    run = bot.service.runs.recent(limit=1)[0]
+    assert run.message.startswith("(They sent from-you/photo-") and "(a picture)" in run.message
+
+
+def test_a_file_too_big_to_download_is_said_and_no_turn_runs(make_bot):
+    sent = message(None, document={"file_id": "huge", "file_name": "film.mp4",
+                                   "file_size": 900 * 1024 * 1024})
+    fake = FakeTelegram([sent])
+    bot = make_bot(fake, script=[])
+    asyncio.run(bot.run())
+    assert fake.texts()[0].startswith("I couldn't get that file: film.mp4 is over")
+    assert not [m for m, _ in fake.calls if m == "getFile"]

@@ -202,8 +202,9 @@ that the agent's file comes after its words.
   path.
 * **Sending a folder** (a zip). `/files` lists files in subfolders by
   their path, and `/file sub/name` sends one.
-* **Receiving files.** A photo or document sent to the bot still gets
-  *"I can only read text."*
+* ~~**Receiving files.**~~ A photo or document sent to the bot is kept
+  in the person's folder under `from-you/` and named to the agent
+  ([notes/44](44-what-they-send.md)).
 
 ## What is not here yet
 

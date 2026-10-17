@@ -133,6 +133,30 @@ def test_an_answer_that_says_connect_carries_the_words_for_buttons(make_service)
     assert "taps" not in mine                              # your own line has none
 
 
+def test_a_file_sent_from_the_page_is_kept_and_named(make_service):
+    import base64
+
+    service = make_service([says("A receipt for 12.50.")], web=True)
+    png = base64.b64encode(b"\x89PNG not really").decode()
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        said = client.post("/web/message", headers=AUTH, json={
+            "actor": "owner", "agent": "greeter", "text": "",
+            "files": [{"name": "../receipt.png", "data": png}]}).json()
+        assert said["line"]["sent"] == ["receipt.png"]
+        assert settled(client)["lines"][-1]["text"] == "A receipt for 12.50."
+        run = service.runs.recent(limit=1)[0]
+        assert "from-you/receipt.png (a picture)" in run.message
+        assert [p.name for p in service.state.rglob("from-you/*")] == ["receipt.png"]
+
+
+def test_a_file_that_is_not_base64_is_refused_before_any_line(page):
+    said = page.post("/web/message", headers=AUTH, json={
+        "actor": "owner", "agent": "greeter", "text": "hi",
+        "files": [{"name": "a.txt", "data": "not base64!"}]})
+    assert said.status_code == 400 and "base64" in said.json()["detail"]
+    assert settled(page)["lines"] == []
+
+
 # ---- a held turn, answered from the page ----------------------------------
 
 def test_a_held_turn_answered_on_the_page_leaves_its_answer_as_a_line(

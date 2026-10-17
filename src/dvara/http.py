@@ -140,6 +140,30 @@ def _resolve(service: Service, kind: str | None, native: str | None) -> str:
         raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
+def _attachments(files) -> list:
+    """``files: [{"name", "data"}]``, data in base64, as the page sends a
+    file it was given (attached.py keeps them)."""
+    import base64
+    import binascii
+
+    from dvara.attached import Attachment
+
+    if files is None:
+        return []
+    if not isinstance(files, list):
+        raise ValueError("files must be a list of {name, data}")
+    out = []
+    for f in files:
+        if not isinstance(f, dict) or not isinstance(f.get("name"), str) \
+                or not isinstance(f.get("data"), str):
+            raise ValueError("each file needs a name and its data (base64)")
+        try:
+            out.append(Attachment(f["name"], base64.b64decode(f["data"], validate=True)))
+        except (binascii.Error, ValueError):
+            raise ValueError(f"{f['name']}: its data isn't base64") from None
+    return out
+
+
 def create_app(service: Service, *, token: str,
                alongside: Callable[[], Awaitable[None]] | None = None) -> Any:
     """A FastAPI app in front of one ``Service``.
@@ -381,14 +405,19 @@ def create_app(service: Service, *, token: str,
         check(authorization)
         body = await request.json()
         web = web_for(body.get("actor"))
-        missing = [f for f in ("agent", "text")
+        try:
+            attachments = _attachments(body.get("files"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        missing = [f for f in ("agent",) + (() if attachments else ("text",))
                    if not isinstance(body.get(f), str) or not body[f].strip()]
         if missing:
             raise HTTPException(status_code=400,
                                 detail=f"missing or empty: {', '.join(missing)}")
         service.refresh()
         try:
-            line = web.say(body["actor"], body["agent"], body["text"])
+            line = web.say(body["actor"], body["agent"], body.get("text") or "",
+                           attachments)
         except Refused as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         return {"line": line.as_dict()}
