@@ -112,11 +112,36 @@ way to change one. `/schedules` lists theirs from `samay list`.
 ## The words are the way in
 
 `/skills`, `/skills keep N`, `/skills drop N`, `/skills forget NAME`,
-`/tools`, `/schedules`. They are answered the same on Telegram, a page
+`/learn`, `/tools`, `/schedules`. They are answered the same on Telegram, a page
 and HTTP, as `/memory` is. A page's buttons send these words, so there is
 one implementation, and three channels can't drift. Telegram's `/` menu
 offers them where they mean something: `/skills` for a package with
 skills, `/schedules` with Samay on.
+
+## Asked for now
+
+`/learn` is the person saying the job was worth keeping. It starts the
+same look, on the conversation so far, with Yantra's `forced`: two steps
+are still a recipe once someone has asked for it. The reply is at once
+(*"Looking at how I did that…"*); the offer follows as the same notice
+with Keep and Not now, and a look that finds nothing says why, since
+they asked. A new message stops it as it stops the other looks. Before
+any job there is nothing to read, and it says to do the job first.
+
+Live, a scratch web channel with `qwen3.8:latest` and a package with
+`read_file`, `write_file` and skills: "Write a file shopping.txt with
+three lines… then read it back and tell me how many lines it has" (two
+steps, under the four a look needs by itself), then `/learn`:
+
+```
+mailer Looking at how I did that, to keep it as a skill. I'll send you
+       what I find.
+notice I could keep what I just did as a skill, so next time it's one step:
+       write-file-and-count-lines — Write a text file with specified
+       lines, then read it back to confirm the line count. …
+       Test: nothing to run
+       Send /skills keep 6d32 to keep it, or /skills drop 6d32.
+```
 
 ## Receipt
 
@@ -187,6 +212,9 @@ own_skills_only=True: []
 * **A list of past conversations.** One per channel, and `/new`, as
   before.
 * **Telegram word by word.** Steps only, for the rate limit above.
-* **`/learn`**, asking for a skill now, and a kept skill becoming a
-  tool (Yantra's notes/98).
-* **Sending a file from a page into the person's folder.**
+* ~~**`/learn`**, asking for a skill now~~ -- below, *Asked for now*. A
+  kept skill becoming a tool (Yantra's notes/98) is still the owner's,
+  at the keyboard.
+* ~~**Sending a file from a page into the person's folder.**~~ The
+  paperclip, and a photo or document to the bot
+  ([notes/44](44-what-they-send.md)).

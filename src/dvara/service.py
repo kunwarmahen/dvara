@@ -653,6 +653,11 @@ class Service:
                                           text=text, came_by=came_by, started=started)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="new")
+        if not unattended and learning.is_learn(text):
+            # A skill asked for now: the look starts; the offer follows.
+            said = await self.learning.learn_now(spec, who, key, came_by)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="skills")
         if not unattended and learning.word_of(text):
             # Skills offered and kept: theirs to see and answer, not a turn.
             said = await self.learning.words(spec, who, key, text)

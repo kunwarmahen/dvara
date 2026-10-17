@@ -189,6 +189,30 @@ class TestSkills:
         service = make_service(solved_turn(), policy=Policy(mode="yolo"), actors=PEOPLE)
         assert run(service, say(service, "greet world"))[0].ok
 
+    def test_learn_asks_for_one_now_even_after_a_short_job(self, make_service, helper):
+        short = [calls("bash", {"command": "echo hi"}, call_id="c1"), says("Hi.")]
+        service = make_service([*short, draft()], policy=Policy(mode="yolo"),
+                               actors=PEOPLE, web=True)
+        run(service, say(service, "greet world"))
+        assert len(service.scripted.script) == 1      # the draft: no look by itself
+        asked, = run(service, say(service, "/learn"))
+        assert asked.text.startswith("Looking at how I did that")
+        line = service.web.look("owner")["lines"][-1]
+        assert line["who"] == "notice" and line["offer"]["name"] == "greet-someone"
+
+    def test_learn_before_any_job_says_do_it_first(self, make_service, helper):
+        service = make_service([], actors=PEOPLE)
+        reply, = run(service, say(service, "/learn"))
+        assert "Ask me to do the job first" in reply.text
+
+    def test_learn_with_nothing_to_keep_says_why(self, make_service, helper):
+        service = make_service([says("Hello.")], policy=Policy(mode="yolo"),
+                               actors=PEOPLE, web=True)
+        run(service, say(service, "hi"))
+        run(service, say(service, "/learn"))
+        line = service.web.look("owner")["lines"][-1]
+        assert line["who"] == "notice" and line["text"].startswith("Nothing to keep")
+
     def test_an_agent_without_skills_says_so(self, make_service):
         service = make_service([], actors=PEOPLE)
         reply, = run(service, say(service, "/skills", agent="greeter"))

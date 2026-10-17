@@ -41,8 +41,15 @@ and what waits; ``/skills keep N`` and ``/skills drop N`` answer an
 offer (by its number or its id); ``/skills forget NAME`` removes one of
 their own. A page's buttons send the same words.
 
-``YANTRA_LEARN=off`` stops the looks (Yantra's switch); uses of learned
-skills are still counted, as Yantra counts them in any run.
+``/learn`` IS THE PERSON ASKING. The same look, started now on the
+conversation so far, by their word: Yantra's ``forced`` -- a short job
+still counts, since they've already said it's worth keeping. It runs
+behind the reply like the others, and what it finds comes as the same
+offer with Keep and Not now; what it doesn't, it says.
+
+``YANTRA_LEARN=off`` stops the looks (Yantra's switch), ``/learn``'s
+too; uses of learned skills are still counted, as Yantra counts them in
+any run.
 """
 
 from __future__ import annotations
@@ -73,6 +80,8 @@ if TYPE_CHECKING:
 
 #: The word.
 WORD = "/skills"
+#: Asking for one now.
+LEARN = "/learn"
 #: Where a kept skill goes: the person's own folder for this agent.
 SCOPE = "project"
 #: A Run that was a look for a skill, not a turn.
@@ -83,6 +92,12 @@ def word_of(text: str) -> bool:
     """Whether ``text`` is ``/skills`` (with or without more after it)."""
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].lower() in (WORD, WORD + "@")
+
+
+def is_learn(text: str) -> bool:
+    """Whether ``text`` is ``/learn``."""
+    first = text.strip().split(maxsplit=1)[:1]
+    return bool(first) and first[0].lower().split("@")[0] == LEARN
 
 
 def rest_of(text: str) -> str:
@@ -157,8 +172,43 @@ class Learning:
         self._jobs.add(job)
         job.add_done_callback(self._jobs.discard)
 
+    async def learn_now(self, spec: Any, who: Actor, key: str,
+                        came_by: str | None = None) -> str:
+        """``/learn``: look at the conversation so far for a skill, now,
+        because they asked. The answer is at once; the offer follows."""
+        name = workspace_parts(key)[1]
+        if not spec.skills:
+            return f"{name} doesn't use skills, so there is nothing to keep here."
+        mode = self.mode()
+        if mode == "off":
+            return "Learning skills is switched off here (YANTRA_LEARN=off)."
+        built = self._build(spec, who, key, gated=False)
+        if isinstance(built, str):
+            return built
+        self.service._rehydrate(built, key)
+        if not any(m.role == "assistant" for m in built.history):
+            return ("There's nothing to learn from yet. Ask me to do the job first, "
+                    "then send /learn.")
+        from yantra.skills.learn import Learner
+
+        learner = Learner(built, "ask", execute=self._executor(built, quiet=True))
+        learner.last_reason = "end_turn"
+        _, _, thread = workspace_parts(key)
+        provider_name = (self.service.provider_name or spec.provider
+                         or guess_provider())
+        run = Run(actor=who.id, agent=name, thread=thread or "", message=LEARN,
+                  started_at=datetime.now(UTC), cost_usd=0.0, came_by=came_by,
+                  model=str(built.model))
+        job = asyncio.ensure_future(self._look(built, learner, "ask", run=run, key=key,
+                                               who=who, provider_name=provider_name,
+                                               forced=True))
+        self._jobs.add(job)
+        job.add_done_callback(self._jobs.discard)
+        return ("Looking at how I did that, to keep it as a skill. I'll send you "
+                "what I find.")
+
     async def _look(self, agent: Any, learner: Any, mode: str, *, run: Run, key: str,
-                    who: Actor, provider_name: str) -> None:
+                    who: Actor, provider_name: str, forced: bool = False) -> None:
         from dvara.service import _copy, _cost, _delta
 
         service = self.service
@@ -171,7 +221,8 @@ class Learning:
                    model=run.model)
         offer = None
         try:
-            offer = await asyncio.to_thread(learner.consider, stop=lambda: key in locks)
+            offer = await asyncio.to_thread(learner.consider, forced=forced,
+                                            stop=lambda: key in locks)
             look.stop_reason = LOOKED
             look.reply = (f"found {offer.draft.name}" if offer is not None
                           else learner.last_skip or "nothing to keep")
@@ -186,6 +237,11 @@ class Learning:
             if look.usage.input_tokens or look.usage.output_tokens or offer is not None:
                 service.runs.record(look)     # a look that spent nothing is no Run
         if offer is None:
+            if forced:      # they asked: an answer either way
+                with suppress(Refused):
+                    await service.notify(actor=who.id, text=(
+                        f"Nothing to keep as a skill: "
+                        f"{look.reply if look.stop_reason == LOOKED else look.detail}"))
             return
         name = run.agent
         if mode == "auto" and not offer.waiting:

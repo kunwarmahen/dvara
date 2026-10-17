@@ -1454,7 +1454,8 @@ Send /skills keep 080a to keep it, or /skills drop 080a.
 Telegram and a page show **Keep** and **Not now** buttons too. A kept
 skill is saved in that person's own folder for that agent, so nobody
 else's agent changes. Ask for the same job again and the agent uses it.
-`/skills` lists theirs, how each has done, and what is waiting;
+A shorter job isn't looked at by itself; send `/learn` after it and the
+same offer comes for it. `/skills` lists theirs, how each has done, and what is waiting;
 `/skills forget NAME` removes one. Besides their own, an agent has only
 its package's skills: folders you put in its `skills/` (for example
 `agents/minder/skills/check-orders/SKILL.md`), there for everyone who
