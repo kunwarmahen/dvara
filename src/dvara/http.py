@@ -19,7 +19,9 @@ question to a person and replies with their answer -- for a run started
 somewhere else (Samay's direct road) that met a call nobody allowed
 ahead of time. The question is the same question a turn here would put,
 on the same desk, through the same owner's rules; only the turn lives
-elsewhere.
+elsewhere. ``/phone/ready`` is the check before such a run that works
+the phone: in use, locked (its person asked to unlock it), asleep (woken),
+exactly as a phone schedule here is checked.
 
 THE TOKEN AUTHENTICATES THE CALLER, NOT THE PERSON. That distinction is
 the whole security posture of this layer. A caller here is a channel
@@ -339,6 +341,28 @@ def create_app(service: Service, *, token: str,
         return {"approved": answer.approved, "reason": answer.reason or "",
                 "code": "" if answer.approved else answer.code or "",
                 "via": answer.via or ""}
+
+    @app.post("/phone/ready")
+    async def phone_ready(request: Request,
+                          authorization: str | None = Header(default=None)) -> dict:
+        """Whether a person's phone is free for a run Dvara isn't running
+        (service.phone_ready): ``{"go": true}``, or ``{"go": false,
+        "said": why}``. It may take a while: a phone in someone's hand is
+        waited on up to ten minutes, a locked one the schedule's wait."""
+        check(authorization)
+        body = await request.json()
+        actor = body.get("actor")
+        if not isinstance(actor, str) or not actor.strip():
+            raise HTTPException(status_code=400, detail="missing or empty: actor")
+        wait = body.get("wait", 0)
+        if isinstance(wait, bool) or not isinstance(wait, (int, float)) or wait < 0:
+            raise HTTPException(status_code=400, detail="wait is seconds, 0 or more")
+        try:
+            skip = await service.phone_ready(actor=actor, wait=float(wait),
+                                             about=str(body.get("about") or ""))
+        except Refused as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return {"go": skip is None, "said": skip or ""}
 
     @app.post("/notify")
     async def notify(request: Request,

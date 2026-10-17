@@ -102,3 +102,20 @@ the next run wrote the file and `/asks` stayed empty.
   ours. `dvara runs` doesn't show it; Samay's record does.
 - **`ask_user` from outside.** Only a yes or a no crosses. A run that
   wants a typed answer still ends its turn.
+
+## A phone check for a run that is not ours
+
+A schedule made on Yantra's page reads the iPhone's Battery row every
+morning. It runs on Samay's direct road, so it can put a question here,
+but it had no phone: a run nobody watches gets none. It may have one now
+on the same condition as a question: its person can be reached here.
+Before it starts, Samay asks `POST /phone/ready` for that person, and
+the answer is the check a phone schedule on this road gets
+(`ready.ready`, unchanged): in someone's hand, looked at each minute for
+ten; locked, its person told in their chat (*"Your phone is locked, and
+a schedule wants it now…"*) and waited on for the schedule's wait;
+asleep, woken. `{"go": true}`, or `{"go": false, "said": "skipped: the
+phone stayed locked …"}`, which Samay files as a skip. Someone not
+marked `phone = true` is refused, as a turn here would be. The run's
+held Send then comes back through `/ask` like any other question.
+

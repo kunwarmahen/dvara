@@ -327,6 +327,56 @@ class TestAScheduleWithThePhone:
         assert "Your phone is locked" in got[0][1] and "text Sam" in got[0][1]
 
 
+class TestReadyForARunElsewhere:
+    """``POST /phone/ready``: a schedule made on Yantra's page runs on Samay's
+    direct road, and gets the same check before it works the phone."""
+
+    def test_an_asleep_phone_is_woken_and_the_run_goes(self, make_service, sparsh,
+                                                       monkeypatch):
+        monkeypatch.setenv("FAKE_PHONE", "asleep")
+        service = make_service([], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        assert asyncio.run(service.phone_ready(actor="owner", wait=60, about="x")) is None
+        assert ["wake"] in logged(sparsh[1])
+
+    def test_a_locked_phone_asks_its_person_then_skips(self, make_service, sparsh,
+                                                       monkeypatch):
+        from dvara import ready
+
+        monkeypatch.setenv("FAKE_PHONE", "locked")
+        monkeypatch.setattr(ready, "LOCKED_EVERY", 0.05)
+        service = make_service([], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        got = []
+
+        async def telegram(address, text, file=None):
+            got.append(text)
+        service.notices.route("telegram", telegram)
+        why = asyncio.run(service.phone_ready(actor="owner", wait=0.3,
+                                              about="read the battery row"))
+        assert "stayed locked" in why
+        assert len(got) == 1 and "read the battery row" in got[0]
+
+    def test_someone_without_the_phone_is_refused(self, make_service, sparsh, phone_book):
+        from dvara.errors import Refused
+
+        service = make_service([], sparsh=str(sparsh[0]), actors=phone_book)
+        with pytest.raises(Refused, match="phone = true"):
+            asyncio.run(service.phone_ready(actor="guest", wait=60, about="x"))
+
+    def test_over_http_it_answers_go_or_why_not(self, make_service, sparsh, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from dvara.http import create_app
+
+        monkeypatch.setenv("FAKE_PHONE", "asleep")
+        service = make_service([], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        client = TestClient(create_app(service, token="a-token-long-enough-to-be-real"))
+        headers = {"Authorization": "Bearer a-token-long-enough-to-be-real"}
+        got = client.post("/phone/ready", json={"actor": "owner", "wait": 60}, headers=headers)
+        assert got.status_code == 200 and got.json() == {"go": True, "said": ""}
+        assert client.post("/phone/ready", json={"wait": 60}, headers=headers).status_code == 400
+        assert client.post("/phone/ready", json={"actor": "owner"}).status_code == 401
+
+
 class TestReady:
     """ready.py on its own, with a phone made of answers and a clock."""
 

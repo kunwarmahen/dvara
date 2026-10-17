@@ -480,6 +480,26 @@ class Service:
         return who.id, await self.notices.send(who.id, self._told_at(who), text,
                                                extra=extra)
 
+    async def phone_ready(self, *, actor: str, wait: float, about: str) -> str | None:
+        """Is ``actor``'s phone free for a run Dvara isn't running
+        (``POST /phone/ready``)? None: go. Otherwise why it's skipped.
+
+        A schedule made on Yantra's page runs on Samay's direct road, with
+        nobody at it; it may still work the phone when its person can be
+        asked here. Before it starts, the SAME CHECK a phone schedule here
+        gets (ready.py): in use, waited on up to ten minutes; locked, its
+        person asked in their chat to unlock it, for ``wait`` seconds;
+        asleep, woken. Refused for someone without the phone.
+        """
+        self.refresh()
+        who = self.actors.get(actor)
+        if self.sparsh is None or not who.phone:
+            raise Refused(f"{actor} has no phone this service can work: it needs "
+                          "--sparsh and phone = true for them")
+        return await ready.ready(ready.through(self.sparsh),
+                                 wait=wait or DEFAULT_SCHEDULE_WAIT,
+                                 ask=self._asker(who), about=" ".join(about.split())[:120])
+
     async def ask(self, *, actor: str, tool: str, summary: str,
                   arguments: dict, timeout: float, agent: str = "",
                   thread: str = "") -> Answer:

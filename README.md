@@ -812,6 +812,7 @@ POST /asks/{id}    {actor, approve}              -> {answered, approved}
 GET  /holds?actor=                               -> {holds: [{id, calls, age, ...}]}
 POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
 POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code, via}
+POST /phone/ready  {actor, wait, about}           -> {go, said}
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}
@@ -847,6 +848,11 @@ reply is the answer after at most `timeout` seconds: approved, or a
 refusal with its reason and code (`user`, `timeout`, `policy`,
 `unattended`). Silence lapses; it is never held
 ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)).
+`/phone/ready` is the check before such a run works the phone (a
+schedule made on Yantra's page): the person's phone in use is waited on
+up to ten minutes, locked asks them in their chat to unlock it for
+`wait` seconds, asleep is woken; `{go: false, said}` is the skip, in
+words. Only for someone marked `phone = true`.
 
 **The web channel: a chat on a page.** `dvara serve --web` gives every
 person a list of lines kept on disk: what they said on a page, what
