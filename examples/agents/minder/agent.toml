@@ -29,6 +29,12 @@ prompt      = "prompt.md"
 # send_file sends them the record itself, on Telegram as a document
 # (dvara's notes/26). Something leaving for their phone is a write too:
 # asked in a chat, and in a schedule only if the card listed it.
+#
+# A link in their mail to another site (a hotel's "View reservation") is
+# not the mail's to follow; add "browser_open", "browser_close" here to
+# let minder open such a page in its own browser -- asked each time, and
+# with none of their sign-ins there. Its prompt says to answer from the
+# message first.
 allow = ["web_fetch", "read_file", "write_file", "send_file", "mcp__samay__*"]
 
 # The person's own accounts, through their Setu folder: none unless named.
