@@ -97,3 +97,19 @@ def test_a_skill_that_is_not_theirs_or_is_a_path_makes_nothing(tmp_path, root, s
         make(root, state, [], skill=skill)
     with pytest.raises(ValueError, match="no learned skill"):
         make(root, state, [], person="maya")
+
+
+def test_a_tool_taken_back_leaves_the_recipe_and_its_counters(tmp_path, root):
+    state = tmp_path / "state"
+    folder = kept(state)
+    make(root, state, [proposal()])
+    assert promoting.unmake_tool(state=state, agent="helper", person="owner",
+                                 skill="greet-someone") == "greet_person"
+    assert not (folder / "tool.json").exists()
+    row = promoting.learned(state, "helper")[0]
+    assert row["tool"] is None and row["worked"] == 5 and row["script"]
+    with pytest.raises(ValueError, match="isn't a tool"):
+        promoting.unmake_tool(state=state, agent="helper", person="owner",
+                              skill="greet-someone")
+    with pytest.raises(ValueError, match="no learned skill"):
+        promoting.unmake_tool(state=state, agent="helper", person="owner", skill="../x")

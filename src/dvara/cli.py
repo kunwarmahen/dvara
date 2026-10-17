@@ -293,7 +293,8 @@ def build_parser() -> argparse.ArgumentParser:
                       "file for text (actors, policy, agent, prompt)")
     sets.add_argument("--agent", help="for text: which agent's agent.toml or prompt")
     sets.add_argument("--remove", action="store_true", help="the person or agent, gone "
-                      "(an agent's folder is moved aside, never deleted)")
+                      "(an agent's folder is moved aside, never deleted); for tool, "
+                      "the tool taken back (the skill stays a recipe)")
     sets.add_argument("--from-example", dest="from_example", metavar="NAME",
                       help="a new agent, copied from this example")
     sets.add_argument("--examples", metavar="DIR", help="where the example agents are")
@@ -465,12 +466,18 @@ def _settings(args) -> int:
 
             if not (args.name and args.person and args.skill):
                 raise ConfigProblem("tool needs the agent, --person and --skill")
-            out = {"tool": promoting.make_tool(
-                root=root, state=Path(args.state).expanduser(),
-                agent=settings._name(args.name, "an agent's"),
-                person=settings._name(args.person, "a person's"),
-                skill=args.skill,
-                provider=args.provider, model=args.model)}
+            elif args.remove:
+                out = {"untool": promoting.unmake_tool(
+                    state=Path(args.state).expanduser(),
+                    agent=settings._name(args.name, "an agent's"),
+                    person=settings._name(args.person, "a person's"), skill=args.skill)}
+            else:
+                out = {"tool": promoting.make_tool(
+                    root=root, state=Path(args.state).expanduser(),
+                    agent=settings._name(args.name, "an agent's"),
+                    person=settings._name(args.person, "a person's"),
+                    skill=args.skill,
+                    provider=args.provider, model=args.model)}
         else:
             body = sys.stdin.read()
             data = json.loads(body) if args.what != "text" and body.strip() else None

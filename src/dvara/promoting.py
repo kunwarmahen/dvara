@@ -18,6 +18,11 @@ if it passes. Yantra writes the definition (one model call, the rules
 it checks, one retry), runs the test and saves it: ``propose_tool`` and
 ``save_tool``, the same as at its own page.
 
+AND IT CAN BE TAKEN BACK. ``unmake_tool`` removes the tool (its
+``tool.json`` and the ``tool:`` line) and leaves the skill a recipe, as
+it was before; its counters stay. A tool that turned out wrong is one
+press away from gone, never a file to find by hand.
+
 IT STAYS THE PERSON'S. The skill lives in their folder for that agent,
 and so does the tool: one person's tool never appears in anyone else's
 agent. ``show`` lists every person's learned skills per agent, with how
@@ -97,3 +102,23 @@ def make_tool(*, root: Path, state: Path, agent: str, person: str, skill: str,
         return {**view, "kept": False}
     made = learner.save_tool(offer)
     return {**view, "kept": True, "tool": made.tool_name}
+
+
+def unmake_tool(*, state: Path, agent: str, person: str, skill: str) -> str:
+    """The tool taken back; the skill stays a recipe. Its old tool name,
+    or ValueError in words."""
+    from yantra.skills.learn import set_tool_line
+    from yantra.skills.loader import LEARNED_SOURCES, load_skill
+    from yantra.skills.promote import TOOL_FILE
+    from yantra.skills.registry import write_atomic
+
+    folder = Path(state) / "work" / person / agent / LEARNED / (skill or "")
+    manifest = folder / "SKILL.md"
+    if not SKILL_NAME.match(skill or "") or not manifest.is_file():
+        raise ValueError(f"{person} has no learned skill called {skill!r} with {agent}")
+    found = load_skill(manifest, source=LEARNED_SOURCES["project"])
+    if not found.tool_name:
+        raise ValueError(f"{skill} isn't a tool")
+    write_atomic(manifest, set_tool_line(manifest.read_text(encoding="utf-8"), ""))
+    (folder / TOOL_FILE).unlink(missing_ok=True)
+    return found.tool_name

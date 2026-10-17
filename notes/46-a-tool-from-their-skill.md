@@ -67,7 +67,10 @@ call goes to Dvara with this house's model and needs whose and which.
 
 ## What is not here yet
 
-* **Undoing it from the page.** A tool is taken back by deleting its
-  `tool.json` and the `tool:` line in the person's folder, by hand.
+* ~~**Undoing it from the page.**~~ **Stop using as a tool** beside it
+  (`settings tool AGENT --person P --skill S --remove`, `unmake_tool`):
+  `tool.json` and the `tool:` line go, the skill stays a recipe with its
+  counters. Live: after it, "Please greet Carol." went back to
+  `load_skill → bash` and still said *"Hello, Carol!"*.
 * **A tool a person asks for from the chat.** Deliberately not: see
   above.
