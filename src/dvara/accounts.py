@@ -54,13 +54,15 @@ people-page off``), and the link is not even made then.
 
 A SERVER OF THEIR OWN, BUT NO TOKEN IN THE CHAT. ``/connect server URL``
 runs ``setu connect --server`` in their folder: Setu tries the server
-and keeps it, and the reply says how many tools it has, and whether the
-agent here may use it (its package's ``[connections] needs`` has to name
-it, or ``*``). A token typed into a chat stays in the chat's history, on
-the chat service's computers too, so a server that asks for one is sent
-to their own page (``/accounts page``), where the token goes straight
-to Setu -- and so is ``/connect server`` with no address. A program as a
-server is never added from here: Setu would run it on this computer.
+and keeps it (one that signs in on its own page sends its link, and the
+address it ends on is pasted back, as Google's is), and the reply says
+how many tools it has, and whether the agent here may use it (its
+package's ``[connections] needs`` has to name it, or ``*``). A token
+typed into a chat stays in the chat's history, on the chat service's
+computers too, so a server that asks for one is sent to their own page
+(``/accounts page``), where the token goes straight to Setu -- and so is
+``/connect server`` with no address. A program as a server is never
+added from here: Setu would run it on this computer.
 
 ONE SIGN-IN AT A TIME PER PERSON, for ten minutes. A new ``/connect``
 replaces one that is waiting. The outcome comes back as the reply to the
@@ -316,21 +318,23 @@ class AccountDesk:
                         "[a name] [read] [as NAME]")
         if url is None:
             return await self._server_page(program, home, own_folder)
-        argv = [program, "connect", "--server", url, "--as", account, "--json"]
+        argv = [program, "connect", "--server", url, "--as", account, "--json", "--paste",
+                "--timeout", str(int(self.sign_in_for))]
         argv += ["--id", name] if name else []
         argv += ["--level", level] if level else []
-        try:
-            code, out, err = await asyncio.wait_for(
-                _run(argv, home, self.keys.key_for(actor)), ANSWER_WITHIN * 2)
-        except TimeoutError:
+        guess = f"{name or 'server'}:{account}"
+        started, done = await self._launch(actor, guess, argv, home)
+        if done["event"] == "timeout":
             return "That server didn't answer in time; nothing was saved."
-        events = []
-        for line in out.splitlines():
-            with contextlib.suppress(ValueError):
-                events.append(json.loads(line))
-        done = next((e for e in reversed(events) if e.get("event") in ("connected", "error")),
-                    {"event": "error", "message": (err.strip().splitlines() or
-                                                   ["Setu said nothing"])[-1]})
+        if done["event"] == "url":
+            # it signs in on its own page: the same road as Google's, and the
+            # outcome comes back as the reply to the paste
+            ref = str(started.get("ref") or guess)
+            if self._waiting.get(actor) is not None:
+                self._waiting[actor].ref = ref
+            return self._paste_back(ref, started.get("level_label") or level or
+                                    "all its tools, the ones that change things asked "
+                                    "about", done["url"])
         if done["event"] == "error":
             # Setu's words are for a terminal; the name goes after the address here
             said = str(done.get("message") or "").replace(
@@ -410,6 +414,39 @@ class AccountDesk:
         if not in_a_window and client and not \
                 (status.get("setup") or {}).get("google_client_file"):
             argv += ["--client-file", client]
+        started, event = await self._launch(actor, ref, argv, home)
+        if event.get("event") == "timeout":
+            return "Setu didn't answer in time; nothing was started."
+        if event.get("event") == "connected":
+            # nothing to sign in to (a server of their own, at a new level)
+            return _outcome(ref, event)
+        if event.get("event") == "error":
+            return f"I couldn't start that sign-in: {event.get('message')}"
+        what = started.get("level_label") or level or "the least access"
+        minutes = int(self.sign_in_for // 60)
+        if event.get("event") == "link":
+            return (f"To connect {ref} ({what}), open this on your phone:\n\n{event['url']}"
+                    f"\n\nYou'll see {card.get('name') or connector}'s sign-in page, running "
+                    "in a browser on this service's computer: tap and type as you would on "
+                    "the page. It opens on the first device only and works for "
+                    f"{minutes} minutes. Your sign-in stays in your own folder; I'll tell you "
+                    "when it's done.")
+        return self._paste_back(ref, what, event["url"])
+
+    def _paste_back(self, ref: str, what: str, url: str) -> str:
+        minutes = int(self.sign_in_for // 60)
+        return (f"To connect {ref} ({what}), open this and sign in:\n\n{url}\n\n"
+                "After you allow it, your browser will try to open a page starting with "
+                "http://127.0.0.1 and fail to load it. That's expected. Copy that page's "
+                f"whole address and send it to me here. It works once, within {minutes} "
+                "minutes, and it goes to the sign-in, not to any agent.")
+
+    async def _launch(self, actor: str, ref: str, argv: list[str],
+                      home: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Start Setu's sign-in and wait for what decides the reply: the
+        ``started`` event (or {}), and the first ``url``, ``link``,
+        ``connected`` or ``error`` -- or ``{"event": "timeout"}``. A link
+        leaves the sign-in waiting for the address pasted back."""
         await self._forget(actor)                  # a new sign-in replaces a waiting one
         proc = await asyncio.create_subprocess_exec(
             *argv, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
@@ -426,32 +463,15 @@ class AccountDesk:
                 event = await asyncio.wait_for(waiting.events.get(), ANSWER_WITHIN)
             except TimeoutError:
                 await self._forget(actor)
-                return "Setu didn't answer in time; nothing was started."
-            if event.get("event") == "started":
+                return started, {"event": "timeout"}
+            kind = event.get("event")
+            if kind == "started":
                 started = event
-            elif event.get("event") in ("url", "link"):
-                break
-            elif event.get("event") == "connected":
-                # nothing to sign in to (a server of their own, at a new level)
+            elif kind in ("url", "link"):
+                return started, event
+            elif kind in ("connected", "error"):
                 await _settle(waiting)
-                return _outcome(ref, event)
-            elif event.get("event") == "error":
-                await _settle(waiting)
-                return f"I couldn't start that sign-in: {event.get('message')}"
-        minutes = int(self.sign_in_for // 60)
-        what = started.get("level_label") or level or "the least access"
-        if event.get("event") == "link":
-            return (f"To connect {ref} ({what}), open this on your phone:\n\n{event['url']}"
-                    f"\n\nYou'll see {card.get('name') or connector}'s sign-in page, running "
-                    "in a browser on this service's computer: tap and type as you would on "
-                    "the page. It opens on the first device only and works for "
-                    f"{minutes} minutes. Your sign-in stays in your own folder; I'll tell you "
-                    "when it's done.")
-        return (f"To connect {ref} ({what}), open this and sign in:\n\n{event['url']}\n\n"
-                "After you allow it, your browser will try to open a page starting with "
-                "http://127.0.0.1 and fail to load it. That's expected. Copy that page's "
-                f"whole address and send it to me here. It works once, within {minutes} "
-                "minutes, and it goes to the sign-in, not to any agent.")
+                return started, event
 
     # ---- the address, pasted back ------------------------------------------------
 

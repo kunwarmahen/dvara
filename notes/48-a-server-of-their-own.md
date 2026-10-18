@@ -69,6 +69,32 @@ from here. Setu would run it on the computer running dvara, as dvara's
 user, and that's the owner's to decide at that computer. Setu's page
 refuses it from a person's page too.
 
+## A server that signs in on its own page
+
+Some servers have no token to paste. They answer *"401, sign in here"*
+(MCP's own OAuth), and Setu follows that to the server's sign-in page
+(Setu's README, *A server that signs you in on its own page*). From a
+chat that is the same road as Google's ([notes/20](20-signing-in-from-the-chat.md)):
+`/connect server URL` runs `setu connect --server URL --json --paste`,
+and when Setu sends a sign-in link, so does the reply:
+
+```
+To connect wiki:personal (All its tools), open this and sign in:
+
+https://auth.example.com/authorize?…
+
+After you allow it, your browser will try to open a page starting with
+http://127.0.0.1 and fail to load it. That's expected. Copy that page's whole
+address and send it to me here. …
+```
+
+The address pasted back goes to that sign-in only, and the outcome is
+the reply to it. The tokens it earns go into their Setu folder. The chat
+holds only that one-time address, which is spent as soon as it is used.
+Run against a stand-in server in `tests/test_chat_accounts.py`; Setu's
+own tests hold the sign-in itself, and its discovery was checked against
+Linear's and Notion's real servers.
+
 ## A folder that isn't theirs
 
 A person pointed at the owner's folder with `setu_manage`
@@ -80,9 +106,11 @@ to change in every way, as before.
 ## Changing its level
 
 `/connect docs read` is what changing a level always was: connect again.
-For a server there's no sign-in page to link to. Setu tries it again with
-the address and token it holds, and the answer is the outcome itself, with
-no link and no paste.
+For a server there's usually no sign-in page to link to. Setu tries it
+again with the address and token it holds, and the answer is the outcome
+itself, with no link and no paste. A server that signed in on its own
+page keeps that sign-in too. Only one that stopped taking it sends a new
+link.
 
 ## Run for real
 

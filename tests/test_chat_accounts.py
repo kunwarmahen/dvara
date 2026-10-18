@@ -65,6 +65,21 @@ SETU = """\
             if "no-name" in args[1]:
                 emit(event="error", message="Setu cannot make a name from that; give one "
                      "with --id"); sys.exit(2)
+            if "signs-in" in args[1]:         # it signs in on its own page
+                ref = "wiki:" + account
+                emit(event="started", ref=ref, level="write", scopes=[])
+                emit(event="url", url="https://auth.example.com/authorize?state=GOOD",
+                     paste="--paste" in args)
+                for line in sys.stdin:
+                    if "state=GOOD" in line and "code=" in line:
+                        json.dump(have + [ref], open(path, "w"))
+                        emit(event="connected", ref=ref, email="signs-in.example.com/mcp",
+                             level="write", level_label="All its tools", asked_level="write",
+                             tools=4)
+                        break
+                    emit(event="paste_refused", message="that address belongs to a "
+                         "different sign-in")
+                sys.exit(0)
             if "needs-token" in args[1]:
                 emit(event="error", message=args[1] + " asks for a token (HTTP 401); add "
                      "one with --token-stdin"); sys.exit(2)
@@ -430,6 +445,25 @@ class TestTheirOwnServer:
         assert "http://192.168.1.44:8775/#link=raj.CODE" in reply.text
         bare = run(turn(service, "raj", "/connect server"))
         assert "Add your own server" in bare.text and "#link=raj.CODE" in bare.text
+
+    def test_one_that_signs_in_on_its_own_page_sends_its_link_and_takes_the_paste(
+            self, make_service, fake_setu, agents_root):
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+
+        async def both():
+            first = await turn(service, "raj", "/connect server https://signs-in.example/mcp")
+            pasted = await turn(service, "raj", GOOD)
+            return first, pasted
+
+        first, pasted = run(both())
+        assert "https://auth.example.com/authorize?state=GOOD" in first.text
+        assert "wiki:personal" in first.text and "send it to me here" in first.text
+        assert pasted.text.startswith("Connected wiki:personal (signs-in.example.com/mcp)")
+        home = service.state / "setu" / "raj"
+        argv = json.loads((home / "argv.log").read_text().splitlines()[-1])
+        assert "--paste" in argv
+        assert json.loads((home / "accounts.json").read_text()) == ["wiki:personal"]
 
     def test_changing_its_level_needs_no_link(self, make_service, fake_setu, agents_root):
         mailer(agents_root)
