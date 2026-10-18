@@ -1250,12 +1250,14 @@ The last answer lists only the boiler conversation, with *boiler*
 marked, and its number in the whole list (2). `/chats 2` goes back into
 it. `/chats delete 2` asks first; `/chats delete 2 sure` deletes it for
 good. The conversation open now can't be deleted until you `/new`.
+Telegram's command menu lists `/chats` as *Our conversations: find,
+open, delete*.
 
 On Sarathi's home page the same thing is the **History** button: a
 search box, the list, a conversation to read, **Carry on in the chat**,
 and **Delete**. Deleting there clears the person's history. The page's
 own chat scroll and the owner's run ledger keep their copies of those
-lines until they age out
+lines until they age out, on purpose: the owner's record stays whole
 ([notes/50](notes/50-every-conversation-kept.md)).
 
 ## 20 · What an agent remembers about each person
@@ -1555,6 +1557,10 @@ agent: I think you opened your portfolio. Am I right?
 you:   /learn done
 ```
 
+A skill taught on one phone is for that phone. The iPhone and an Android
+phone name their apps and home screens differently, so teach it on each
+phone it'll be used on.
+
 **Don't mix them up.** `/learn start` learns only the steps you *type*
 and it carries out. Steps done by hand on the phone during it aren't
 seen, so `/learn done` finds nothing. If you'll touch the phone, use
@@ -1653,7 +1659,7 @@ Each topic, and the note that argues it:
 | `notes/40-a-notice-on-their-phone.md` | `--ntfy`: notices on the ntfy app, through a server in the house, each person on a topic nobody can guess; the accounts-page button |
 | `notes/43-a-box-for-each-tool.md` | the settings page's tool checkboxes: every tool an agent could have, in plain words, marked asks / runs unasked |
 | `notes/44-what-they-send.md` | a picture or file the person sends: kept in their folder under `from-you/`, a picture shown to a model that can see |
-| `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again |
+| `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again (now every conversation: note 50) |
 | `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
 | `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |

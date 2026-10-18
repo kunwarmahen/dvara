@@ -99,4 +99,8 @@ drop an open lesson and say so (Yantra's notes/129).
   marked `[yours]` in the roster, and after the rebuild it used this
   one on Telegram without a push (Yantra's notes/129).
 * **A Teach button.** The words only; a page could open a lesson from
-  the skills panel.
+  the skills panel, and Sarathi's home chat from its row of buttons.
+* **One skill for both phones.** A skill taught on the iPhone names the
+  iPhone's home screen and app; on the Android phone it has to be
+  taught again (Yantra's notes/129).
+* **`/learn clear`**, another word for `/learn stop`.
