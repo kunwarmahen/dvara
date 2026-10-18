@@ -82,7 +82,7 @@ SETU = """\
                 sys.exit(0)
             if "needs-token" in args[1]:
                 emit(event="error", message=args[1] + " asks for a token (HTTP 401); add "
-                     "one with --token-stdin"); sys.exit(2)
+                     "one with --ask-token"); sys.exit(2)
             ref = (args[args.index("--id") + 1] if "--id" in args else "docs") + ":" + account
             emit(event="started", ref=ref, level="write", scopes=[])
             json.dump(have + [ref], open(path, "w"))
