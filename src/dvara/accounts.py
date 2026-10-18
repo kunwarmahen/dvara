@@ -10,6 +10,8 @@ THREE WORDS, AND THEY ARE THE PERSON'S, NOT THE MODEL'S.
     /connect gmail                 sign in (the level the agent asks for)
     /connect gmail send as work    a level, and a name for the account
     /connect homeassistant http://ha.local:8123
+    /connect server https://x/mcp  an MCP server of their own, needing no token
+    /connect server                their page's link, to add one that needs a token
     /accounts                      what is connected here, for you
     /accounts page                 a one-time link to their folder's page
     /disconnect gmail:work         revoke it and forget it
@@ -49,6 +51,16 @@ minutes (Setu's people.py). Only for a folder of their own -- a shared
 one is the owner's, and has the owner's page. The owner turns every
 person's page off in one place, their own Setu (``setu config
 people-page off``), and the link is not even made then.
+
+A SERVER OF THEIR OWN, BUT NO TOKEN IN THE CHAT. ``/connect server URL``
+runs ``setu connect --server`` in their folder: Setu tries the server
+and keeps it, and the reply says how many tools it has, and whether the
+agent here may use it (its package's ``[connections] needs`` has to name
+it, or ``*``). A token typed into a chat stays in the chat's history, on
+the chat service's computers too, so a server that asks for one is sent
+to their own page (``/accounts page``), where the token goes straight
+to Setu -- and so is ``/connect server`` with no address. A program as a
+server is never added from here: Setu would run it on this computer.
 
 ONE SIGN-IN AT A TIME PER PERSON, for ten minutes. A new ``/connect``
 replaces one that is waiting. The outcome comes back as the reply to the
@@ -217,6 +229,9 @@ class AccountDesk:
             return self.keys.unlock(actor, program, home, rest)
         if word == "/disconnect":
             return await self._disconnect(program, home, rest)
+        if [w.lower() for w in rest[:1]] == ["server"]:
+            return await self._server(actor, program, home, rest[1:], needs,
+                                      own if may_lock is None else may_lock)
         return await self._connect(actor, program, home, rest, narrowed, needs)
 
     # ---- /accounts ------------------------------------------------------------
@@ -281,13 +296,79 @@ class AccountDesk:
                 if (err or out).strip() else f"{ref} could not be disconnected."
         return f"Disconnected {ref}. " + (out.strip().splitlines() or [""])[-1]
 
+    # ---- /connect server ---------------------------------------------------------
+
+    async def _server(self, actor: str, program: str, home: Path, words: list[str],
+                      needs: dict[str, str], own_folder: bool) -> str:
+        url, account, level, name = None, "personal", None, None
+        while words:
+            word = words.pop(0)
+            if word.lower().startswith(("http://", "https://")) and url is None:
+                url = word
+            elif word.lower() == "as" and words:
+                account = words.pop(0)
+            elif word.lower() in ("read", "write") and level is None:
+                level = word.lower()
+            elif name is None and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", word.lower()):
+                name = word.lower()
+            else:
+                return (f"I didn't follow {word!r}: /connect server https://its-address "
+                        "[a name] [read] [as NAME]")
+        if url is None:
+            return await self._server_page(program, home, own_folder)
+        argv = [program, "connect", "--server", url, "--as", account, "--json"]
+        argv += ["--id", name] if name else []
+        argv += ["--level", level] if level else []
+        try:
+            code, out, err = await asyncio.wait_for(
+                _run(argv, home, self.keys.key_for(actor)), ANSWER_WITHIN * 2)
+        except TimeoutError:
+            return "That server didn't answer in time; nothing was saved."
+        events = []
+        for line in out.splitlines():
+            with contextlib.suppress(ValueError):
+                events.append(json.loads(line))
+        done = next((e for e in reversed(events) if e.get("event") in ("connected", "error")),
+                    {"event": "error", "message": (err.strip().splitlines() or
+                                                   ["Setu said nothing"])[-1]})
+        if done["event"] == "error":
+            said = str(done.get("message") or "")
+            if "token" in said:
+                return (f"{said.split(';')[0]}. A token shouldn't be typed into a chat: it "
+                        "stays in the chat's history. "
+                        + await self._server_page(program, home, own_folder))
+            return f"Nothing was saved: {said}"
+        ref = str(done.get("ref") or "")
+        cid = ref.partition(":")[0]
+        seen = ("The agent here can use it from your next message."
+                if cid in needs or "*" in needs else
+                f"The agent here doesn't use it yet: its package has to name it "
+                f"([connections] needs = [\"{cid}:write\"]) -- ask the owner.")
+        self.log(f"dvara: {actor} added the server {ref} from the chat")
+        return (f"Connected {ref} ({done.get('email') or url}) at "
+                f"{done.get('level_label') or done.get('level')}, "
+                f"{done.get('tools', 0)} tools. Tools that change things are asked about "
+                f"first. {seen}")
+
+    async def _server_page(self, program: str, home: Path, own_folder: bool) -> str:
+        if not own_folder:
+            return ("Your accounts here are in the owner's folder: they add servers on "
+                    "Setu's page, at their computer.")
+        page = await self._page(program, home, own_folder)
+        if not page.startswith("Your accounts page:"):
+            return page
+        return ("Add it on your accounts page, under Add your own server: its address, "
+                "and its token if it needs one. The token goes straight to Setu.\n\n"
+                + page.removeprefix("Your accounts page:\n\n"))
+
     # ---- /connect ----------------------------------------------------------------
 
     async def _connect(self, actor: str, program: str, home: Path, rest: list[str],
                        narrowed: tuple[str, ...] | None, needs: dict[str, str]) -> str:
         if not rest:
-            return ("Say which: /connect gmail (or /connect gmail send as work, or "
-                    "/connect homeassistant http://your-home-assistant:8123)")
+            return ("Say which: /connect gmail (or /connect gmail send as work, "
+                    "/connect homeassistant http://your-home-assistant:8123, or "
+                    "/connect server https://its-address for an MCP server of your own)")
         connector, account, level, url = rest[0].lower(), "personal", None, None
         words = rest[1:]
         while words:
@@ -348,6 +429,10 @@ class AccountDesk:
                 started = event
             elif event.get("event") in ("url", "link"):
                 break
+            elif event.get("event") == "connected":
+                # nothing to sign in to (a server of their own, at a new level)
+                await _settle(waiting)
+                return _outcome(ref, event)
             elif event.get("event") == "error":
                 await _settle(waiting)
                 return f"I couldn't start that sign-in: {event.get('message')}"

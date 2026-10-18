@@ -60,7 +60,25 @@ SETU = """\
         print("revoked at Google; forgotten here")
     elif cmd == "connect":
         args = sys.argv[2:]
-        ref = args[0] + ":" + args[args.index("--as") + 1]
+        account = args[args.index("--as") + 1]
+        if args[0] == "--server":
+            if "needs-token" in args[1]:
+                emit(event="error", message=args[1] + " asks for a token (HTTP 401); add "
+                     "one with --token-stdin"); sys.exit(2)
+            ref = (args[args.index("--id") + 1] if "--id" in args else "docs") + ":" + account
+            emit(event="started", ref=ref, level="write", scopes=[])
+            json.dump(have + [ref], open(path, "w"))
+            level = args[args.index("--level") + 1] if "--level" in args else "write"
+            emit(event="connected", ref=ref, email="docs.example.com/mcp", level=level,
+                 level_label={"write": "All its tools", "read": "Only its reading tools"}[level],
+                 asked_level=level, tools=3)
+            sys.exit(0)
+        ref = args[0] + ":" + account
+        if args[0] == "docs":                 # a server of their own: no sign-in page
+            emit(event="started", ref=ref, level="read", scopes=[])
+            emit(event="connected", ref=ref, email="docs.example.com/mcp", level="read",
+                 level_label="Only its reading tools", asked_level="read", tools=3)
+            sys.exit(0)
         if args[0] == "amazon":
             if "--remote" not in args:
                 emit(event="error", message="Amazon is signed in to in a window"); sys.exit(2)
@@ -362,3 +380,67 @@ class TestTheirOwnPage:
                                                     "setu_manage": True}))
         reply = run(turn(service, "raj", "/accounts page"))
         assert "owner's own folder" in reply.text and "#link=" not in reply.text
+
+
+class TestTheirOwnServer:
+    """``/connect server``: a server of their own, and never its token in the chat."""
+
+    def test_a_server_needing_no_token_is_added_from_the_chat(self, make_service,
+                                                              fake_setu, agents_root):
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/connect server https://docs.example.com/mcp"))
+        assert reply.text.startswith("Connected docs:personal (docs.example.com/mcp) at "
+                                     "All its tools, 3 tools.")
+        assert "its package has to name it" in reply.text      # mailer needs gmail only
+        home = service.state / "setu" / "raj"
+        assert json.loads((home / "accounts.json").read_text()) == ["docs:personal"]
+        argv = json.loads((home / "argv.log").read_text().splitlines()[-1])
+        assert argv[:3] == ["connect", "--server", "https://docs.example.com/mcp"]
+        assert service.scripted.requests == []
+
+    def test_a_name_a_level_and_an_account_are_the_persons_words(self, make_service,
+                                                                 fake_setu, agents_root):
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj",
+                         "/connect server https://x.example/mcp wiki read as work"))
+        assert reply.text.startswith("Connected wiki:work") and "Only its reading" in reply.text
+
+    def test_a_package_that_needs_everything_sees_it(self, make_service, fake_setu,
+                                                     agents_root):
+        write_package(agents_root, "mailer", body=(
+            '[agent]\nname = "mailer"\nprompt = "prompt.md"\n'
+            '[connections]\nneeds = ["*:read"]\n'))
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/connect server https://docs.example.com/mcp"))
+        assert "can use it from your next message" in reply.text
+
+    def test_a_token_is_never_asked_for_here_the_page_is_offered(self, make_service,
+                                                                 fake_setu, agents_root,
+                                                                 monkeypatch):
+        monkeypatch.setenv("SETU_PAGE_URL", "http://192.168.1.44:8775/")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/connect server https://needs-token.example/mcp"))
+        assert "shouldn't be typed into a chat" in reply.text
+        assert "http://192.168.1.44:8775/#link=raj.CODE" in reply.text
+        bare = run(turn(service, "raj", "/connect server"))
+        assert "Add your own server" in bare.text and "#link=raj.CODE" in bare.text
+
+    def test_changing_its_level_needs_no_link(self, make_service, fake_setu, agents_root):
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/connect docs read"))
+        assert reply.text.startswith("Connected docs:personal (docs.example.com/mcp) at "
+                                     "Only its reading tools.")
+
+    def test_a_shared_folder_is_the_owners_to_add_to(self, make_service, fake_setu,
+                                                     agents_root, tmp_path):
+        mailer(agents_root)
+        shared = tmp_path / "owners-setu"
+        shared.mkdir()
+        service = make_service([], actors=book(raj={"setu": str(shared),
+                                                    "setu_manage": True}))
+        reply = run(turn(service, "raj", "/connect server"))
+        assert "owner's folder" in reply.text

@@ -942,6 +942,16 @@ user, and his sign-in expires every 7 days (his agent tells him to
 `/connect gmail` again). Publishing the app ends both
 ([notes/20](notes/20-signing-in-from-the-chat.md)).
 
+**A server of his own.** raj runs a notes server at home that speaks
+MCP. He sends `/connect server http://192.168.1.50:8000/mcp notes`, and
+Setu tries it and keeps it in his folder: *"Connected notes:personal …
+at All its tools, 2 tools"*. The reply also says whether the agent here
+uses it, which depends on its package: one whose `[connections] needs`
+says `"*:read"` sees its reading tools at once. If the server wants a
+token, he isn't asked to type it into Telegram. The reply sends him his
+page's one-time link, and he adds the token there, under **Add your own
+server** ([notes/48](notes/48-a-server-of-their-own.md)).
+
 **Your own phone, your own folder.** If you are an actor too, pointed at
 the folder your desktop uses so the page and the chat share one set of
 sign-ins, you are a guest there by default: `/connect` says the owner
