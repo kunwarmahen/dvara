@@ -62,6 +62,9 @@ SETU = """\
         args = sys.argv[2:]
         account = args[args.index("--as") + 1]
         if args[0] == "--server":
+            if "no-name" in args[1]:
+                emit(event="error", message="Setu cannot make a name from that; give one "
+                     "with --id"); sys.exit(2)
             if "needs-token" in args[1]:
                 emit(event="error", message=args[1] + " asks for a token (HTTP 401); add "
                      "one with --token-stdin"); sys.exit(2)
@@ -444,3 +447,10 @@ class TestTheirOwnServer:
                                                     "setu_manage": True}))
         reply = run(turn(service, "raj", "/connect server"))
         assert "owner's folder" in reply.text
+
+    def test_setus_terminal_words_become_the_chats(self, make_service, fake_setu,
+                                                    agents_root):
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/connect server http://no-name/mcp"))
+        assert "--id" not in reply.text and "/connect server URL a-name" in reply.text

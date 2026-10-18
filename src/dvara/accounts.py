@@ -332,7 +332,9 @@ class AccountDesk:
                     {"event": "error", "message": (err.strip().splitlines() or
                                                    ["Setu said nothing"])[-1]})
         if done["event"] == "error":
-            said = str(done.get("message") or "")
+            # Setu's words are for a terminal; the name goes after the address here
+            said = str(done.get("message") or "").replace(
+                "with --id", "after the address (/connect server URL a-name)")
             if "token" in said:
                 return (f"{said.split(';')[0]}. A token shouldn't be typed into a chat: it "
                         "stays in the chat's history. "

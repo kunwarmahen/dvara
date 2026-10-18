@@ -84,6 +84,47 @@ For a server there's no sign-in page to link to. Setu tries it again with
 the address and token it holds, and the answer is the outcome itself, with
 no link and no paste.
 
+## Run for real
+
+A scratch dvara, the person raj with a folder of his own, and a package
+`household` with `[connections] needs = ["*:read"]`. Two notes servers
+written with the official MCP SDK (Streamable HTTP), one wanting a Bearer
+token and one not. The model is `qwen3.8-64k` through Ollama:
+
+```
+$ dvara say --actor raj --agent household "/connect server http://127.0.0.1:8813/mcp kitchen"
+[accounts]
+Connected kitchen:personal (127.0.0.1/mcp) at All its tools, 2 tools. Tools that change
+things are asked about first. The agent here can use it from your next message.
+
+$ dvara say --actor raj --agent household "/connect server http://127.0.0.1:8811/mcp"
+[accounts]
+http://127.0.0.1:8811/mcp asks for a token (HTTP 401). A token shouldn't be typed into a
+chat: it stays in the chat's history. Add it on your accounts page, under Add your own
+server: its address, and its token if it needs one. The token goes straight to Setu.
+
+http://127.0.0.1:8775/#link=raj.0XCH…
+
+$ dvara say --actor raj --agent household "What's on the kitchen board?"
+There are 2 notes on the kitchen board:
+1. **Milk on Friday**
+2. **Call the plumber**
+
+$ dvara say --actor raj --agent household "Pin a note on the kitchen board: buy bread"
+I can only read the kitchen board — the connected tools just include `list_notes`,
+there's no add/pin function available to me right now.
+```
+
+`dvara runs` shows the read went through `mcp__kitchen-personal__list_notes`.
+At `"*:read"` the package was given only the server's reading tools, so
+the write was never offered, let alone asked about.
+
+The first try found a gap: the second address is a bare IP with nothing
+in it to name the server, and Setu refused it ("give one with --id")
+before ever reaching it. Setu now takes the server's own name once it
+answers (`team-docs` from *Team docs*). The chat also turns Setu's
+`--id` into its own words: a name after the address.
+
 ## The package's own servers
 
 There are two kinds of server, and they belong to different people. A
