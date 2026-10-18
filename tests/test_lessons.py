@@ -125,7 +125,7 @@ class TestALesson:
     def test_a_word_it_does_not_know_shows_how(self, make_service, helper):
         service = make_service([], actors=PEOPLE)
         reply, = run(service, say(service, "/learn begin"))
-        assert "/learn start and what the job is for" in reply.text
+        assert "TELL: /learn start" in reply.text and "SHOW: /learn watch" in reply.text
 
 
 class TestTheMixUps:

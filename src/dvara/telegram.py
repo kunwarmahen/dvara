@@ -765,9 +765,11 @@ class TelegramBot:
         if getattr(self.spec, "skills", None):
             lines.append("When a job takes several steps, I may offer to keep how it "
                          "was done as a skill. Send /learn to ask for one now, and "
-                         "/skills to see them. To teach me a job one step at a "
-                         "time, send /learn start and what it's for; /learn done "
-                         "when we're through.")
+                         "/skills to see them. To teach me a job: /learn start and "
+                         "what it's for, then type each step and I'll do it; or "
+                         "/learn watch and what it's for, then do each step on "
+                         "your phone and send next. /learn done when we're "
+                         "through.")
         lines.append("Send /new to start our conversation over; /chats lists the "
                      "earlier ones, to go back into one.")
         return "\n\n".join(lines)

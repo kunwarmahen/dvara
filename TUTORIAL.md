@@ -1491,8 +1491,17 @@ one into the package's `skills/` to share it. The look is a run of its own in
 `dvara runs` (`looked_for_skill`), paid from the person's allowance.
 `YANTRA_LEARN=off` stops the looks.
 
-Some jobs are easier to show one step at a time. Send `/learn start`
-and what the job is for, then each step:
+Some jobs are easier to walk through one step at a time. A **lesson**
+does that, in one of two ways. Pick the one the person will actually do:
+
+| | `/learn start …`: you **tell** | `/learn watch …`: you **show** |
+|---|---|---|
+| Who touches the phone | **the agent**; you don't | **you**; the agent doesn't |
+| What you send | each step, as a message ("open Coinbase", "tap Portfolio") | **next**, after you've done each step yourself |
+| What the agent does | carries out that one step, says what's on the screen, asks what's next | looks at what changed and says what it thinks you did ("I think you opened Coinbase"); you correct it if it's wrong |
+| Good for | jobs you can describe in words | jobs easier to do than to describe |
+
+Telling:
 
 ```text
 you:   /learn start send a WhatsApp message
@@ -1509,12 +1518,23 @@ The offer comes with **Keep** and **Not now**, like any other. While a
 lesson is open, the agent does only the step it's told and no skill is
 offered after each one.
 
-**Telling or showing: pick the one you'll do.** `/learn start` learns
-only the steps you *type* and it carries out. Steps you do yourself on
-the phone aren't seen in it. To do them by hand, send `/learn watch`
-and what it's for, then `next` after each step, and the agent says what
-it thinks you did. `/learn done` on a lesson nothing was taught in says
-so and keeps the lesson open. A new `/learn start` replaces a lesson
+Showing (the person does each step on their phone):
+
+```text
+you:   /learn watch check my Coinbase portfolio value
+agent: I'm watching. Do the first step and say "next".
+you:   next
+agent: I think you opened Coinbase. Am I right?
+you:   yes. next
+agent: I think you opened your portfolio. Am I right?
+you:   /learn done
+```
+
+**Don't mix them up.** `/learn start` learns only the steps you *type*
+and it carries out. Steps done by hand on the phone during it aren't
+seen, so `/learn done` finds nothing. If you'll touch the phone, use
+`/learn watch`. `/learn done` on a lesson nothing was taught in says so
+and keeps the lesson open. A new `/learn start` replaces a lesson
 that's still empty. `/new` and `/chats N` drop an open lesson, since
 the conversation that told the agent it was being taught is gone.
 `/learn stop` drops one too ([notes/49](notes/49-a-job-taught-step-by-step.md)).
