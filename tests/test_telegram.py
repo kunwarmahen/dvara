@@ -339,8 +339,9 @@ def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
                             "Send /files to see the files I keep for you, "
                             "and /file NAME to get one.\n\n"
                             "Send /tools to see what I can use.\n\n"
-                            "Send /new to start our conversation over; /chats lists the "
-                            "earlier ones, to go back into one."]
+                            "Send /new to start our conversation over. Every "
+                            "conversation is kept: /chats lists them, /chats and a "
+                            "word finds one, /chats N goes back into it."]
 
 
 # ---- the reply -------------------------------------------------------------

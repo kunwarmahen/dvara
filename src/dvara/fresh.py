@@ -17,8 +17,9 @@ it is answered here, never a turn: no model reads it, nothing is spent,
 and it works the same whatever model is behind the door.
 
 THE CONVERSATION GOES, NOTHING ELSE DOES. Only the saved conversation
-(sessions.sqlite3) is let go, through Yantra's ``forget`` -- kept first
-in past.py's book, so ``/chats`` can open it again. The ledger
+(sessions.sqlite3) is let go, through Yantra's ``forget`` -- already kept,
+turn by turn, in the person's log (past.py), so ``/chats`` can open it
+again; ``/new`` only starts the next one there. The ledger
 keeps every run's message and reply, so ``dvara runs`` and the day's
 spending are unchanged; the person's folder with this agent keeps its
 files; their schedules and their accounts are not conversations at all.

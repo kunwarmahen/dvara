@@ -86,5 +86,9 @@ another id loads as it was and carries on from there.
   number, `/new`, `/chats 1` came back as *"Where we left it: You: Our
   plumber is Ravi, his number is 555-0142. mailer: Got it — Ravi,
   555-0142."*, the line's `transcript` holding both.
-* **Naming or deleting a kept conversation** from the chat. The oldest
-  go by themselves after thirty.
+* ~~**Naming or deleting a kept conversation** from the chat. The oldest
+  go by themselves after thirty.~~ Every conversation is kept now, not
+  only what `/new` ended and not only thirty; `/chats WORDS` finds one
+  and `/chats delete N sure` deletes it for good
+  ([note 50](50-every-conversation-kept.md)). Naming one is still not
+  here.

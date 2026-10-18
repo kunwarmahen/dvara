@@ -1,14 +1,19 @@
-"""Past conversations: kept by ``/new``, opened by ``/chats N`` (past.py).
+"""Past conversations: every one kept as it goes, found, opened, deleted (past.py).
 
 The bias is A CONVERSATION THAT COMES BACK WRONG, OR NOT AT ALL, OR TO
-SOMEBODY ELSE. What ``/new`` ends is kept whole and listed; going back
-puts exactly it in front of the model and keeps the one it replaced; one
-person never sees another's; and nothing here is a turn.
+SOMEBODY ELSE, OR THAT WON'T GO. Every conversation is in the list
+whether or not ``/new`` ended it; going back puts exactly it in front of
+the model and grows its own row rather than a copy; one person never
+sees another's; a delete needs the word ``sure`` and then leaves nothing;
+a schedule's run is not a conversation; and nothing here is a turn.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import sqlite3
+import time
 
 from dvara import past
 from dvara.keys import session_key
@@ -26,21 +31,30 @@ def shown(service, n=-1):
             if getattr(block, "text", None)]
 
 
-def test_new_keeps_what_it_ends_and_chats_lists_it(make_service):
+def test_a_conversation_is_kept_without_new(make_service):
     service = make_service([says("The trip is on Friday.")])
     say(service, "when is the school trip?")
-    say(service, "/new")
     listed = say(service, "/chats")
     assert listed.run_id is None
-    assert "1. when is the school trip? —" in listed.text and "1 message" in listed.text
+    assert "1. when is the school trip? (this one) —" in listed.text
+    assert "1 message" in listed.text
 
 
-def test_going_back_shows_the_model_that_conversation_and_keeps_this_one(make_service):
+def test_new_starts_a_second_conversation_and_keeps_the_first(make_service):
+    service = make_service([says("Friday."), says("Hello.")])
+    say(service, "when is the school trip?")
+    say(service, "/new")
+    say(service, "hi")
+    titles = [r.title for r in service.past.listed("owner", "greeter")]
+    assert titles == ["hi", "when is the school trip?"]
+
+
+def test_going_back_shows_the_model_that_conversation_and_grows_its_row(make_service):
     service = make_service([says("Friday."), says("Hello."), says("Bring a packed lunch.")])
     say(service, "when is the school trip?")
     say(service, "/new")
     say(service, "hi")
-    back = say(service, "/chats 1")
+    back = say(service, "/chats 2")
     assert back.text.startswith("Back in: when is the school trip?")
     assert back.text.endswith("Where we left it:\nYou: when is the school trip?\n"
                               "greeter: Friday.")
@@ -48,23 +62,65 @@ def test_going_back_shows_the_model_that_conversation_and_keeps_this_one(make_se
                                {"who": "agent", "text": "Friday."})
     say(service, "what should he bring?")
     assert shown(service) == ["when is the school trip?", "what should he bring?"]
-    assert [r.title for r in service.past.listed("owner", "greeter")] == ["hi"]
+    rows = service.past.listed("owner", "greeter")
+    assert [(r.title, r.turns) for r in rows] == [("when is the school trip?", 2),
+                                                 ("hi", 1)]
+
+
+def test_going_back_into_the_one_open_is_said(make_service):
+    service = make_service([says("x")])
+    say(service, "a")
+    assert say(service, "/chats 1").text == "That's the conversation we're in now."
+
+
+def test_words_find_a_conversation_and_keep_its_number(make_service):
+    service = make_service([says("Lisbon in May."), says("1.5 bar.")])
+    say(service, "where should we go?")
+    say(service, "/new")
+    say(service, "boiler pressure?")
+    found = say(service, "/chats lisbon")
+    assert "2. where should we go?" in found.text
+    assert "*Lisbon*" in found.text
+    assert "boiler" not in found.text
+    assert "None of your conversations" in say(service, "/chats zebra").text
 
 
 def test_a_number_that_is_not_there_is_said(make_service):
     service = make_service([says("x")])
     say(service, "a")
-    say(service, "/new")
     assert "no conversation 7" in say(service, "/chats 7").text
-    assert "no conversation two" in say(service, "/chats two").text
 
 
-def test_one_persons_conversations_are_never_anothers(make_service):
+def test_delete_asks_first_and_sure_deletes_for_good(make_service, tmp_path):
+    service = make_service([says("noted"), says("hi")])
+    say(service, "my zebracorn plan")
+    say(service, "/new")
+    say(service, "hello")
+    asked = say(service, "/chats delete 2")
+    assert "Delete “my zebracorn plan” for good?" in asked.text
+    assert len(service.past.listed("owner", "greeter")) == 2
+    done = say(service, "/chats delete 2 sure")
+    assert done.text == "Deleted “my zebracorn plan” for good."
+    assert [r.title for r in service.past.listed("owner", "greeter")] == ["hello"]
+    service.past.close()
+    for f in (tmp_path / "state" / "past").iterdir():
+        assert b"zebracorn" not in f.read_bytes()
+
+
+def test_the_conversation_open_now_is_not_deleted(make_service):
+    service = make_service([says("x")])
+    say(service, "a")
+    assert "Send /new first" in say(service, "/chats delete 1 sure").text
+    assert len(service.past.listed("owner", "greeter")) == 1
+
+
+def test_one_persons_conversations_are_never_anothers(make_service, tmp_path):
     service = make_service([says("x")])
     say(service, "my secret plan")
-    say(service, "/new")
     theirs = say(service, "/chats", actor="guest")
-    assert "secret" not in theirs.text and "no earlier conversations" in theirs.text
+    assert "secret" not in theirs.text and "no conversations" in theirs.text
+    assert service.past.listed("guest") == []
+    assert [f.name for f in (tmp_path / "state" / "past").glob("*.sqlite")] == ["owner.sqlite"]
 
 
 def test_nothing_said_is_nothing_kept(make_service):
@@ -73,21 +129,54 @@ def test_nothing_said_is_nothing_kept(make_service):
     assert service.past.listed("owner", "greeter") == []
 
 
-def test_the_book_keeps_only_the_newest(tmp_path):
-    book = past.PastBook(tmp_path / "p.sqlite3", keep=2)
-    for n in range(3):
-        book.keep_one("o", "a", "web:chat", {"history": [
-            {"role": "user", "content": [{"kind": "text", "text": f"chat {n}"}]}]})
-    assert [r.title for r in book.listed("o", "a")] == ["chat 2", "chat 1"]
-    assert book.listed("o", "a")[0].came == "the page"
+def test_a_scheduled_run_is_not_a_conversation(make_service, monkeypatch):
+    monkeypatch.setenv("YANTRA_UNATTENDED", "1")
+    service = make_service([says("all quiet")])
+    say(service, "check the site")
+    assert service.past.listed("owner") == []
+
+
+def test_what_new_kept_before_comes_over_once(tmp_path):
+    old = tmp_path / "past.sqlite3"
+    db = sqlite3.connect(old)
+    db.execute("CREATE TABLE past (id INTEGER PRIMARY KEY, actor TEXT, agent TEXT, "
+               "came TEXT, title TEXT, turns INTEGER, ended TEXT, payload TEXT)")
+    db.execute("INSERT INTO past (actor, agent, came, title, turns, ended, payload) "
+               "VALUES (?,?,?,?,?,?,?)",
+               ("o", "greeter", "Telegram", "old trip", 1, "2026-09-01T10:00:00+00:00",
+                json.dumps({"history": [{"role": "user", "content": [
+                    {"kind": "text", "text": "old trip"}]}]})))
+    db.commit()
+    db.close()
+    book = past.PastBook(tmp_path / "past")
+    assert book.bring_in(old) == 1 and not old.exists()
+    [row] = book.listed("o", "greeter")
+    assert (row.title, row.road, row.updated_at) == ("old trip", "Telegram",
+                                                     "2026-09-01T10:00:00+00:00")
+    assert book.bring_in(old) == 0
     book.close()
 
 
+def test_a_persons_file_is_never_a_step_up(tmp_path):
+    book = past.PastBook(tmp_path / "past")
+    assert book._path("..").parent == tmp_path / "past"
+    assert not book._path(".x").name.startswith(".")
+    book.close()
+
+
+def test_one_still_open_in_another_chat_is_not_opened_twice(make_service):
+    service = make_service([says("Friday."), says("hi")])
+    say(service, "trip?", thread="telegram:1")
+    said = say(service, "/chats 1", thread="web:chat")
+    assert said.text.startswith("That conversation is still going on Telegram.")
+
+
 def test_the_session_it_replaces_is_its_own_key(make_service):
-    service = make_service([says("Friday.")])
+    service = make_service([says("Friday."), says("hi")])
     say(service, "trip?")
     say(service, "/new")
-    say(service, "/chats 1")
+    say(service, "hello")
+    say(service, "/chats 2")
     assert service.sessions.load_latest(session_key("owner", "greeter", "chat"))
 
 
@@ -102,9 +191,18 @@ def test_the_transcript_is_words_never_a_tools_output():
                                         {"who": "agent", "text": "It's up."}]
 
 
-def test_the_page_gets_the_whole_conversation_on_its_line(make_service):
-    import time
+def finish(client, auth, text):
+    client.post("/web/message", headers=auth,
+                json={"actor": "owner", "agent": "greeter", "text": text})
+    for _ in range(200):
+        seen = client.get("/web?actor=owner", headers=auth).json()
+        if not seen["busy"]:
+            return seen
+        time.sleep(0.02)
+    return seen
 
+
+def test_the_page_gets_the_whole_conversation_on_its_line(make_service):
     from fastapi.testclient import TestClient
 
     from dvara.http import create_app
@@ -113,14 +211,66 @@ def test_the_page_gets_the_whole_conversation_on_its_line(make_service):
     token = "a-token-long-enough-to-be-real"
     auth = {"Authorization": f"Bearer {token}"}
     with TestClient(create_app(service, token=token)) as client:
-        for text in ("when is the trip?", "/new", "hello", "/chats 1"):
-            client.post("/web/message", headers=auth,
-                        json={"actor": "owner", "agent": "greeter", "text": text})
-            for _ in range(200):
-                seen = client.get("/web?actor=owner", headers=auth).json()
-                if not seen["busy"]:
-                    break
-                time.sleep(0.02)
+        for text in ("when is the trip?", "/new", "hello"):
+            finish(client, auth, text)
+        seen = finish(client, auth, "/chats 2")
         last = seen["lines"][-1]
     assert last["transcript"] == [{"who": "you", "text": "when is the trip?"},
                                   {"who": "agent", "text": "Friday."}]
+
+
+def test_the_page_lists_searches_reads_and_deletes(make_service):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service([says("Lisbon in May."), says("1.5 bar.")], web=True)
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    with TestClient(create_app(service, token=token)) as client:
+        finish(client, auth, "where should we go?")
+        finish(client, auth, "/new")
+        finish(client, auth, "boiler pressure?")
+        listed = client.get("/web/chats", headers=auth,
+                            params={"actor": "owner"}).json()
+        assert [r["title"] for r in listed["rows"]] == ["boiler pressure?",
+                                                         "where should we go?"]
+        assert listed["rows"][0]["open"] and not listed["rows"][1]["open"]
+        assert listed["rows"][1]["agent"] == "greeter"
+        found = client.get("/web/chats", headers=auth,
+                           params={"actor": "owner", "q": "lisbon"}).json()["rows"]
+        assert [r["title"] for r in found] == ["where should we go?"]
+        old = found[0]["id"]
+        read = client.get(f"/web/chats/{old}", headers=auth,
+                          params={"actor": "owner"}).json()
+        assert read["transcript"][1] == {"who": "agent", "text": "Lisbon in May."}
+        assert client.get(f"/web/chats/{old}", headers=auth,
+                          params={"actor": "guest"}).status_code == 404
+        now = listed["rows"][0]["id"]
+        assert client.request("DELETE", f"/web/chats/{now}", headers=auth,
+                              params={"actor": "owner"}).status_code == 409
+        assert client.request("DELETE", f"/web/chats/{old}", headers=auth,
+                              params={"actor": "owner"}).status_code == 200
+        assert client.get(f"/web/chats/{old}", headers=auth,
+                          params={"actor": "owner"}).status_code == 404
+
+
+def test_the_page_carries_one_on(make_service):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service([says("Lisbon."), says("hi"), says("Book flights.")], web=True)
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    with TestClient(create_app(service, token=token)) as client:
+        finish(client, auth, "where should we go?")
+        finish(client, auth, "/new")
+        finish(client, auth, "hello")
+        old = client.get("/web/chats", headers=auth, params={
+            "actor": "owner", "q": "where"}).json()["rows"][0]["id"]
+        seen = finish(client, auth, f"/chats open {old}")
+        assert seen["lines"][-1]["transcript"][0]["text"] == "where should we go?"
+        finish(client, auth, "and then?")
+    rows = service.past.listed("owner", "greeter")
+    assert [(r.title, r.turns) for r in rows][0] == ("where should we go?", 2)

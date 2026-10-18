@@ -515,6 +515,46 @@ def create_app(service: Service, *, token: str,
         url, said = await service.accounts_page(actor)
         return {"url": url, "said": said}
 
+    # ---- past conversations (past.py): the page's history -------------------
+
+    @app.get("/web/chats")
+    async def web_chats(actor: str = "", q: str = "",
+                        authorization: str | None = Header(default=None)) -> dict:
+        """Every conversation this person has had, with every agent, newest
+        first; ``q`` keeps the ones that say every word (marked in each
+        row's ``snippet`` between \\u0002 and \\u0003)."""
+        check(authorization)
+        web_for(actor)
+        return {"rows": service.past.page_rows(actor, q)}
+
+    @app.get("/web/chats/{conversation_id}")
+    async def web_chat(conversation_id: str, actor: str = "",
+                       authorization: str | None = Header(default=None)) -> dict:
+        """One conversation to read: its row, its entries (tools and all)
+        and its transcript. Only ever the person's own."""
+        check(authorization)
+        web_for(actor)
+        kept = service.past.read(actor, conversation_id)
+        if kept is None:
+            raise HTTPException(status_code=404, detail="that conversation is gone")
+        return {**kept, "agent": kept["folder"],
+                "open": conversation_id in service.past.open_ids(actor)}
+
+    @app.delete("/web/chats/{conversation_id}")
+    async def web_chat_delete(conversation_id: str, actor: str = "",
+                              authorization: str | None = Header(default=None)) -> dict:
+        """Gone for good. Not one open in a chat now: its next turn would
+        write it again. To carry one on, the page says ``/chats open ID``."""
+        check(authorization)
+        web_for(actor)
+        if conversation_id in service.past.open_ids(actor):
+            raise HTTPException(status_code=409,
+                                detail="that conversation is open in a chat now -- "
+                                       "start a new one there first (/new)")
+        if not service.past.delete(actor, conversation_id):
+            raise HTTPException(status_code=404, detail="that conversation is gone")
+        return {"deleted": conversation_id}
+
     @app.get("/web/file")
     async def web_file(actor: str = "", line: int = 0, n: int = 0,
                        authorization: str | None = Header(default=None)) -> Any:

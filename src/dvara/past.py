@@ -1,23 +1,46 @@
-"""Past conversations: kept when ``/new`` ends one, opened again by a word.
+"""Past conversations: every one kept, found by its words, opened again.
 
-``/new`` let a conversation go for good (fresh.py), which was right for
-the habit it was meant to break and wrong for everything else: "what did
-we work out about the trip last week?" had nowhere to go but the
-person's memory. Yantra's page has saved sessions; nothing here did.
+``/new`` used to let a conversation go for good (fresh.py), which was
+right for the habit it was meant to break and wrong for everything else:
+"what did we work out about the trip last week?" had nowhere to go but
+the person's memory. Then ``/new`` kept the conversation it ended, the
+newest thirty -- and the one that was never ended with ``/new``, or the
+thirty-first, was still gone.
 
-    /chats          the conversations you've finished with this agent
-    /chats 2        go back into that one
+    /chats                  every conversation with this agent, newest first
+    /chats trip             only the ones that say "trip"
+    /chats 2                go back into that one
+    /chats delete 2         ask to delete it for good
+    /chats delete 2 sure    delete it for good
 
-KEPT, NOT FORGOTTEN. ``/new`` now hands the conversation it ends to this
-book first: its saved form exactly as Yantra wrote it, a title (its
-first words), where it was (Telegram, the page) and when it ended. The
-newest ``KEEP`` per person per agent are kept.
+EVERY CONVERSATION, AS IT GOES. Each turn writes its conversation to the
+person's own log -- Yantra's ``history.ConversationLog``, the same one
+its terminal and page keep -- under the conversation's id. ``/new``
+only starts a new id; there is nothing left to copy. A conversation cut
+off by a restart is there, and so is the one nobody ended. A run a
+schedule started is not a conversation and is not kept here; Samay's
+logbook has it.
 
-OPENING ONE SWAPS. The conversation you are in is kept the same way, and
-the one you named becomes it, on the channel you asked from -- one begun
-on Telegram can be carried on on the page. Nothing else moves: the
-folder, the files, the schedules and the ledger never belonged to a
-conversation. Like ``/new``, never under a turn still working on it.
+ONE FILE PER PERSON. ``past/<person>.sqlite`` holds a person's
+conversations with every agent (each row's folder is the agent's name),
+so one person's never shows to another by construction, not by a WHERE
+clause, and a person who leaves can be removed by removing a file.
+
+OPENING ONE MOVES THE CONVERSATION, NOT A COPY. The one you named
+becomes the conversation here, on the channel you asked from -- one
+begun on Telegram can be carried on on the page -- and its next turn
+grows its own row. The one you were in is already kept. One still open
+in another chat is not opened twice: two chats writing one row would
+each overwrite the other, so it says where it is open. Nothing else
+moves: the folder, the files, the schedules and the ledger never
+belonged to a conversation. Like ``/new``, never under a turn still
+working on it.
+
+DELETED MEANS GONE, ASKED ONCE. A chat has no dialog, so ``/chats delete
+N`` says which conversation that is and what to send to delete it; only
+``/chats delete N sure`` does. The log deletes for good (Yantra's note
+130). Not the conversation open here: its next turn would write it
+again.
 
 WHAT YOU SEE IS THE CONVERSATION. The answer to ``/chats N`` ends with
 its last few exchanges, so a phone shows where it was; a page gets the
@@ -33,28 +56,22 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote, unquote
+
+from yantra.history import END, HIT, ConversationLog, Kept, new_id, title_of
 
 WORD = "/chats"
-#: Conversations kept per person per agent; the oldest go first.
-KEEP = 30
-#: A title's length, at most.
-TITLE = 60
+#: Rows shown in a chat's list; a page asks for as many as it wants.
+SHOWN_ROWS = 30
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS past (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    actor    TEXT NOT NULL,
-    agent    TEXT NOT NULL,
-    came     TEXT NOT NULL,
-    title    TEXT NOT NULL,
-    turns    INTEGER NOT NULL,
-    ended    TEXT NOT NULL,
-    payload  TEXT NOT NULL
+CURRENT = """
+CREATE TABLE IF NOT EXISTS current (
+    key           TEXT PRIMARY KEY,
+    conversation  TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS past_who ON past (actor, agent, id);
 """
 
 CAME = {"telegram": "Telegram", "web": "the page", "http": "HTTP"}
@@ -70,41 +87,14 @@ def picked(text: str) -> str:
     return parts[1].strip() if len(parts) > 1 else ""
 
 
-@dataclass(frozen=True)
-class Past:
-    id: int
-    came: str
-    title: str
-    turns: int
-    ended: datetime
-
-
 def _texts(message: dict) -> str:
     return " ".join(b.get("text", "") for b in message.get("content") or []
                     if isinstance(b, dict) and b.get("kind") == "text")
 
 
-def title_of(payload: dict) -> str:
-    """Its first words: what the person first asked."""
-    for message in payload.get("history") or []:
-        if message.get("role") == "user":
-            words = " ".join(_texts(message).split())
-            if words:
-                return words if len(words) <= TITLE else words[:TITLE - 1] + "…"
-    return "(no words)"
-
-
-def turns_of(payload: dict) -> int:
-    """How many times the person wrote in it (not tool results)."""
-    return sum(1 for m in payload.get("history") or []
-               if m.get("role") == "user" and _texts(m).strip())
-
-
-def last_answer(payload: dict) -> str:
-    for message in reversed(payload.get("history") or []):
-        if message.get("role") == "assistant" and _texts(message).strip():
-            return " ".join(_texts(message).split())
-    return ""
+def came_of_key(key: str) -> str:
+    """Where a chat is, from its session key (``actor/agent/thread``)."""
+    return came_of(unquote(key.rsplit("/", 1)[-1]))
 
 
 def came_of(thread: str) -> str:
@@ -113,69 +103,190 @@ def came_of(thread: str) -> str:
 
 
 class PastBook:
-    def __init__(self, path: Path, *, keep: int = KEEP) -> None:
-        self.keep = keep
+    """Each person's log, and which conversation each chat is in now."""
+
+    def __init__(self, folder: Path) -> None:
+        self.folder = Path(folder)
+        self.folder.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._db = sqlite3.connect(Path(path), check_same_thread=False)
-        self._db.executescript(SCHEMA)
+        self._logs: dict[str, ConversationLog] = {}
+        self._db = sqlite3.connect(self.folder / "current.sqlite3",
+                                   check_same_thread=False)
+        self._db.executescript(CURRENT)
         self._db.commit()
 
     def close(self) -> None:
         with self._lock:
+            for log in self._logs.values():
+                log.close()
+            self._logs.clear()
             self._db.close()
 
-    def keep_one(self, actor: str, agent: str, thread: str, payload: dict) -> None:
-        """A finished conversation, kept; the oldest beyond ``keep`` go."""
-        if not turns_of(payload):
-            return               # nothing the person said: nothing to go back to
+    def log(self, actor: str) -> ConversationLog:
         with self._lock:
-            self._db.execute(
-                "INSERT INTO past (actor, agent, came, title, turns, ended, payload) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (actor, agent, came_of(thread), title_of(payload), turns_of(payload),
-                 datetime.now(UTC).isoformat(timespec="seconds"), json.dumps(payload)))
-            self._db.execute(
-                "DELETE FROM past WHERE actor = ? AND agent = ? AND id NOT IN ("
-                "SELECT id FROM past WHERE actor = ? AND agent = ? ORDER BY id DESC "
-                "LIMIT ?)", (actor, agent, actor, agent, self.keep))
+            if actor not in self._logs:
+                self._logs[actor] = ConversationLog(self._path(actor))
+            return self._logs[actor]
+
+    def _path(self, actor: str) -> Path:
+        # quote leaves "." alone; a leading one is escaped too, so no
+        # person's file is a dot-file or a step up (keys.py's reason).
+        name = quote(actor, safe="")
+        return self.folder / f"{'%2E' + name[1:] if name.startswith('.') else name}.sqlite"
+
+    # ---- which conversation a chat is in --------------------------------------
+
+    def current(self, key: str) -> str:
+        """The id this chat's turns are written to; a new one if none."""
+        with self._lock:
+            row = self._db.execute("SELECT conversation FROM current WHERE key = ?",
+                                   (key,)).fetchone()
+            if row:
+                return row[0]
+            made = new_id()
+            self._db.execute("INSERT INTO current (key, conversation) VALUES (?, ?)",
+                             (key, made))
+            self._db.commit()
+            return made
+
+    def _set_current(self, key: str, conversation_id: str | None) -> None:
+        with self._lock:
+            if conversation_id is None:
+                self._db.execute("DELETE FROM current WHERE key = ?", (key,))
+            else:
+                self._db.execute(
+                    "INSERT INTO current (key, conversation) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET conversation = excluded.conversation",
+                    (key, conversation_id))
             self._db.commit()
 
-    def listed(self, actor: str, agent: str) -> list[Past]:
-        """Newest first."""
+    def open_on(self, actor: str, conversation_id: str) -> list[str]:
+        """Where it is open right now: the chats (keys) of this person's
+        whose turns are writing it."""
+        prefix = quote(actor, safe="") + "/"
         with self._lock:
-            rows = self._db.execute(
-                "SELECT id, came, title, turns, ended FROM past WHERE actor = ? AND "
-                "agent = ? ORDER BY id DESC", (actor, agent)).fetchall()
-        return [Past(r[0], r[1], r[2], r[3], datetime.fromisoformat(r[4])) for r in rows]
+            return [r[0] for r in self._db.execute(
+                "SELECT key FROM current WHERE conversation = ? AND substr(key, 1, ?) = ?",
+                (conversation_id, len(prefix), prefix)).fetchall()]
 
-    def take(self, actor: str, agent: str, past_id: int) -> dict | None:
-        """The conversation, out of the book (it is about to be current)."""
+    def open_ids(self, actor: str) -> set[str]:
+        """Every conversation open in one of this person's chats now."""
+        prefix = quote(actor, safe="") + "/"
         with self._lock:
-            row = self._db.execute(
-                "SELECT payload FROM past WHERE actor = ? AND agent = ? AND id = ?",
-                (actor, agent, past_id)).fetchone()
-            if row is None:
-                return None
-            self._db.execute("DELETE FROM past WHERE id = ?", (past_id,))
-            self._db.commit()
-        return json.loads(row[0])
+            return {r[0] for r in self._db.execute(
+                "SELECT conversation FROM current WHERE substr(key, 1, ?) = ?",
+                (len(prefix), prefix)).fetchall()}
+
+    def page_rows(self, actor: str, words: str = "") -> list[dict]:
+        """The page's list: every agent's, each row saying which agent and
+        whether it is open in a chat now (a page offers no delete there)."""
+        open_now = self.open_ids(actor)
+        return [{**r.as_dict(), "agent": r.folder, "open": r.id in open_now}
+                for r in self.listed(actor, None, words)]
+
+    # ---- writing ---------------------------------------------------------------
+
+    def kept(self, actor: str, agent: str, key: str, thread: str, payload: dict) -> None:
+        """A turn's conversation, as it is now, into the person's log."""
+        self.log(actor).keep(self.current(key), payload, road=came_of(thread),
+                             folder=agent)
+
+    def ended(self, key: str) -> None:
+        """``/new``: the next turn here starts a new conversation."""
+        self._set_current(key, None)
+
+    def opened(self, key: str, conversation_id: str) -> None:
+        """``/chats N``: this chat's next turn grows that conversation."""
+        self._set_current(key, conversation_id)
+
+    def delete(self, actor: str, conversation_id: str) -> bool:
+        return self.log(actor).delete(conversation_id)
 
     def forget_all(self, actor: str) -> None:
+        """A person removed: their file goes."""
         with self._lock:
-            self._db.execute("DELETE FROM past WHERE actor = ?", (actor,))
-            self._db.commit()
+            log = self._logs.pop(actor, None)
+        if log is not None:
+            log.close()
+        with suppress(FileNotFoundError):
+            self._path(actor).unlink()
+
+    # ---- reading ---------------------------------------------------------------
+
+    def listed(self, actor: str, agent: str | None = None, words: str = "",
+               *, limit: int = 200) -> list[Kept]:
+        """Newest first; ``agent`` None is every agent's."""
+        if not self._path(actor).exists():
+            return []
+        return self.log(actor).listed(words, folder=agent, limit=limit)
+
+    def payload(self, actor: str, conversation_id: str) -> dict | None:
+        if not self._path(actor).exists():
+            return None
+        return self.log(actor).payload(conversation_id)
+
+    def read(self, actor: str, conversation_id: str) -> dict | None:
+        """One conversation for a page: its row, its entries (tools and
+        all, as Yantra's reading view draws them) and its transcript."""
+        if not self._path(actor).exists():
+            return None
+        log = self.log(actor)
+        kept = log.read(conversation_id)
+        if kept is None:
+            return None
+        payload = log.payload(conversation_id) or {}
+        return {**kept, "transcript": transcript(payload)}
+
+    # ---- what was kept before every conversation was -------------------------
+
+    def bring_in(self, old: Path) -> int:
+        """The book ``/new`` kept (past.sqlite3), moved into each person's
+        log once, with when each one ended; the old file then goes.
+        Returns how many came over."""
+        if not old.exists():
+            return 0
+        db = sqlite3.connect(old)
+        try:
+            rows = db.execute("SELECT actor, agent, came, ended, payload FROM past "
+                              "ORDER BY id").fetchall()
+        except sqlite3.Error:
+            rows = []
+        finally:
+            db.close()
+        for actor, agent, came, ended, payload in rows:
+            self.log(actor).keep(new_id(), json.loads(payload), road=came,
+                                 folder=agent, at=ended)
+        old.unlink()
+        return len(rows)
 
 
-def listing(agent: str, rows: list[Past]) -> str:
+def listing(agent: str, rows: list[Kept], words: str = "", *,
+            open_id: str | None = None, numbers: dict[str, int] | None = None) -> str:
+    """The list a chat shows. ``numbers`` is each row's place in the
+    whole list, when ``rows`` is a search's: ``/chats N`` counts that."""
     if not rows:
-        return (f"You have no earlier conversations with {agent}. When you send /new, "
-                f"the one you end is kept here.")
-    out = [f"Your earlier conversations with {agent}, newest first:"]
-    for n, row in enumerate(rows, start=1):
-        when = row.ended.astimezone().strftime("%a %-d %b %H:%M")
-        out.append(f"{n}. {row.title} — {when}, on {row.came}, {row.turns} "
+        if words:
+            return (f"None of your conversations with {agent} say “{words}”. "
+                    f"Send /chats to see them all.")
+        return (f"You have no conversations with {agent} kept yet. Each one is "
+                f"kept by itself as you talk.")
+    head = (f"Your conversations with {agent} that say “{words}”, newest first:"
+            if words else f"Your conversations with {agent}, newest first:")
+    out = [head]
+    for place, row in enumerate(rows[:SHOWN_ROWS], start=1):
+        n = (numbers or {}).get(row.id, place)
+        when = datetime.fromisoformat(row.updated_at).astimezone().strftime("%a %-d %b %H:%M")
+        here = " (this one)" if row.id == open_id else ""
+        out.append(f"{n}. {row.title}{here} — {when}, on {row.road}, {row.turns} "
                    f"message{'s' if row.turns != 1 else ''}")
-    out += ["", "Send /chats N to go back into one; this one is kept in its place."]
+        if row.snippet:
+            snip = " ".join(row.snippet.replace(HIT, "*").replace(END, "*").split())
+            out.append(f"    {snip}")
+    if len(rows) > SHOWN_ROWS:
+        out.append(f"… and {len(rows) - SHOWN_ROWS} older. Add a word to find one: "
+                   f"/chats trip")
+    out += ["", "Send /chats N to go back into one, /chats WORDS to find one, "
+                "/chats delete N to delete one for good."]
     return "\n".join(out)
 
 
@@ -204,7 +315,7 @@ def transcript(payload: dict) -> list[dict]:
 
 
 def reopened(payload: dict, agent: str = "") -> str:
-    lines = [f"Back in: {title_of(payload)}"]
+    lines = [f"Back in: {title_of(payload) or '(no words)'}"]
     said = transcript(payload)[-SHOWN:]
     if said:
         lines += ["", "Where we left it:"]

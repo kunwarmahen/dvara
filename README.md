@@ -420,17 +420,23 @@ And anyone can start their conversation with an agent over:
 ```
 /new                           start over; files, schedules, accounts and
                                the ledger all stay, and this conversation is kept
-/chats                         the earlier ones, newest first
+/chats                         every conversation, newest first
+/chats boiler                  only the ones that say "boiler"
 /chats 2                       go back into one (the one you're in is kept)
+/chats delete 2                delete one for good (asks you to add "sure")
 ```
 
 A chat is one conversation for as long as it lasts, and a long one can
 teach a small model a habit (an old way of reading a site, kept after a
 better tool arrived). Telegram's own "Clear history" never reaches the
-bot; `/new` does ([notes/28](notes/28-starting-over.md)). What it ends
-is kept, the newest 30 per person per agent, and `/chats` goes back into
-one, on whichever channel you ask from
-([notes/45](notes/45-going-back.md)).
+bot; `/new` does ([notes/28](notes/28-starting-over.md)). Every
+conversation is kept as it goes, whether `/new` ends it or not, in each
+person's own file. `/chats` finds one by its words and goes back into
+it, on whichever channel you ask from
+([notes/45](notes/45-going-back.md),
+[notes/50](notes/50-every-conversation-kept.md)). A page gets the same
+through `GET /web/chats`, `GET /web/chats/ID` and `DELETE
+/web/chats/ID`; Sarathi's home page has a History button on them.
 
 With an agent that remembers people (below), anyone can see and choose
 what it keeps about them:
@@ -1188,7 +1194,7 @@ reads that person's key from `<state>/memory.json`
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)) |
-| `past.py` | `/chats`: what `/new` ended, kept (30 per person per agent) and listed; `/chats N` swaps it back in, keeping the one it replaces ([notes/45](notes/45-going-back.md)) |
+| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |

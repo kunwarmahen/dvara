@@ -111,6 +111,7 @@ from yantra import (
 from yantra.config import guess_provider
 from yantra.errors import ConfigError, ToolError
 from yantra.hold import check_answers, held_task
+from yantra.session import snapshot
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
@@ -309,8 +310,10 @@ class Service:
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
-        #: Conversations ``/new`` ended, for ``/chats`` (past.py).
-        self.past = past.PastBook(self.state / "past.sqlite3")
+        #: Every conversation, one log per person, for ``/chats`` and the
+        #: page's history (past.py). What ``/new`` kept before comes over once.
+        self.past = past.PastBook(self.state / "past")
+        self.past.bring_in(self.state / "past.sqlite3")
         self.runs = RunStore(self.state / "runs.sqlite3")
         # Always open, even when nothing is configured to hold: a turn
         # held yesterday by a service started with --on-timeout hold can
@@ -1327,6 +1330,14 @@ class Service:
             # synthesized results -- so what is written is always loadable.
             self.sessions.save(agent, provider_name=provider_name,
                                session_id=key)
+            if not is_unattended():
+                # Kept to read again (past.py) -- a person's conversation,
+                # never a schedule's run, and never at the turn's cost.
+                try:
+                    self.past.kept(who.id, run.agent, key, run.thread,
+                                   snapshot(agent, provider_name))
+                except Exception as exc:
+                    self._note(f"dvara: conversation not kept: {exc}")
             # AND ACCOUNT FOR IT. A turn that raised on its fourth model
             # call still paid for the first three, and this is the only
             # place that knows it: the handler upstairs has a Run and no
@@ -1527,9 +1538,8 @@ class Service:
                                                 text=text, came_by=came_by,
                                                 started=started)
             self.holds.drop_key(key)
-            ending = self.sessions.load_latest(key)
-            if ending is not None:
-                self.past.keep_one(who.id, workspace_parts(key)[1], thread, ending)
+            # Already kept, turn by turn (past.py): the next one is new.
+            self.past.ended(key)
             gone = self.sessions.forget(key)
         said = fresh.STARTED_OVER if gone else fresh.NOTHING_YET
         if self.learning.drop_lesson(who.id, workspace_parts(key)[1]):
@@ -1541,32 +1551,71 @@ class Service:
 
     async def _past_words(self, key: str, *, who: Actor, agent: str, thread: str,
                           text: str) -> str | tuple[str, list[dict]]:
-        """``/chats`` lists what ``/new`` kept; ``/chats N`` swaps it in for
-        the conversation here, which is kept in its place (past.py)."""
-        rows = self.past.listed(who.id, agent)
+        """``/chats`` lists, ``/chats WORDS`` finds, ``/chats N`` goes back
+        into one, ``/chats delete N [sure]`` deletes one (past.py)."""
         pick = past.picked(text)
-        if not pick:
-            return past.listing(agent, rows)
-        if not pick.isdigit() or not 1 <= int(pick) <= len(rows):
+        open_id = self.past.current(key) if self.sessions.load_latest(key) else None
+        verb, _, rest = pick.partition(" ")
+        if verb.lower() == "delete" and rest.split()[:1] and rest.split()[0].isdigit():
+            n, sure = rest.split()[0], rest.split()[1:2] == ["sure"]
+            return self._past_delete(who, agent, int(n), sure, open_id)
+        rows = self.past.listed(who.id, agent)
+        if verb.lower() == "open" and rest.strip():
+            # ``/chats open N``, as Yantra's terminal says it, or ``/chats
+            # open ID``: what a page sends for the row it drew.
+            pick = rest.strip()
+            if not pick.isdigit():
+                place = next((n for n, r in enumerate(rows, 1) if r.id == pick), None)
+                if place is None:
+                    return "That conversation is gone. Send /chats to see what's kept."
+                pick = str(place)
+        if not pick.isdigit():
+            # Found ones keep their number in the whole list, so the N
+            # sent next means the row that was on screen.
+            return past.listing(agent, self.past.listed(who.id, agent, pick)
+                                if pick else rows, pick, open_id=open_id,
+                                numbers={r.id: n for n, r in enumerate(rows, 1)})
+        if not 1 <= int(pick) <= len(rows):
             return (f"There's no conversation {pick} to go back to. Send /chats to "
                     f"see them." if rows else past.listing(agent, rows))
+        chosen = rows[int(pick) - 1]
+        if chosen.id == open_id:
+            return "That's the conversation we're in now."
+        elsewhere = [k for k in self.past.open_on(who.id, chosen.id) if k != key]
+        if elsewhere:
+            return (f"That conversation is still going on {past.came_of_key(elsewhere[0])}. "
+                    f"Carry it on there, or send /new there first.")
         if key in self._locks:
             return fresh.STILL_ANSWERING.replace("/new", f"/chats {pick}")
         async with self._locks.hold(key):
-            payload = self.past.take(who.id, agent, rows[int(pick) - 1].id)
+            payload = self.past.payload(who.id, chosen.id)
             if payload is None:
                 return "That conversation just went. Send /chats to see what's kept."
             self.holds.drop_key(key)
-            current = self.sessions.load_latest(key)
-            if current is not None:
-                self.past.keep_one(who.id, agent, thread, current)
             self.sessions.forget(key)
             self.sessions.save_payload(payload, session_id=key)
+            self.past.opened(key, chosen.id)
         said = past.reopened(payload, agent)
         if self.learning.drop_lesson(who.id, agent):
             from yantra.skills.lesson import DROPPED
             said = f"{said}\n\n{DROPPED}"
         return said, past.transcript(payload)
+
+    def _past_delete(self, who: Actor, agent: str, n: int, sure: bool,
+                     open_id: str | None) -> str:
+        """Asked once: a chat has no dialog, so the word ``sure`` is it."""
+        rows = self.past.listed(who.id, agent)
+        if not 1 <= n <= len(rows):
+            return f"There's no conversation {n}. Send /chats to see them."
+        chosen = rows[n - 1]
+        if chosen.id == open_id:
+            return ("That's the conversation we're in now. Send /new first, then "
+                    "delete it.")
+        if not sure:
+            return (f"Delete “{chosen.title}” for good? It can't be brought back. "
+                    f"Send /chats delete {n} sure to delete it.")
+        self.past.delete(who.id, chosen.id)
+        return f"Deleted “{chosen.title}” for good."
 
     async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
                          text: str, came_by: str | None, started: datetime,

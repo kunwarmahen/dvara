@@ -770,8 +770,9 @@ class TelegramBot:
                          "/learn watch and what it's for, then do each step on "
                          "your phone and send next. /learn done when we're "
                          "through.")
-        lines.append("Send /new to start our conversation over; /chats lists the "
-                     "earlier ones, to go back into one.")
+        lines.append("Send /new to start our conversation over. Every conversation "
+                     "is kept: /chats lists them, /chats and a word finds one, "
+                     "/chats N goes back into it.")
         return "\n\n".join(lines)
 
     def _reply_messages(self, text: str, receipt: str | None) -> list[str]:

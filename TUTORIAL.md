@@ -1233,6 +1233,31 @@ its own conversation (one on Telegram doesn't continue there), and the
 person is the same person on both, with the same allowance, rules and
 questions ([notes/34](notes/34-a-chat-on-a-page.md)).
 
+### Old conversations, found again
+
+Every conversation is kept as it goes, on every channel, in a file of
+each person's own (`state/past/<person>.sqlite`). Nobody has to send
+`/new` first. Try it on the terminal channel:
+
+```bash
+dvara say --actor owner --agent greeter "What pressure should a boiler show when cold?"
+dvara say --actor owner --agent greeter "/new"
+dvara say --actor owner --agent greeter "A good month for Lisbon?"
+dvara say --actor owner --agent greeter "/chats boiler"
+```
+
+The last answer lists only the boiler conversation, with *boiler*
+marked, and its number in the whole list (2). `/chats 2` goes back into
+it. `/chats delete 2` asks first; `/chats delete 2 sure` deletes it for
+good. The conversation open now can't be deleted until you `/new`.
+
+On Sarathi's home page the same thing is the **History** button: a
+search box, the list, a conversation to read, **Carry on in the chat**,
+and **Delete**. Deleting there clears the person's history. The page's
+own chat scroll and the owner's run ledger keep their copies of those
+lines until they age out
+([notes/50](notes/50-every-conversation-kept.md)).
+
 ## 20 · What an agent remembers about each person
 
 A package can ask Yantra to remember the people it talks to: add this to
@@ -1629,6 +1654,7 @@ Each topic, and the note that argues it:
 | `notes/43-a-box-for-each-tool.md` | the settings page's tool checkboxes: every tool an agent could have, in plain words, marked asks / runs unasked |
 | `notes/44-what-they-send.md` | a picture or file the person sends: kept in their folder under `from-you/`, a picture shown to a model that can see |
 | `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again |
+| `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
 | `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |
 
