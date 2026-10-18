@@ -92,8 +92,11 @@ drop an open lesson and say so (Yantra's notes/129).
 
 ## What is not here yet
 
-* **A lesson run for real through Telegram, start to skill.** The first
-  try found the mix-ups above; the next one is the owner's, after the
-  rebuild.
+* ~~**A lesson run for real through Telegram, start to skill.**~~ Done
+  by the owner on the iPhone: `/learn watch check my Coinbase portfolio
+  value`, two nexts, `/learn done`, Keep. Asked next time, the agent
+  used the skill only when pushed; the person's own skills are now
+  marked `[yours]` in the roster, and it reaches for this one first
+  (Yantra's notes/129).
 * **A Teach button.** The words only; a page could open a lesson from
   the skills panel.
