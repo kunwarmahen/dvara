@@ -1507,9 +1507,17 @@ agent: Writing down what you taught me (2 step(s)) as one skill. I'll send it to
 
 The offer comes with **Keep** and **Not now**, like any other. While a
 lesson is open, the agent does only the step it's told and no skill is
-offered after each one. On a phone, `/learn watch` lets the person do
-each step with their own hand and send `next`; `/learn stop` drops a
-lesson ([notes/49](notes/49-a-job-taught-step-by-step.md)).
+offered after each one.
+
+**Telling or showing: pick the one you'll do.** `/learn start` learns
+only the steps you *type* and it carries out. Steps you do yourself on
+the phone aren't seen in it. To do them by hand, send `/learn watch`
+and what it's for, then `next` after each step, and the agent says what
+it thinks you did. `/learn done` on a lesson nothing was taught in says
+so and keeps the lesson open. A new `/learn start` replaces a lesson
+that's still empty. `/new` and `/chats N` drop an open lesson, since
+the conversation that told the agent it was being taught is gone.
+`/learn stop` drops one too ([notes/49](notes/49-a-job-taught-step-by-step.md)).
 
 **`/tools` and `/schedules`.** `/tools` lists what the agent could use
 on your last message, grouped by where each tool came from. `/schedules`

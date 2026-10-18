@@ -53,7 +53,12 @@ every turn after it is kept in the lesson -- on disk beside the offers,
 since the agent is built anew for each message -- and no look runs
 after them; ``/learn done`` hands the whole walk to the same look, and
 its offer comes as any other. ``/learn watch <what>`` is the same with
-the person's own hand on the phone; ``/learn stop`` drops it.
+the person's own hand on the phone; ``/learn stop`` drops it, and so do
+``/new`` and ``/chats N``, which take away the conversation whose
+opening told the agent it was being taught. A lesson nothing was taught
+in yet is replaced by a new start, and ``/learn done`` on it says how
+to teach rather than looking -- on a real iPhone, a person did the
+steps by hand in a ``start`` lesson, which learns only what it's told.
 
 ``YANTRA_LEARN=off`` stops the looks (Yantra's switch), ``/learn``'s
 too; uses of learned skills are still counted, as Yantra counts them in
@@ -248,8 +253,8 @@ class Learning:
                     else "No lesson is open."), None
         if verb not in ("start", "watch"):
             return USAGE, None
-        if (open_ := self.lesson(who.id, name)) is not None:
-            return open_.status(), None
+        if (open_ := self.lesson(who.id, name)) is not None and not open_.empty:
+            return open_.status() + " (Or /learn stop, then start again.)", None
         if not rest:
             return USAGE, None
         lesson = Lesson(task=rest, watching=verb == "watch")
@@ -269,7 +274,11 @@ class Learning:
             return "Learning skills is switched off here (YANTRA_LEARN=off)."
         lesson = self.lesson(who.id, name)
         if done and lesson is None:
-            return "No lesson is open: /learn start <what it's for> begins one."
+            return "No lesson is open: /learn start and what it's for begins one."
+        if lesson is not None and lesson.empty:
+            from yantra.skills.lesson import NOTHING_YET
+
+            return NOTHING_YET          # kept open: they may go on
         built = self._build(spec, who, key, gated=False)
         if isinstance(built, str):
             return built

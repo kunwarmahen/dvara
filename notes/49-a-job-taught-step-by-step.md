@@ -80,10 +80,20 @@ offer on the page                        send-a-whatsapp-message, Keep / Not now
 The same lesson on a real iPhone, from Yantra's terminal with
 `qwen3.8-64k`, is Yantra's notes/129 receipt.
 
+## Found in use
+
+The owner's first lesson on Telegram (a Coinbase portfolio, on the
+iPhone) came back with nothing to keep. The steps had been done by hand
+in a `start` lesson, a second `/learn start` had been answered with the
+first one's status, and `/new` in between had left the lesson open with
+its opening gone. Now a new start replaces an empty lesson, `/learn
+done` on one says how to teach (and keeps it), and `/new` and `/chats N`
+drop an open lesson and say so (Yantra's notes/129).
+
 ## What is not here yet
 
-* **A lesson run for real through Telegram.** The words are the same
-  code on every channel; the real run is the owner's (on a phone,
-  through Sarathi).
+* **A lesson run for real through Telegram, start to skill.** The first
+  try found the mix-ups above; the next one is the owner's, after the
+  rebuild.
 * **A Teach button.** The words only; a page could open a lesson from
   the skills panel.

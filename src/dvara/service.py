@@ -1532,6 +1532,11 @@ class Service:
                 self.past.keep_one(who.id, workspace_parts(key)[1], thread, ending)
             gone = self.sessions.forget(key)
         said = fresh.STARTED_OVER if gone else fresh.NOTHING_YET
+        if self.learning.drop_lesson(who.id, workspace_parts(key)[1]):
+            # Its opening went with the conversation: the agent would no
+            # longer know it was being taught (learning.py).
+            from yantra.skills.lesson import DROPPED
+            said = f"{said} {DROPPED}"
         return f"{said}\n\n{noticed}" if noticed else said
 
     async def _past_words(self, key: str, *, who: Actor, agent: str, thread: str,
@@ -1557,7 +1562,11 @@ class Service:
                 self.past.keep_one(who.id, agent, thread, current)
             self.sessions.forget(key)
             self.sessions.save_payload(payload, session_id=key)
-        return past.reopened(payload, agent), past.transcript(payload)
+        said = past.reopened(payload, agent)
+        if self.learning.drop_lesson(who.id, agent):
+            from yantra.skills.lesson import DROPPED
+            said = f"{said}\n\n{DROPPED}"
+        return said, past.transcript(payload)
 
     async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
                          text: str, came_by: str | None, started: datetime,

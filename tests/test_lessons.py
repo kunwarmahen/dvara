@@ -100,11 +100,12 @@ class TestALesson:
         assert line["offer"]["name"] == "send-a-whatsapp-message"
         assert service.learning.lesson("owner", "helper") is None
 
-    def test_a_second_start_says_how_far_the_first_got(self, make_service, helper):
-        service = make_service(walk()[:1], policy=Policy(mode="yolo"), actors=PEOPLE)
-        run(service, say(service, "/learn start x"))
+    def test_a_second_start_over_steps_says_how_far_the_first_got(self, make_service, helper):
+        service = make_service(walk()[:3], policy=Policy(mode="yolo"), actors=PEOPLE)
+        run(service, say(service, "/learn start x"), say(service, "open WhatsApp"))
         again, = run(service, say(service, "/learn start y"))
         assert again.text.startswith("You're teaching me how to x")
+        assert "/learn stop, then start again" in again.text
 
     def test_stop_drops_it_and_done_then_has_nothing(self, make_service, helper):
         service = make_service(walk()[:1], policy=Policy(mode="yolo"), actors=PEOPLE)
@@ -124,4 +125,33 @@ class TestALesson:
     def test_a_word_it_does_not_know_shows_how(self, make_service, helper):
         service = make_service([], actors=PEOPLE)
         reply, = run(service, say(service, "/learn begin"))
-        assert "/learn start <what it's for>" in reply.text
+        assert "/learn start and what the job is for" in reply.text
+
+
+class TestTheMixUps:
+    """From a real run on Telegram: a second start answered with the first's
+    status (0 steps); steps done by hand in a start lesson; /new leaving the
+    lesson open with its opening gone."""
+
+    def test_a_start_over_an_empty_lesson_replaces_it(self, make_service, helper):
+        service = make_service([says("Ready."), says("Ready.")],
+                               policy=Policy(mode="yolo"), actors=PEOPLE)
+        run(service, say(service, "/learn start coinbase current portfolio value"))
+        again, = run(service, say(service, "/learn start check my Coinbase value"))
+        assert again.text == "Ready."
+        assert service.learning.lesson("owner", "helper").task == "check my Coinbase value"
+
+    def test_done_with_nothing_taught_says_how_and_keeps_it(self, make_service, helper):
+        service = make_service([says("Ready.")], policy=Policy(mode="yolo"), actors=PEOPLE)
+        run(service, say(service, "/learn start x"))
+        done, = run(service, say(service, "/learn done"))
+        assert "haven't shown me any steps" in done.text and "/learn watch" in done.text
+        assert service.learning.lesson("owner", "helper") is not None
+        assert service.scripted.script == []          # no write-up was asked for
+
+    def test_new_drops_the_lesson_and_says_so(self, make_service, helper):
+        service = make_service([says("Ready.")], policy=Policy(mode="yolo"), actors=PEOPLE)
+        run(service, say(service, "/learn start x"))
+        fresh, = run(service, say(service, "/new"))
+        assert "lesson you'd started was dropped" in fresh.text
+        assert service.learning.lesson("owner", "helper") is None
