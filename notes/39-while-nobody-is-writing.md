@@ -30,7 +30,7 @@ numbered for `/remember`, under the agent's name:
 greeter: Looking back over our conversation, I noticed this about you:
 1. Lives in Raleigh (near RDU airport).
 2. Works night shifts at a hospital.
-Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
 ```
 
 * **ONCE, UNTIL THEY WRITE AGAIN.** The look back is a run of its own

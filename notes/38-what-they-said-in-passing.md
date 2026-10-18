@@ -32,6 +32,8 @@ fact back, only the owner could, in the store itself.
 /remember            what I noticed, numbered, waiting for your word
 /remember 1 3        keep those
 /remember all        keep all of it
+/remember not 2      not that one, and never offered again
+/remember none       none of it, never offered again
 ```
 
 Like `/files` and `/new` ([note 28](28-starting-over.md)), these are
@@ -76,6 +78,31 @@ readable by the owner alone, at most twelve per person, until the person
 sends `/remember` with the numbers. A list nobody answers is replaced by
 the next look back. Nothing goes to the store until they say so.
 
+**WHAT THEY TURNED DOWN STAYS TURNED DOWN.** Leaving a fact unanswered
+was the only way to say no, and it did not hold: the next `/new` reads
+the same person the same way and lists the same fact again, every time
+they start over. `/remember not 1 2` drops those and keeps their words in
+the same file as declined (two hundred at most per person); a candidate
+that is the same fact as one declined (the head rule above) is never
+listed again, at `/new`, after a quiet while, or as a turn's hint.
+`/remember none` declines all that is waiting. Declining opens no store
+and asks no model. A fact the model rewords past the head rule can come
+back once; declining that wording covers it too.
+
+Run against `gemma4:12b`, the guest declines the second of three and
+mentions the night shifts again before the next `/new`:
+
+```
+$ dvara say --actor guest --agent greeter "/remember not 2"
+I won't offer these again:
+- Works as a nurse on night shifts.
+$ dvara say --actor guest --agent greeter "Still settling into Pune; the night shifts are tiring."
+$ dvara say --actor guest --agent greeter "/new"
+Starting fresh. …
+Before we started over, I noticed this about you:
+1. Lives in Pune, India (Indian Standard Time).
+```
+
 **NOT A BUTTON THAT WAITS.** A yes/no question on Telegram would have
 been the obvious shape, since the queue of questions already exists
 ([note 12](12-taken-down-everywhere-it-went.md)). But a question waits
@@ -115,7 +142,7 @@ Before we started over, I noticed this about you:
 2. Their dog is named Bruno.
 3. Works night shifts as a nurse, which shapes their daily schedule (e.g., a 7 a.m. dog walk before the rest of the day wakes up).
 4. Is learning Marathi, so language questions they ask are most likely in Marathi rather than another Indian language.
-Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
 
 $ dvara … say … "/remember 1 3"
 Kept:
@@ -142,7 +169,9 @@ login running Dvara.
 
 `tests/test_remembering.py`: `/new` looks back and lists but keeps
 nothing; `/remember` keeps the chosen ones under that person's own name
-and leaves the rest; numbers never listed are refused; `/memory` lists
+and leaves the rest; numbers never listed are refused; a fact turned
+down with `/remember not` or `none` is not listed at the next `/new`,
+nor said another way, and declining asks no model; `/memory` lists
 one person's own and forgets by id with no model asked; a package that
 keeps none says so and its `/new` asks no model; a look back that fails
 still starts over; what a turn noticed is one line, and the same fact

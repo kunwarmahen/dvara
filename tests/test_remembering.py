@@ -7,8 +7,10 @@ the store would be deciding for them, and one that wrote them under the
 login it runs as would hand them to the next person who asks. So the
 tests look back, check nothing is in the store until ``/remember``, and
 check that each person's ``/memory`` shows their own facts and nobody
-else's. The other bias is a look back that costs the start-over: a model
-that fails mid-look-back must still leave the conversation forgotten.
+else's. A fact they turned down that comes back at every ``/new`` is
+the same failure from the other side: their word ignored. The other
+bias is a look back that costs the start-over: a model that fails
+mid-look-back must still leave the conversation forgotten.
 """
 
 from __future__ import annotations
@@ -185,3 +187,48 @@ def test_the_look_back_at_new_replaces_what_the_turns_noticed(tmp_path):
     assert offered.add("guest", "greeter", [Offer("Lives in Pune, India (IST)")]) == 0
     offered.add("guest", "greeter", [Offer("Is learning Marathi")], replace=True)
     assert [o.statement for o in offered.get("guest")] == ["Is learning Marathi"]
+
+
+def test_what_they_turn_down_is_never_offered_again(make_service, remembers):
+    service = make_service([says("ok"), says(LOOKED), says("ok again"), says(LOOKED)])
+    say(service, "I live in Pune", actor="guest")
+    say(service, "/new", actor="guest")
+    reply = say(service, "/remember not 1", actor="guest")
+    assert reply.text == "I won't offer these again:\n- Lives in Pune (Asia/Kolkata time)"
+    assert kept("guest") == []
+    # the next look back reads them the same way; only the cat comes back
+    say(service, "still in Pune", actor="guest")
+    again = say(service, "/new", actor="guest").text
+    assert "1. Has a cat called Biscuit" in again and "Pune" not in again
+    assert len(service.scripted.requests) == 4      # declining asked no model
+
+
+def test_remember_none_turns_down_everything_waiting(make_service, remembers):
+    service = make_service([says("ok"), says(LOOKED)])
+    say(service, "hello")
+    say(service, "/new")
+    assert "Has a cat called Biscuit" in say(service, "/remember none").text
+    assert say(service, "/remember").text.startswith("There's nothing waiting")
+    assert kept("owner") == []
+
+
+def test_not_without_numbers_asks_which():
+    rest = remembering.declining("not")[1]
+    assert remembering.chosen(rest, 2).startswith("Which ones?")
+    assert remembering.declining("skip 1 2") == (True, "1 2")
+    assert remembering.declining("1 2") == (False, "1 2")
+
+
+def test_a_declined_fact_said_another_way_stays_declined(tmp_path):
+    from dvara.remembering import Offer
+    offered = remembering.Offered(tmp_path)
+    offered.add("guest", "greeter", [Offer("Lives in Pune"), Offer("Has a cat")])
+    offered.take("guest", [1], decline=True)
+    assert offered.add("guest", "greeter", [Offer("Lives in Pune, India")],
+                       replace=True) == 0
+    assert offered.get("guest") == []
+    assert offered.declined("guest") == ["Lives in Pune"]
+    # keeping is not declining
+    offered.add("guest", "greeter", [Offer("Is learning Marathi")])
+    offered.take("guest", [1])
+    assert offered.declined("guest") == ["Lives in Pune"]

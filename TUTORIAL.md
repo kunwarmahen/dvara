@@ -1281,7 +1281,7 @@ what the agent noticed, numbered:
 Before we started over, I noticed this about you:
 1. Lives in Pune, India (relocated there in the recent past).
 2. Works night shifts as a nurse, which shapes their daily schedule (…).
-Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
 ```
 
 That list is one call to the agent's own model, on the guest's
@@ -1298,6 +1298,21 @@ What I remember about you (1):
 #1  Lives in Pune, India (relocated there in the recent past).
 Send /memory forget ID to remove one (/memory forget 1).
 ```
+
+The second one isn't something to keep? Turn it down, and the next
+`/new` won't list it again:
+
+```bash
+dvara say --actor guest --agent greeter "/remember not 1"
+```
+
+```
+I won't offer these again:
+- Works night shifts as a nurse, which shapes their daily schedule (…).
+```
+
+(It's number 1 now: keeping the first moved it up. `/remember none`
+turns down everything waiting.)
 
 `/memory forget 1` takes it back. Mid-conversation, what the agent
 notices joins the same list, and the answer gets one line saying so.
@@ -1325,7 +1340,7 @@ on Telegram, on the page, and on the phone if §22 is set up:
 greeter: Looking back over our conversation, I noticed this about you:
 1. Lives in Raleigh (near RDU airport).
 2. Works night shifts at a hospital.
-Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
 ```
 
 The conversation is still there: carry on as before. It happens once

@@ -1634,9 +1634,13 @@ class Service:
         if word == "/remember":
             if not rest and offers:
                 return remembering.listing(offers, head="I noticed this about you:")
+            decline, rest = remembering.declining(rest)
             pick = remembering.chosen(rest, len(offers))
             if isinstance(pick, str):
                 return pick
+            if decline:          # no store and no model: only the list changes
+                gone = self.offered.take(who.id, pick, decline=True)
+                return remembering.declined_words([o.statement for o in gone])
             picked = pick
         forget = None
         if word == "/memory" and rest:

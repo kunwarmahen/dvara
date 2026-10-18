@@ -433,6 +433,7 @@ what it keeps about them:
 /memory forget 2               that one, gone
 /remember                      what the agent noticed, numbered, not kept yet
 /remember 1 3                  keep those (or /remember all)
+/remember not 2                not that one, never offered again (or /remember none)
 ```
 
 `/new` looks back over the conversation first, and lists what it noticed
@@ -1043,7 +1044,8 @@ package that remembers looks back over the conversation once (Yantra's
 look back, on the agent's own model and their allowance, recorded as a
 `looked_back` run) and lists what it noticed under the answer. What
 Yantra notices mid-turn waits on the same list, with a one-line hint.
-Nothing is kept until they send `/remember 1 3` (or `all`), and
+Nothing is kept until they send `/remember 1 3` (or `all`); what they
+turn down with `/remember not 2` (or `none`) is never offered again; and
 `/memory` shows them what is kept, with `/memory forget ID` to take one
 back. The list waits in `<state>/offered.json`, yours alone
 ([notes/38](notes/38-what-they-said-in-passing.md)).
@@ -1177,7 +1179,7 @@ reads that person's key from `<state>/memory.json`
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)) |
 | `past.py` | `/chats`: what `/new` ended, kept (30 per person per agent) and listed; `/chats N` swaps it back in, keeping the one it replaces ([notes/45](notes/45-going-back.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
-| `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
+| `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
 | `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it ([notes/40](notes/40-a-notice-on-their-phone.md)) |
 | `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |

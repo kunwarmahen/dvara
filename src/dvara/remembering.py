@@ -12,6 +12,8 @@ without the owner opening the store.
     /memory forget ID    that one, gone
     /remember 1 3        keep what I noticed (the numbers I listed)
     /remember all        keep all of it
+    /remember not 2      not that one, and never offered again
+    /remember none       none of it, never offered again
 
 THE LOOK BACK IS YANTRA'S, AND SO IS WHAT IT NOTICES MID-TURN. Yantra's
 own look back (its memory/reflect.py) asks the agent's model once what
@@ -47,6 +49,16 @@ person, never the same fact twice (by its head: "Works night shifts as
 a nurse" is one fact whatever follows the comma), the newest ``WAITING``
 at most.
 What is kept goes to the store.
+
+WHAT THEY TURNED DOWN STAYS TURNED DOWN. A list nobody answers is
+replaced at the next ``/new``, and the look back reads the same person
+the same way, so a fact they never wanted came back every time they
+started over. ``/remember not 1 2`` drops those and keeps their words in
+the same file as declined (``DECLINED`` at most, the oldest go first);
+a candidate that is ``same`` as one declined is never offered again.
+Declining opens no store and asks no model. A fact reworded past
+``same`` can still come back once; declining it again covers that
+wording too.
 """
 
 from __future__ import annotations
@@ -64,6 +76,12 @@ FILE = "offered.json"
 LISTED = 30
 #: The most candidates waiting for one person; the oldest go first.
 WAITING = 12
+#: The most declined facts remembered for one person; the oldest go first.
+DECLINED = 200
+#: The words that turn the numbers down instead of keeping them.
+NOT = ("not", "no", "skip", "ignore", "drop", "never", "forget")
+#: The words that turn down everything waiting.
+NONE = ("none", "neither", "nothing")
 
 NOTHING_HERE = "{agent} doesn't keep memories about the people it talks to."
 NO_STORE = ("Your memories aren't open for you here yet. The owner can give "
@@ -122,38 +140,59 @@ class Offered:
         not added again (``same``)."""
         data = self._read()
         waiting = [] if replace else self.get(actor)
+        declined = self.declined(actor)
         fresh: list[Offer] = []
         for o in offers:
+            if any(same(o.statement, d) for d in declined):
+                continue
             if not any(same(o.statement, w.statement) for w in waiting + fresh):
                 fresh.append(o)
         if not fresh and not replace:
             return 0
         kept = (waiting + fresh)[-WAITING:]
-        if kept:
-            data[actor] = {"agent": agent,
-                           "at": datetime.now(UTC).isoformat(timespec="seconds"),
-                           "items": [{"statement": o.statement, "kind": o.kind}
-                                     for o in kept]}
-        else:
-            data.pop(actor, None)
+        self._put(data, actor, kept, declined, agent=agent)
         self._write(data)
         return len(fresh)
+
+    def _put(self, data: dict, actor: str, items: list[Offer], declined: list[str],
+             *, agent: str | None = None) -> None:
+        """This person's entry, or none when nothing waits or was declined."""
+        if not items and not declined:
+            data.pop(actor, None)
+            return
+        entry = data.get(actor) or {}
+        if agent is not None:
+            entry["agent"] = agent
+            entry["at"] = datetime.now(UTC).isoformat(timespec="seconds")
+        entry["items"] = [{"statement": o.statement, "kind": o.kind} for o in items]
+        if declined:
+            entry["declined"] = declined[-DECLINED:]
+        else:
+            entry.pop("declined", None)
+        data[actor] = entry
 
     def get(self, actor: str) -> list[Offer]:
         entry = self._read().get(actor) or {}
         return [Offer(i["statement"], i.get("kind") or "fact")
                 for i in entry.get("items", []) if i.get("statement")]
 
-    def take(self, actor: str, chosen: list[int]) -> list[Offer]:
-        """The chosen ones (1-based), removed from the list; the rest stay."""
+    def declined(self, actor: str) -> list[str]:
+        """What this person turned down, never to be offered again."""
+        entry = self._read().get(actor) or {}
+        return [d for d in entry.get("declined", []) if isinstance(d, str) and d]
+
+    def take(self, actor: str, chosen: list[int], *,
+             decline: bool = False) -> list[Offer]:
+        """The chosen ones (1-based), removed from the list; the rest stay.
+        ``decline``: their words are kept as turned down instead."""
         data = self._read()
         offers = self.get(actor)
         taken = [offers[n - 1] for n in chosen]
         left = [o for i, o in enumerate(offers, 1) if i not in chosen]
-        if left:
-            data[actor]["items"] = [{"statement": o.statement, "kind": o.kind} for o in left]
-        else:
-            data.pop(actor, None)
+        declined = self.declined(actor)
+        if decline:
+            declined += [o.statement for o in taken]
+        self._put(data, actor, left, declined)
         self._write(data)
         return taken
 
@@ -184,6 +223,18 @@ def same(a: str, b: str) -> bool:
     return _words(a) == _words(b)
 
 
+def declining(rest: str) -> tuple[bool, str]:
+    """Whether ``/remember …`` turns the numbers down (``not 1 2``,
+    ``none``), and what is left to read the numbers from."""
+    words = rest.split(maxsplit=1)
+    first = words[0].lower() if words else ""
+    if first in NONE:
+        return True, "all"
+    if first in NOT:
+        return True, words[1] if len(words) > 1 else ""
+    return False, rest
+
+
 def chosen(rest: str, count: int) -> list[int] | str:
     """The numbers asked for, or the words saying why not."""
     if not count:
@@ -205,7 +256,8 @@ def listing(offers: list[Offer], *, head: str) -> str:
     lines = [head]
     lines += [f"{n}. {o.statement}" for n, o in enumerate(offers, 1)]
     lines.append("Send /remember with the numbers to keep them (/remember 1 2), or "
-                 "/remember all. Nothing is kept unless you do.")
+                 "/remember all. Nothing is kept unless you do. /remember not 1 2 "
+                 "(or /remember none) and I won't offer those again.")
     return "\n".join(lines)
 
 
@@ -220,6 +272,10 @@ def noticed(new: int) -> str:
     things = "a thing" if new == 1 else f"{new} things"
     return (f"(I noticed {things} about you worth remembering. "
             "Send /remember to see what's waiting.)")
+
+
+def declined_words(statements: list[str]) -> str:
+    return "I won't offer these again:\n" + "\n".join(f"- {s}" for s in statements)
 
 
 def kept_words(statements: list[str]) -> str:
