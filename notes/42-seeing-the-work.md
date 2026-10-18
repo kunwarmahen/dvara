@@ -212,6 +212,9 @@ own_skills_only=True: []
 * ~~**A list of past conversations.**~~ `/chats`
   ([notes/45](45-going-back.md)).
 * **Telegram word by word.** Steps only, for the rate limit above.
+* ~~**A job taught one message at a time.** `/learn` keeps the last
+  answer, so a walk-through is learned as its last step.~~ A lesson,
+  `/learn start` to `/learn done` ([notes/49](49-a-job-taught-step-by-step.md)).
 * ~~**`/learn`**, asking for a skill now~~ -- below, *Asked for now*.
   ~~A kept skill becoming a tool~~ -- the owner's, from the settings
   page ([notes/46](46-a-tool-from-their-skill.md)).

@@ -47,6 +47,14 @@ still counts, since they've already said it's worth keeping. It runs
 behind the reply like the others, and what it finds comes as the same
 offer with Keep and Not now; what it doesn't, it says.
 
+``/learn start <what>`` IS A LESSON: a job taught one step per message
+(Yantra's skills/lesson.py). Its opening goes to the agent as the turn,
+every turn after it is kept in the lesson -- on disk beside the offers,
+since the agent is built anew for each message -- and no look runs
+after them; ``/learn done`` hands the whole walk to the same look, and
+its offer comes as any other. ``/learn watch <what>`` is the same with
+the person's own hand on the phone; ``/learn stop`` drops it.
+
 ``YANTRA_LEARN=off`` stops the looks (Yantra's switch), ``/learn``'s
 too; uses of learned skills are still counted, as Yantra counts them in
 any run.
@@ -98,6 +106,14 @@ def is_learn(text: str) -> bool:
     """Whether ``text`` is ``/learn``."""
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].lower().split("@")[0] == LEARN
+
+
+def lesson_verb(text: str) -> tuple[str, str]:
+    """``/learn``'s word after it, and what follows: ``("start", "send a
+    WhatsApp")``; ``("", "")`` for plain ``/learn``."""
+    from yantra.skills.lesson import parse
+
+    return parse(rest_of(text))
 
 
 def rest_of(text: str) -> str:
@@ -164,6 +180,14 @@ class Learning:
             learner.after_turn(end)
         except Exception as exc:     # a counter never costs the answer
             self.service._note(f"dvara: {who.id}: counting skill uses failed -- {exc}")
+        if not run.unattended and (lesson := self.lesson(who.id, run.agent)) is not None:
+            # A step of a walk-through: kept for /learn done, never looked
+            # at alone -- one step is not a skill.
+            from yantra.skills.learn import current_turn
+
+            lesson.add(current_turn(agent))
+            self.keep_lesson(who.id, run.agent, lesson)
+            return
         if (mode == "off" or run.unattended or end.reason != "end_turn"
                 or agent.held is not None):
             return
@@ -172,21 +196,87 @@ class Learning:
         self._jobs.add(job)
         job.add_done_callback(self._jobs.discard)
 
+    # ---- a lesson: a job taught one step at a time ----------------------------------
+
+    def _lesson_file(self, actor: str, agent: str) -> Path:
+        return self.state / actor / f"{agent}.lesson.json"
+
+    def lesson(self, actor: str, agent: str) -> Any:
+        """The lesson open for them with this agent, or None."""
+        import json
+
+        from yantra.skills.lesson import Lesson
+
+        path = self._lesson_file(actor, agent)
+        try:
+            return Lesson.from_dict(json.loads(path.read_text()))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            self.service._note(f"dvara: {actor}/{agent}: a lesson could not be read "
+                               f"({exc}); it is dropped")
+            path.unlink(missing_ok=True)
+            return None
+
+    def keep_lesson(self, actor: str, agent: str, lesson: Any) -> None:
+        import json
+
+        from yantra.skills.registry import write_atomic
+
+        path = self._lesson_file(actor, agent)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(path, json.dumps(lesson.to_dict(), ensure_ascii=False))
+
+    def drop_lesson(self, actor: str, agent: str) -> bool:
+        path = self._lesson_file(actor, agent)
+        there = path.exists()
+        path.unlink(missing_ok=True)
+        return there
+
+    def lesson_word(self, spec: Any, who: Actor, key: str, text: str) -> tuple[str, str | None]:
+        """``/learn start|watch|stop`` and a misspelt word: what to say,
+        and -- for a lesson just opened -- the turn to run in place of the
+        word (its opening). ``done`` and plain ``/learn`` are learn_now's."""
+        from yantra.skills.lesson import USAGE, Lesson
+
+        name = workspace_parts(key)[1]
+        verb, rest = lesson_verb(text)
+        if not spec.skills:
+            return f"{name} doesn't use skills, so there is nothing to keep here.", None
+        if verb == "stop":
+            return ("Dropped the lesson; nothing was kept." if self.drop_lesson(who.id, name)
+                    else "No lesson is open."), None
+        if verb not in ("start", "watch"):
+            return USAGE, None
+        if (open_ := self.lesson(who.id, name)) is not None:
+            return open_.status(), None
+        if not rest:
+            return USAGE, None
+        lesson = Lesson(task=rest, watching=verb == "watch")
+        self.keep_lesson(who.id, name, lesson)
+        return "", lesson.opening()
+
     async def learn_now(self, spec: Any, who: Actor, key: str,
-                        came_by: str | None = None) -> str:
+                        came_by: str | None = None, *, done: bool = False) -> str:
         """``/learn``: look at the conversation so far for a skill, now,
-        because they asked. The answer is at once; the offer follows."""
+        because they asked. The answer is at once; the offer follows.
+        ``done`` (``/learn done``) looks at the open lesson instead."""
         name = workspace_parts(key)[1]
         if not spec.skills:
             return f"{name} doesn't use skills, so there is nothing to keep here."
         mode = self.mode()
         if mode == "off":
             return "Learning skills is switched off here (YANTRA_LEARN=off)."
+        lesson = self.lesson(who.id, name)
+        if done and lesson is None:
+            return "No lesson is open: /learn start <what it's for> begins one."
         built = self._build(spec, who, key, gated=False)
         if isinstance(built, str):
             return built
         self.service._rehydrate(built, key)
-        if not any(m.role == "assistant" for m in built.history):
+        if lesson is not None:
+            self.drop_lesson(who.id, name)
+        elif not any(m.role == "assistant" for m in built.history):
             return ("There's nothing to learn from yet. Ask me to do the job first, "
                     "then send /learn.")
         from yantra.skills.learn import Learner
@@ -201,14 +291,18 @@ class Learning:
                   model=str(built.model))
         job = asyncio.ensure_future(self._look(built, learner, "ask", run=run, key=key,
                                                who=who, provider_name=provider_name,
-                                               forced=True))
+                                               forced=True, lesson=lesson))
         self._jobs.add(job)
         job.add_done_callback(self._jobs.discard)
+        if lesson is not None:
+            return (f"Writing down what you taught me ({lesson.told()} step(s)) as one "
+                    f"skill. I'll send it to you to keep.")
         return ("Looking at how I did that, to keep it as a skill. I'll send you "
                 "what I find.")
 
     async def _look(self, agent: Any, learner: Any, mode: str, *, run: Run, key: str,
-                    who: Actor, provider_name: str, forced: bool = False) -> None:
+                    who: Actor, provider_name: str, forced: bool = False,
+                    lesson: Any = None) -> None:
         from dvara.service import _copy, _cost, _delta
 
         service = self.service
@@ -222,7 +316,7 @@ class Learning:
         offer = None
         try:
             offer = await asyncio.to_thread(learner.consider, forced=forced,
-                                            stop=lambda: key in locks)
+                                            stop=lambda: key in locks, lesson=lesson)
             look.stop_reason = LOOKED
             look.reply = (f"found {offer.draft.name}" if offer is not None
                           else learner.last_skip or "nothing to keep")

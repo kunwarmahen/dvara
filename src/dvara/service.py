@@ -707,10 +707,21 @@ class Service:
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="new", transcript=tuple(shown))
         if not unattended and learning.is_learn(text):
-            # A skill asked for now: the look starts; the offer follows.
-            said = await self.learning.learn_now(spec, who, key, came_by)
-            return Reply(text=said, run_id=None, agent=agent, actor=actor,
-                         stop_reason="skills")
+            verb, _ = learning.lesson_verb(text)
+            if verb in ("", "done"):
+                # A skill asked for now -- of the last answer, or of the
+                # lesson just finished: the look starts; the offer follows.
+                said = await self.learning.learn_now(spec, who, key, came_by,
+                                                     done=verb == "done")
+                return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                             stop_reason="skills")
+            said, opening = self.learning.lesson_word(spec, who, key, text)
+            if opening is None:
+                return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                             stop_reason="skills")
+            # A lesson opened: its opening is the turn, so the agent hears
+            # it is being taught and answers that it is ready.
+            text = opening
         if not unattended and learning.word_of(text):
             # Skills offered and kept: theirs to see and answer, not a turn.
             said = await self.learning.words(spec, who, key, text)

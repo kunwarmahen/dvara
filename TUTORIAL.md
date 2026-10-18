@@ -1491,6 +1491,26 @@ one into the package's `skills/` to share it. The look is a run of its own in
 `dvara runs` (`looked_for_skill`), paid from the person's allowance.
 `YANTRA_LEARN=off` stops the looks.
 
+Some jobs are easier to show one step at a time. Send `/learn start`
+and what the job is for, then each step:
+
+```text
+you:   /learn start send a WhatsApp message
+agent: I'm ready. What's first?
+you:   open WhatsApp
+agent: WhatsApp is open on the Chats list. What's next?
+you:   tap Mom
+agent: Mom's chat is open. What's next?
+you:   /learn done
+agent: Writing down what you taught me (2 step(s)) as one skill. I'll send it to you to keep.
+```
+
+The offer comes with **Keep** and **Not now**, like any other. While a
+lesson is open, the agent does only the step it's told and no skill is
+offered after each one. On a phone, `/learn watch` lets the person do
+each step with their own hand and send `next`; `/learn stop` drops a
+lesson ([notes/49](notes/49-a-job-taught-step-by-step.md)).
+
 **`/tools` and `/schedules`.** `/tools` lists what the agent could use
 on your last message, grouped by where each tool came from. `/schedules`
 lists your schedules from Samay (with `--samay`). Neither is a turn, so

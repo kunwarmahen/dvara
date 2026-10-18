@@ -765,7 +765,9 @@ class TelegramBot:
         if getattr(self.spec, "skills", None):
             lines.append("When a job takes several steps, I may offer to keep how it "
                          "was done as a skill. Send /learn to ask for one now, and "
-                         "/skills to see them.")
+                         "/skills to see them. To teach me a job one step at a "
+                         "time, send /learn start and what it's for; /learn done "
+                         "when we're through.")
         lines.append("Send /new to start our conversation over; /chats lists the "
                      "earlier ones, to go back into one.")
         return "\n\n".join(lines)
@@ -1209,7 +1211,7 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
                   ("unlock", "Unlock them for a while")]
     if getattr(spec, "skills", None):
         words += [("skills", "Skills I've learned, and ones to keep"),
-                  ("learn", "Keep what I just did as a skill")]
+                  ("learn", "Keep what I just did as a skill; /learn start to teach me")]
     words += [("tools", "What I can use for you")]
     if phone:
         words += [("phone", "Your phone's screen, and what was done on it")]

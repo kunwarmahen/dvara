@@ -885,7 +885,11 @@ NDJSON. For a package with skills, a job of four steps or more is looked
 at after the answer and may come back as a skill to keep (`/skills keep
 ID`, or the Keep button on Telegram and a page), saved in that person's
 own folder only. `/learn` asks for one now, after any job, even a short
-one; the offer follows the same way. An agent sees only its package's skills (its
+one; the offer follows the same way. A job walked through one step per
+message is a lesson: `/learn start <what it's for>`, then each step,
+then `/learn done` keeps the whole walk as one skill (`/learn watch` the
+same with the person's own hand on the phone, `/learn stop` drops it;
+[notes/49](notes/49-a-job-taught-step-by-step.md)). An agent sees only its package's skills (its
 `skills/` folder) and the person's own, never the ones in
 `~/.yantra/skills` on this computer. `/tools` and `/schedules` answer
 from the record, with no turn ([notes/42](notes/42-seeing-the-work.md)).
@@ -1206,7 +1210,7 @@ reads that person's key from `<state>/memory.json`
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)) |
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
-| `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
+| `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/learn start|watch|done|stop`, a lesson kept on disk per person per agent, no look halfway ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |
 | `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay ([notes/42](notes/42-seeing-the-work.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)) |
