@@ -1007,15 +1007,17 @@ class Service:
                        remembers: Person | None = None):
         """The MCP servers this turn gets, all stopped when it ends: the
         person's own accounts (``_accounts``), Samay's tools
-        (``_schedules``), the phone (``_phone``) and their memory
-        (``_remembering``). None when there are none to start."""
+        (``_schedules``), the phone (``_phone``), their memory
+        (``_remembering``) and the package's own (``_packaged``). None
+        when there are none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
         phone = (self.sparsh is not None and who.phone and works_phone(spec)
                  and (not is_unattended() or phone_run is not None))
         remembering = (self.memory is not None and spec.memory == self.memory.name
                        and getattr(agent, "memory", None) is not None)
-        if not (accounts or schedules or phone or remembering):
+        packaged = bool(getattr(spec, "mcp", ()))
+        if not (accounts or schedules or phone or remembering or packaged):
             return None
         from yantra.mcp import MCPManager
 
@@ -1031,7 +1033,34 @@ class Service:
         if remembering:
             assert remembers is not None
             await self._remembering(agent, manager, who=who, remembers=remembers)
+        if packaged:
+            await self._packaged(manager, spec=spec)
         return manager
+
+    async def _packaged(self, manager, *, spec: AgentSpec) -> None:
+        """The servers the package itself declares (``[[mcp]]`` in its
+        agent.toml), as Yantra starts them in every session.
+
+        LAST, SO THIS TURN'S OWN WIN. A name the person's accounts, Samay,
+        the phone or the memory already took is theirs: the package's is
+        skipped and the owner told, never swapped in under the same tools.
+        The package's ``[tools] allow`` admits their tools or drops them
+        like any other (``mcp__<name>__*``). A server that will not start
+        costs the turn those tools, never the turn. These are the author's,
+        shared by everyone who talks to the agent; a server one person
+        added is theirs, in their own Setu folder (``_accounts``)."""
+        from yantra.mcp import MCPError
+
+        for cfg in spec.mcp:
+            if cfg.name in manager.sessions:
+                self._note(f"dvara: {spec.name}: mcp {cfg.name!r} (agent.toml) has the "
+                           "name of one this turn already has; using that one")
+                continue
+            try:
+                await asyncio.to_thread(manager.connect, cfg, origin="package")
+            except (MCPError, ValueError) as exc:
+                self._note(f"dvara: {spec.name}: mcp {cfg.name!r} (agent.toml) is off "
+                           f"for this turn -- {exc}")
 
     def _memory_for(self, spec: AgentSpec, who: Actor) -> tuple[AgentSpec, Person]:
         """The spec with the owner's store in it, and whose memories.

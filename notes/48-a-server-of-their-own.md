@@ -84,9 +84,26 @@ For a server there's no sign-in page to link to. Setu tries it again with
 the address and token it holds, and the answer is the outcome itself, with
 no link and no paste.
 
+## The package's own servers
+
+There are two kinds of server, and they belong to different people. A
+person's server is theirs, in their Setu folder. A package author's server
+is declared in `agent.toml` (`[[mcp]]`), and Yantra starts it in every
+session. A turn here used to leave those out, so an agent answered with
+fewer tools than its author gave it, and nobody was told. Each turn now
+starts them too (`Service._packaged`), and three rules come with that:
+
+- **Last.** A name the turn already has (the person's accounts, Samay,
+  the phone, memory) keeps it. The package's server is skipped, and the
+  owner is told.
+- **The package's `[tools] allow` still decides**, as it does for every
+  tool: `mcp__docs__*` lets them in, and a list that leaves them out keeps
+  them out.
+- **A server that won't start** costs the turn those tools, never the
+  turn, and the owner's log says why.
+
 ## Not here
 
 - A token typed into the chat, ever.
-- A server added to a package's own `[[mcp]]` list. That's the package
-  author's, in `agent.toml`, and dvara starting those is a change of its
-  own.
+- ~~A server added to a package's own `[[mcp]]` list~~ — started for each
+  turn now; see above.

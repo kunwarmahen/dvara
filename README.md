@@ -78,7 +78,9 @@ first turn to a bot that asks you before anything changes.
 ## Works with
 
 * **[Yantra](https://github.com/kunwarmahen/yantra)** — every agent here is a Yantra package, built fresh
-  for each turn. Tools, skills, permission modes and evals are Yantra's,
+  for each turn. Tools, skills, permission modes, evals and the MCP
+  servers a package declares (`[[mcp]]`, started for each turn, after the
+  person's own and kept to the package's `[tools] allow`) are Yantra's,
   and [its tutorial](https://github.com/kunwarmahen/yantra/blob/main/TUTORIAL.md) is where they are explained.
 * **[Samay](https://github.com/kunwarmahen/samay)** — runs a person's schedules through this door, as
   them ([notes/17](notes/17-nobody-wrote-first.md)), and with `--samay`
@@ -1172,7 +1174,7 @@ reads that person's key from `<state>/memory.json`
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)) or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), and the package's own `[[mcp]]` servers, last ([notes/48](notes/48-a-server-of-their-own.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)) or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
