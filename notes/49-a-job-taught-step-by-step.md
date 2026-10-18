@@ -96,7 +96,7 @@ drop an open lesson and say so (Yantra's notes/129).
   by the owner on the iPhone: `/learn watch check my Coinbase portfolio
   value`, two nexts, `/learn done`, Keep. Asked next time, the agent
   used the skill only when pushed; the person's own skills are now
-  marked `[yours]` in the roster, and it reaches for this one first
-  (Yantra's notes/129).
+  marked `[yours]` in the roster, and after the rebuild it used this
+  one on Telegram without a push (Yantra's notes/129).
 * **A Teach button.** The words only; a page could open a lesson from
   the skills panel.
