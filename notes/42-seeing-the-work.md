@@ -210,7 +210,8 @@ own_skills_only=True: []
 ## What is not here yet
 
 * ~~**A list of past conversations.**~~ `/chats`
-  ([notes/45](45-going-back.md)).
+  ([notes/45](45-going-back.md)), every one kept and searchable
+  ([notes/50](50-every-conversation-kept.md)).
 * **Telegram word by word.** Steps only, for the rate limit above.
 * ~~**A job taught one message at a time.** `/learn` keeps the last
   answer, so a walk-through is learned as its last step.~~ A lesson,

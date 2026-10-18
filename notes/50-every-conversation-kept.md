@@ -108,11 +108,12 @@ Lisbon one, now no longer open, removed it. `grep -c Lisbon` on
 
 ## What is not here yet
 
-* **The other places a chat's words are.** Delete clears the person's
-  history. The page's chat scroll (`web.sqlite3`, each person's newest
-  lines) and the run ledger (`runs.sqlite3`: each turn's message and
-  answer, the owner's record of spending behind `dvara runs`) still
-  hold the words until their lines age out. Neither says which
-  conversation a line belonged to. Telegram keeps its own copy on the
-  phone.
+* **The other places a chat's words are, left by choice.** Delete
+  clears the person's history. The page's chat scroll (`web.sqlite3`,
+  each person's newest lines) and the run ledger (`runs.sqlite3`: each
+  turn's message and answer, the owner's record of spending behind
+  `dvara runs`) keep the words until their lines age out; neither says
+  which conversation a line belonged to. Blanking them on delete, cost
+  figures kept, was weighed and turned down: the owner's record of each
+  run stays whole. Telegram keeps its own copy on the phone.
 * **Naming a conversation.** Its title is its first words.
