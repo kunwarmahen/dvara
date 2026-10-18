@@ -53,6 +53,7 @@ target-version = "py312"
 select = ["E", "F", "W", "B", "UP"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 # A warning nobody reads is a warning nobody acts on. ResourceWarning as
 # an error is what keeps a long-lived service honest about the sockets
