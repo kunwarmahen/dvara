@@ -81,8 +81,15 @@ $ SETU_WINDOW_HOST=127.0.0.1 SETU_WINDOW_NAME=localhost \
 The link opened, and the stream's frame showed Google's own *Sign in —
 to continue to setu* page, drawn at a phone's size, with its email box
 ready. The run was stopped there, and no browser or profile was left
-behind. Whether Google lets a password through in that window needs a
-person and their phone. The tests finish a sign-in against a fake Setu
+behind. Whether Google lets a password through in that window needed a
+person and their phone.
+
+It does. The owner's `gmail:personal` sign-in had expired, and they sent
+`/connect gmail as personal` on Telegram, opened the link, and typed
+their Google password into the streamed window on their phone. Google
+didn't turn the window away, the window's return to `127.0.0.1` landed
+on the computer, and `setu list` showed the account connected again,
+with its expired mark gone. Nothing was pasted. The tests finish a sign-in against a fake Setu
 that speaks the same events, and Setu's own tests drive a fake browser
 that follows the page's return to `127.0.0.1`.
 
