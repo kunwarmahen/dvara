@@ -90,6 +90,28 @@ its opening gone. Now a new start replaces an empty lesson, `/learn
 done` on one says how to teach (and keeps it), and `/new` and `/chats N`
 drop an open lesson and say so (Yantra's notes/129).
 
+## A page sees it
+
+A lesson kept on disk was invisible to a page: Sarathi's home chat
+could only show the words that answered `/learn`. Now `GET /web` (the
+look a page draws from) carries `lessons`. That is each lesson open for
+the person, one per agent, with what it's for, telling or showing, how
+many steps so far, and the phone it's on:
+
+```
+"lessons": [{"agent": "helper", "task": "check my battery",
+             "watching": true, "told": 1, "steps": 1, "phone": "", ...}]
+```
+
+Only the person's own are listed: Maya's look is empty while the owner
+teaches. The lesson is the same file whichever road opened it, so one
+started on Telegram shows on the home page too, and Done there finishes
+it. `/learn clear` is read as `/learn stop` (Yantra's `lesson.parse`),
+so it reaches Dvara as `stop` and Telegram's help names both.
+
+Tests: `tests/test_lessons.py` (`/learn clear` drops it; the web look
+lists a person's open lesson and not another's).
+
 ## What is not here yet
 
 * ~~**A lesson run for real through Telegram, start to skill.**~~ Done
@@ -98,9 +120,9 @@ drop an open lesson and say so (Yantra's notes/129).
   used the skill only when pushed; the person's own skills are now
   marked `[yours]` in the roster, and after the rebuild it used this
   one on Telegram without a push (Yantra's notes/129).
-* **A Teach button.** The words only; a page could open a lesson from
-  the skills panel, and Sarathi's home chat from its row of buttons.
-* **One skill for both phones.** A skill taught on the iPhone names the
-  iPhone's home screen and app; on the Android phone it has to be
-  taught again (Yantra's notes/129).
-* **`/learn clear`**, another word for `/learn stop`.
+* ~~**A Teach button.**~~ Built on Sarathi's home chat, from Dvara's
+  look (*A page sees it*, above).
+* ~~**One skill for both phones.**~~ The lesson keeps which phone it was
+  taught on, and the write-up opens the app by name (Yantra's
+  notes/133). Run on the other phone for real: not yet.
+* ~~**`/learn clear`**~~, another word for `/learn stop`: built.

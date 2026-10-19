@@ -10,6 +10,10 @@ Designed against:
 * **The agent running ahead.** The lesson's opening is the turn the
   agent hears first, so it knows it is being taught.
 * **One person's lesson in another's.** It is kept per person per agent.
+* **A page that can't see it.** Sarathi's home chat draws a lesson bar
+  from the web look, so the look names each open lesson -- and only the
+  person's own.
+* **A word that isn't there.** ``/learn clear`` drops it, like ``stop``.
 """
 
 from __future__ import annotations
@@ -114,6 +118,24 @@ class TestALesson:
         done, = run(service, say(service, "/learn done"))
         assert stopped.text == "Dropped the lesson; nothing was kept."
         assert done.text.startswith("No lesson is open")
+
+    def test_clear_drops_it_too(self, make_service, helper):
+        service = make_service(walk()[:1], policy=Policy(mode="yolo"), actors=PEOPLE)
+        run(service, say(service, "/learn start x"))
+        cleared, = run(service, say(service, "/learn clear"))
+        assert cleared.text == "Dropped the lesson; nothing was kept."
+        assert service.learning.lesson("owner", "helper") is None
+
+    def test_the_web_look_shows_a_persons_open_lesson(self, make_service, helper):
+        service = make_service(walk()[:3], policy=Policy(mode="yolo"), actors=PEOPLE,
+                               web=True)
+        assert service.web.look("owner")["lessons"] == []
+        run(service, say(service, "/learn watch check my battery"),
+            say(service, "open WhatsApp"))
+        lesson, = service.web.look("owner")["lessons"]
+        assert lesson["agent"] == "helper" and lesson["task"] == "check my battery"
+        assert lesson["watching"] and lesson["told"] == 1
+        assert service.web.look("maya")["lessons"] == []
 
     def test_a_lesson_is_one_persons(self, make_service, helper):
         service = make_service([*walk()[:1], says("Hi Maya.")],

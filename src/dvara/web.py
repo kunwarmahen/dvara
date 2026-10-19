@@ -210,7 +210,21 @@ class WebChannel:
                          for (a, agent), live in sorted(self._live.items()) if a == actor],
                 "asks": [ask.as_dict() for ask in asks],
                 "holds": [hold.as_dict()
-                          for hold in self.service.holds.pending(actor)]}
+                          for hold in self.service.holds.pending(actor)],
+                # A lesson open with an agent (learning.py): what it's for
+                # and how far it got, for the page's lesson bar.
+                "lessons": self._lessons(actor, agents)}
+
+    def _lessons(self, actor: str, agents: list[str]) -> list[dict]:
+        learning = getattr(self.service, "learning", None)
+        if learning is None:
+            return []
+        out = []
+        for agent in agents:
+            lesson = learning.lesson(actor, agent)
+            if lesson is not None:
+                out.append({"agent": agent, **lesson.describe()})
+        return out
 
     def say(self, actor: str, agent: str, text: str,
             attachments: list[Attachment] | None = None) -> Line:

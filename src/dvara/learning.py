@@ -53,7 +53,7 @@ every turn after it is kept in the lesson -- on disk beside the offers,
 since the agent is built anew for each message -- and no look runs
 after them; ``/learn done`` hands the whole walk to the same look, and
 its offer comes as any other. ``/learn watch <what>`` is the same with
-the person's own hand on the phone; ``/learn stop`` drops it, and so do
+the person's own hand on the phone; ``/learn stop`` (or ``clear``) drops it, and so do
 ``/new`` and ``/chats N``, which take away the conversation whose
 opening told the agent it was being taught. A lesson nothing was taught
 in yet is replaced by a new start, and ``/learn done`` on it says how
@@ -190,7 +190,7 @@ class Learning:
             # at alone -- one step is not a skill.
             from yantra.skills.learn import current_turn
 
-            lesson.add(current_turn(agent))
+            lesson.add(current_turn(agent), agent)
             self.keep_lesson(who.id, run.agent, lesson)
             return
         if (mode == "off" or run.unattended or end.reason != "end_turn"

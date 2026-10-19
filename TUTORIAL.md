@@ -1574,9 +1574,15 @@ agent: I think you opened your portfolio. Am I right?
 you:   /learn done
 ```
 
-A skill taught on one phone is for that phone. The iPhone and an Android
-phone name their apps and home screens differently, so teach it on each
-phone it'll be used on.
+A skill taught on one phone is written for both. It opens the app by
+its name, not through the folder that was tapped, and it says which
+phone it was taught on, so a screen that looks different on the other
+phone isn't a surprise (Yantra's notes/133).
+
+`/learn stop` drops a lesson, and so does `/learn clear`. On Sarathi's
+home chat, the **Teach** button starts one without typing: pick *Tell
+it* or *Show it* and write what it's for. A bar then shows the open
+lesson with **Done** and **Stop**, even one started on Telegram.
 
 **Don't mix them up.** `/learn start` learns only the steps you *type*
 and it carries out. Steps done by hand on the phone during it aren't

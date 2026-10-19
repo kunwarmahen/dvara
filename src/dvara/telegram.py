@@ -769,7 +769,7 @@ class TelegramBot:
                          "what it's for, then type each step and I'll do it; or "
                          "/learn watch and what it's for, then do each step on "
                          "your phone and send next. /learn done when we're "
-                         "through.")
+                         "through; /learn stop (or /learn clear) drops it.")
         lines.append("Send /new to start our conversation over. Every conversation "
                      "is kept: /chats lists them, /chats and a word finds one, "
                      "/chats N goes back into it, /chats export N sends it "
