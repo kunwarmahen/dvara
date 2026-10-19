@@ -49,8 +49,10 @@ message.
 **A CONVERSATION HERE ENDS WHEN THEY SAY SO.** A Telegram chat has no
 end anybody marks, except `/new`. So before Dvara lets the conversation
 go, it asks the agent's own model once, through Yantra's look back, what
-the conversation showed about the person. The answer is listed under
-"Starting fresh", numbered. It is one call, on their allowance, recorded
+the conversation showed about the person. The answer comes numbered,
+as a message of its own after "Starting fresh": the look reads a copy
+of the conversation, behind the answer, so starting over doesn't wait
+for it ([note 51](51-starting-over-at-once.md)). It is one call, on their allowance, recorded
 as a Run (`looked_back`) like any turn. A person with nothing left in
 their allowance gets no look back. A look back that fails is a line for
 the owner, and the conversation still goes.

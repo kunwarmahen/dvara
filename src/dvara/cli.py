@@ -750,17 +750,29 @@ def _say(service: Service, args) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    later: list[str] = []
+
+    async def told(actor: str, text: str) -> None:
+        later.append(text)
+    # A look back behind /new (notes/51) is printed under the reply here,
+    # not sent to the person's chat, and waited for: the process ends.
+    service.told_behind = told
+
     async def go():
         try:
-            return await service.deliver(actor=args.actor, via=via,
-                                         agent=args.agent,
-                                         thread=args.thread, text=args.text,
-                                         came_by="cli")
+            reply = await service.deliver(actor=args.actor, via=via,
+                                          agent=args.agent,
+                                          thread=args.thread, text=args.text,
+                                          came_by="cli")
+            print(reply.text, flush=True)
+            await service.settle()
+            return reply
         finally:
             await service.aclose()
 
     reply = asyncio.run(go())
-    print(reply.text)
+    for text in later:
+        print(f"\n{text}")
     for path in reply.files:
         # What a chat would attach (files.py); here, where it is.
         print(f"  file: {path}")

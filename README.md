@@ -451,8 +451,11 @@ what it keeps about them:
 /remember not 2                not that one, never offered again (or /remember none)
 ```
 
-`/new` looks back over the conversation first, and lists what it noticed
-under its answer; a turn that noticed something says so in one line.
+`/new` answers at once and looks back over the conversation behind the
+answer: what it noticed comes as a message of its own, numbered, and
+nothing comes if it noticed nothing
+([notes/51](notes/51-starting-over-at-once.md)); a turn that noticed
+something says so in one line.
 Nothing is kept until the person sends `/remember`
 ([notes/38](notes/38-what-they-said-in-passing.md)). The agent's package
 must say `[memory] via`; Telegram's menu shows the two words after the
@@ -1061,7 +1064,9 @@ they say it on the way to something else. When a person sends `/new`
 (or nobody has written for 30 minutes, [notes/39](notes/39-while-nobody-is-writing.md)), a
 package that remembers looks back over the conversation once (Yantra's
 look back, on the agent's own model and their allowance, recorded as a
-`looked_back` run) and lists what it noticed under the answer. What
+`looked_back` run) and sends what it noticed as a message. At `/new` that
+look runs after "Starting fresh" has gone, so starting over is instant
+([notes/51](notes/51-starting-over-at-once.md)). What
 Yantra notices mid-turn waits on the same list, with a one-line hint.
 Nothing is kept until they send `/remember 1 3` (or `all`); what they
 turn down with `/remember not 2` (or `none`) is never offered again; and
@@ -1188,7 +1193,7 @@ reads that person's key from `<state>/memory.json`
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), and the package's own `[[mcp]]` servers, last ([notes/48](notes/48-a-server-of-their-own.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)) or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), and the package's own `[[mcp]]` servers, last ([notes/48](notes/48-a-server-of-their-own.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)), behind its answer ([notes/51](notes/51-starting-over-at-once.md)), or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |

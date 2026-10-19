@@ -127,7 +127,8 @@ costs the menu, never the bot.
   Every conversation is kept as it goes now, `/new` or not
   ([note 50](50-every-conversation-kept.md)).
 * ~~**What the conversation showed about them, let go with it.**~~ An
-  agent whose package keeps memories now looks back first, and lists
-  what it noticed under "Starting fresh" for the person to keep with
-  `/remember` ([note 38](38-what-they-said-in-passing.md)). Only that
+  agent whose package keeps memories now looks back, and lists what it
+  noticed for the person to keep with `/remember` ([note
+  38](38-what-they-said-in-passing.md)), after "Starting fresh" rather
+  than before it ([note 51](51-starting-over-at-once.md)). Only that
   case asks a model; every other `/new` still costs nothing.

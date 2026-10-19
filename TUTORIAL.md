@@ -1313,19 +1313,27 @@ dvara say --actor guest --agent greeter "I just moved to Pune, and I work night 
 dvara say --actor guest --agent greeter "/new"
 ```
 
-The answer to `/new` starts as always (*"Starting fresh…"*: the
-conversation is kept, and `/chats` lists it to go back into), then lists
-what the agent noticed, numbered:
+The answer to `/new` comes at once, as always (*"Starting fresh…"*: the
+conversation is kept, and `/chats` lists it to go back into). The look
+back over the conversation runs after it, and what the agent noticed is
+printed under it, numbered:
 
 ```
-Before we started over, I noticed this about you:
+Starting fresh. What we said before is kept: /chats lists it, if you want to go back. …
+[new]
+
+greeter: Looking back over the conversation we just ended, I noticed this about you:
 1. Lives in Pune, India (relocated there in the recent past).
 2. Works night shifts as a nurse, which shapes their daily schedule (…).
 Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
 ```
 
-That list is one call to the agent's own model, on the guest's
-allowance, and it shows in `dvara runs` as `looked_back`. Nothing is
+On Telegram, or the home page's chat, the list comes as a message of
+its own a little after *"Starting fresh"*, so you can start the next
+conversation straight away. If it noticed nothing, nothing is sent
+([notes/51](notes/51-starting-over-at-once.md)). That list is one call
+to the agent's own model, on the guest's allowance, and it shows in
+`dvara runs` as `looked_back`. Nothing is
 kept yet. Keep the first and look:
 
 ```bash
@@ -1664,6 +1672,7 @@ Each topic, and the note that argues it:
 | `notes/44-what-they-send.md` | a picture or file the person sends: kept in their folder under `from-you/`, a picture shown to a model that can see |
 | `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again (now every conversation: note 50) |
 | `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
+| `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
 | `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |
 

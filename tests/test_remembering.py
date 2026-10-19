@@ -55,6 +55,16 @@ def say(service, text, *, actor="owner", thread="chat"):
                                        text=text))
 
 
+def start_over(service, *, actor="owner", thread="chat"):
+    """/new, and the look back that runs behind its answer (notes/51)."""
+    async def go():
+        reply = await service.deliver(actor=actor, agent="greeter", thread=thread,
+                                      text="/new")
+        await service.settle()
+        return reply
+    return asyncio.run(go())
+
+
 def kept(person):
     from yantra.memory.local import LocalStore
     return [i.statement for i in LocalStore().list(person, 100)]
@@ -67,24 +77,59 @@ def test_the_words_are_recognised_with_or_without_the_bots_name():
     assert remembering.word_of("remember this") is None
 
 
-def test_new_looks_back_and_lists_but_keeps_nothing(make_service, remembers):
-    service = make_service([says("Pune is lovely."), says(LOOKED)])
+def test_new_answers_at_once_and_what_it_noticed_comes_after(make_service, remembers):
+    """The fresh start is not held for the look back: its answer is the
+    plain one, and the list comes as a notice of its own."""
+    people = ActorBook.from_dict({"actor": {
+        "owner": {"channel": [{"kind": "telegram", "id": "42"}]},
+        "guest": {"agents": ["greeter"]}}})
+    service = make_service([says("Pune is lovely."), says(LOOKED)], actors=people)
+    got: list[str] = []
+
+    async def sender(address, text):
+        got.append(text)
+    service.notices.route("telegram", sender)
     say(service, "I live in Pune, and Biscuit my cat says hi")
-    reply = say(service, "/new")
-    assert reply.text.startswith(fresh.STARTED_OVER)
-    assert "1. Lives in Pune (Asia/Kolkata time)" in reply.text
-    assert "2. Has a cat called Biscuit" in reply.text
-    assert "Nothing is kept unless you do" in reply.text
+    reply = start_over(service)
+    assert reply.text == fresh.STARTED_OVER
+    assert len(got) == 1 and got[0].startswith(
+        "greeter: Looking back over the conversation we just ended")
+    assert "1. Lives in Pune (Asia/Kolkata time)" in got[0]
+    assert "2. Has a cat called Biscuit" in got[0]
+    assert "Nothing is kept unless you do" in got[0]
     assert kept("owner") == []
     # the look back was one model call, on the record like a turn
     assert len(service.scripted.requests) == 2
     assert service.runs.recent()[0].stop_reason == "looked_back"
 
 
+def test_new_is_answered_before_its_look_back_has_run(make_service, remembers):
+    service = make_service([says("ok"), says(LOOKED)])
+    said: list[tuple[str, str]] = []
+
+    async def told(actor, text):
+        said.append((actor, text))
+    service.told_behind = told           # what `dvara say` does with it
+    say(service, "I live in Pune")
+
+    async def go():
+        reply = await service.deliver(actor="owner", agent="greeter",
+                                      thread="chat", text="/new")
+        running = bool(service._behind) and len(service.scripted.requests) == 1
+        await service.settle()
+        return reply, running
+    reply, running = asyncio.run(go())
+    assert reply.text == fresh.STARTED_OVER and running
+    assert len(said) == 1 and said[0][0] == "owner"
+    assert "1. Lives in Pune (Asia/Kolkata time)" in said[0][1]
+    # the conversation went at once; the look read its copy
+    assert service.sessions.load_latest(session_key("owner", "greeter", "chat")) is None
+
+
 def test_remember_keeps_the_chosen_ones_under_their_own_name(make_service, remembers):
     service = make_service([says("ok"), says(LOOKED)])
     say(service, "I live in Pune", actor="guest")
-    say(service, "/new", actor="guest")
+    start_over(service, actor="guest")
     reply = say(service, "/remember 1", actor="guest")
     assert reply.text == "Kept:\n- Lives in Pune (Asia/Kolkata time)"
     assert kept("guest") == ["Lives in Pune (Asia/Kolkata time)"]
@@ -96,7 +141,7 @@ def test_remember_keeps_the_chosen_ones_under_their_own_name(make_service, remem
 def test_remember_all_and_numbers_that_were_never_listed(make_service, remembers):
     service = make_service([says("ok"), says(LOOKED)])
     say(service, "hello")
-    say(service, "/new")
+    start_over(service)
     assert "there's no 7" in say(service, "/remember 7").text
     say(service, "/remember all")
     assert sorted(kept("owner")) == ["Has a cat called Biscuit",
@@ -122,14 +167,14 @@ def test_a_package_that_keeps_no_memories_says_so_and_new_asks_no_model(make_ser
     service = make_service([says("hi")])
     say(service, "hello")
     assert "doesn't keep memories" in say(service, "/memory").text
-    assert say(service, "/new").text == fresh.STARTED_OVER
+    assert start_over(service).text == fresh.STARTED_OVER
     assert len(service.scripted.requests) == 1
 
 
 def test_a_look_back_that_fails_still_starts_over(make_service, remembers, capsys):
     service = make_service([says("hi")])                # nothing scripted for it
     say(service, "hello")
-    assert say(service, "/new").text == fresh.STARTED_OVER
+    assert start_over(service).text == fresh.STARTED_OVER
     assert "the look back at /new failed" in capsys.readouterr().err
     assert service.sessions.load_latest(session_key("owner", "greeter", "chat")) is None
 
@@ -166,7 +211,7 @@ def test_what_yantra_noticed_before_shortening_is_listed_under_the_answer(
 def test_the_offered_list_is_the_owners_alone(make_service, remembers):
     service = make_service([says("ok"), says(LOOKED)])
     say(service, "hello")
-    say(service, "/new")
+    start_over(service)
     assert (service.state / remembering.FILE).stat().st_mode & 0o777 == 0o600
 
 
@@ -192,13 +237,14 @@ def test_the_look_back_at_new_replaces_what_the_turns_noticed(tmp_path):
 def test_what_they_turn_down_is_never_offered_again(make_service, remembers):
     service = make_service([says("ok"), says(LOOKED), says("ok again"), says(LOOKED)])
     say(service, "I live in Pune", actor="guest")
-    say(service, "/new", actor="guest")
+    start_over(service, actor="guest")
     reply = say(service, "/remember not 1", actor="guest")
     assert reply.text == "I won't offer these again:\n- Lives in Pune (Asia/Kolkata time)"
     assert kept("guest") == []
     # the next look back reads them the same way; only the cat comes back
     say(service, "still in Pune", actor="guest")
-    again = say(service, "/new", actor="guest").text
+    start_over(service, actor="guest")
+    again = say(service, "/remember", actor="guest").text
     assert "1. Has a cat called Biscuit" in again and "Pune" not in again
     assert len(service.scripted.requests) == 4      # declining asked no model
 
@@ -206,7 +252,7 @@ def test_what_they_turn_down_is_never_offered_again(make_service, remembers):
 def test_remember_none_turns_down_everything_waiting(make_service, remembers):
     service = make_service([says("ok"), says(LOOKED)])
     say(service, "hello")
-    say(service, "/new")
+    start_over(service)
     assert "Has a cat called Biscuit" in say(service, "/remember none").text
     assert say(service, "/remember").text.startswith("There's nothing waiting")
     assert kept("owner") == []

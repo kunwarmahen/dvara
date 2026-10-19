@@ -90,6 +90,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from yantra import (
     HELD,
@@ -307,6 +308,12 @@ class Service:
         #: How often every Setu folder is checked (``check_sign_ins``); 0: never.
         self.check_every = check_every
         self._looked: dict[str, str] = {}
+        #: Look backs running behind a ``/new`` that has already answered
+        #: (``_look_back_behind``); held so none is collected mid-look.
+        self._behind: set[asyncio.Task] = set()
+        #: Where what such a look noticed goes, as (actor, text); None:
+        #: the person's channels (``notify``). ``dvara say`` prints it.
+        self.told_behind: Callable[[str, str], Awaitable[None]] | None = None
 
         self.state.mkdir(parents=True, exist_ok=True)
         self.sessions = SessionStore(self.state / "sessions.sqlite3")
@@ -1527,21 +1534,22 @@ class Service:
                           text: str, came_by: str | None, started: datetime) -> str:
         """``/new`` (fresh.py): this conversation forgotten, and anything
         it was holding for the person with it -- never while a turn is
-        still working on it. A package that remembers looks back over it
-        first, and what it noticed is listed under the answer."""
+        still working on it. A package that remembers looks back over it,
+        but behind the answer: the copy goes to ``_look_back_behind``, and
+        what it noticed comes as a message of its own (notes/51)."""
         if key in self._locks:
             return fresh.STILL_ANSWERING
         async with self._locks.hold(key):
             noticed = ""
+            ending = self.sessions.load_latest(key)
             if (self.runs.last_stop(who.id, workspace_parts(key)[1], thread)
                     == "looked_back"):
                 # looked back over already, when it went quiet: nothing new
                 waiting = self.offered.get(who.id)
                 noticed = remembering.looked_back(waiting) if waiting else ""
-            elif self.sessions.load_latest(key) is not None:
-                noticed = await self._look_back(spec, who, key, thread=thread,
-                                                text=text, came_by=came_by,
-                                                started=started)
+            elif ending is not None:
+                self._look_back_behind(spec, who, key, ending, thread=thread,
+                                       text=text, came_by=came_by, started=started)
             self.holds.drop_key(key)
             # Already kept, turn by turn (past.py): the next one is new.
             self.past.ended(key)
@@ -1553,6 +1561,36 @@ class Service:
             from yantra.skills.lesson import DROPPED
             said = f"{said} {DROPPED}"
         return f"{said}\n\n{noticed}" if noticed else said
+
+    def _look_back_behind(self, spec: AgentSpec, who: Actor, key: str, ending: dict,
+                          **run: Any) -> None:
+        """The look back over the conversation ``/new`` just ended, run
+        after the answer has gone: the person starts over at once, and what
+        it noticed comes as a notice, numbered for ``/remember``, as the
+        quiet look's does. Nothing noticed, nothing sent. Many people share
+        one model here, so it simply takes its turn in the model's queue."""
+        async def look() -> None:
+            said = await self._look_back(spec, who, key, payload=ending,
+                                         ended=True, **run)
+            if not said:
+                return
+            text = f"{workspace_parts(key)[1]}: {said}"
+            if self.told_behind is not None:
+                await self.told_behind(who.id, text)
+                return
+            try:
+                await self.notify(text=text, actor=who.id)
+            except Refused:
+                pass
+        task = asyncio.get_running_loop().create_task(look())
+        self._behind.add(task)
+        task.add_done_callback(self._behind.discard)
+
+    async def settle(self) -> None:
+        """Wait for every look back still running behind a ``/new``: what
+        a test, or a service stopping, waits on before it reads the result."""
+        while self._behind:
+            await asyncio.gather(*list(self._behind), return_exceptions=True)
 
     async def _past_words(self, key: str, *, who: Actor, agent: str, thread: str,
                           text: str) -> str | tuple[str, list[dict]]:
@@ -1641,7 +1679,8 @@ class Service:
 
     async def _look_back(self, spec: AgentSpec, who: Actor, key: str, *, thread: str,
                          text: str, came_by: str | None, started: datetime,
-                         quiet: bool = False) -> str:
+                         quiet: bool = False, ended: bool = False,
+                         payload: dict | None = None) -> str:
         """Yantra's look back over the conversation ``/new`` ends: one call
         to the agent's own model, on the person's allowance and recorded
         as a Run like any turn. Never costs the start-over: a look back
@@ -1653,7 +1692,8 @@ class Service:
             return ""                       # no allowance left to look back with
         run = Run(actor=who.id, agent=workspace_parts(key)[1], thread=thread,
                   message=text, started_at=started, cost_usd=0.0, came_by=came_by)
-        async with self._remembered(spec, who, key, history=True) as agent:
+        async with self._remembered(spec, who, key, history=True,
+                                    payload=payload) as agent:
             if agent is None:
                 return ""
             run.model = agent.model
@@ -1678,8 +1718,9 @@ class Service:
                              [remembering.Offer(c.statement, c.kind) for c in found],
                              replace=True)
         waiting = self.offered.get(who.id)
-        said = remembering.looked_back(waiting, quiet=quiet) if waiting else ""
-        if quiet and not found:
+        said = (remembering.looked_back(waiting, quiet=quiet, ended=ended)
+                if waiting else "")
+        if (quiet or ended) and not found:
             said = ""        # unasked: only news is worth a message
         run.reply = said or ("Looked back; nothing new to remember."
                              if run.stop_reason == "looked_back" else "")
@@ -1704,11 +1745,13 @@ class Service:
 
     @asynccontextmanager
     async def _remembered(self, spec: AgentSpec, who: Actor, key: str, *,
-                          history: bool = False) -> AsyncIterator[object | None]:
+                          history: bool = False,
+                          payload: dict | None = None) -> AsyncIterator[object | None]:
         """An agent built for this person as a turn would be, with their
         memory open (their name, their own key) and no message sent; None
         when this package keeps none for them. ``history``: this
-        conversation loaded too, for a look back over it."""
+        conversation loaded too, for a look back over it -- or ``payload``,
+        a conversation ``/new`` has already let go of."""
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         spec, remembers = self._memory_for(spec, who)
@@ -1733,7 +1776,9 @@ class Service:
                                  memory_path=self._workspace(key) / ".yantra" / "mcp.json")
             await self._remembering(agent, manager, who=who, remembers=remembers)
         try:
-            if history:
+            if history and payload is not None:
+                apply_payload(agent, payload, history_only=True)
+            elif history:
                 self._rehydrate(agent, key)
             yield agent if getattr(agent, "memory", None) is not None else None
         finally:
