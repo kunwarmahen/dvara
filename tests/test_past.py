@@ -171,6 +171,33 @@ def test_one_still_open_in_another_chat_is_not_opened_twice(make_service):
     assert said.text.startswith("That conversation is still going on Telegram.")
 
 
+def test_export_sends_a_file_of_words_and_tool_names(make_service):
+    service = make_service([says("The trip is on Friday.")])
+    say(service, "when is the school trip?")
+    sent = say(service, "/chats export 1")
+    assert sent.run_id is None and sent.stop_reason == "files"
+    [made] = sent.files
+    assert made.parent.name == "shared" and made.name.endswith("-when-is-the-school-trip.md")
+    text = made.read_text()
+    assert "**You**\n\nwhen is the school trip?" in text
+    assert "**greeter**\n\nThe trip is on Friday." in text
+    assert "never what they returned" in sent.text
+
+
+def test_export_of_a_number_not_there_is_said(make_service):
+    service = make_service([says("x")])
+    say(service, "a")
+    sent = say(service, "/chats export 9")
+    assert "no conversation 9" in sent.text and not sent.files
+
+
+def test_export_is_only_the_word_with_a_number():
+    assert past.export_pick("/chats export 2") == 2
+    assert past.export_pick("/chats export") is None
+    assert past.export_pick("/chats exports 2") is None
+    assert past.export_pick("export 2") is None
+
+
 def test_the_session_it_replaces_is_its_own_key(make_service):
     service = make_service([says("Friday."), says("hi")])
     say(service, "trip?")
@@ -245,6 +272,13 @@ def test_the_page_lists_searches_reads_and_deletes(make_service):
                           params={"actor": "owner"}).json()
         assert read["transcript"][1] == {"who": "agent", "text": "Lisbon in May."}
         assert client.get(f"/web/chats/{old}", headers=auth,
+                          params={"actor": "guest"}).status_code == 404
+        got = client.get(f"/web/chats/{old}/export", headers=auth,
+                         params={"actor": "owner"})
+        assert got.status_code == 200 and got.headers["content-type"].startswith("text/markdown")
+        assert "**greeter**\n\nLisbon in May." in got.text
+        assert "where-should-we-go.md" in got.headers["content-disposition"]
+        assert client.get(f"/web/chats/{old}/export", headers=auth,
                           params={"actor": "guest"}).status_code == 404
         now = listed["rows"][0]["id"]
         assert client.request("DELETE", f"/web/chats/{now}", headers=auth,

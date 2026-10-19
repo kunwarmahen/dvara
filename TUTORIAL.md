@@ -1248,7 +1248,10 @@ dvara say --actor owner --agent greeter "/chats boiler"
 
 The last answer lists only the boiler conversation, with *boiler*
 marked, and its number in the whole list (2). `/chats 2` goes back into
-it. `/chats delete 2` asks first; `/chats delete 2 sure` deletes it for
+it. `/chats export 2` sends it to you as a file to share: your words, the
+agent's answers and the names of the tools it used, never what a tool
+returned (on Telegram it arrives as a document). `/chats delete 2` asks
+first; `/chats delete 2 sure` deletes it for
 good. The conversation open now can't be deleted until you `/new`.
 Telegram's command menu lists `/chats` as *Our conversations: find,
 open, delete*.

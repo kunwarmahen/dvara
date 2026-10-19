@@ -21,6 +21,7 @@ all keep conversations the same way.
 /chats open 2           the same, as Yantra's terminal says it
 /chats delete 2         asks: "Delete … for good? Send /chats delete 2 sure"
 /chats delete 2 sure    deleted for good
+/chats export 2         that one as a Markdown file, sent with the answer
 ```
 
 ONE FILE PER PERSON. `state/past/<person>.sqlite` holds one person's
@@ -64,6 +65,7 @@ a chat word:
 ```
 GET    /web/chats?actor=A&q=WORDS     every agent's, newest first; q searches
 GET    /web/chats/ID?actor=A          one, to read: entries (tools too) + transcript
+GET    /web/chats/ID/export?actor=A   one as a Markdown file, to share
 DELETE /web/chats/ID?actor=A          gone for good; 409 if open in a chat now
 ```
 
@@ -105,6 +107,27 @@ pressure…"* with the conversation unfolded under it. **Delete** on the
 Lisbon one, now no longer open, removed it. `grep -c Lisbon` on
 `state/past/owner.sqlite` then counted 0. The other person's
 `/web/chats` was empty.
+
+## Sharing one
+
+`/chats export 2` writes that conversation as a Markdown file with
+Yantra's `export_markdown`. The file holds your words, the agent's
+answers under the agent's name, and the names of the tools it used,
+never what a tool returned. It goes into the person's folder with that
+agent, under `shared/` (so `/files` lists it), and goes out with the
+answer: a document on Telegram, a file line on the page.
+`GET /web/chats/ID/export` gives the same file to a page without a chat
+line. Sarathi's History uses it for **Download** and **Send…**, and its
+**Save as PDF** prints the same conversation through the browser.
+
+Live, on the scratch Dvara above with `qwen3.8:latest`, `/chats export 1`
+answered *"Here is “In one sentence: what pressure should a home boiler
+show when cold?”, to share: your words, my answers and the names of the
+tools I used (never what they returned). It's kept in your files too, as
+shared/2026-10-18-in-one-sentence-what-pressure-should-a-home-boil.md."*,
+and the line carried that file. Sarathi's page downloaded the same file
+and printed the conversation to a one-page A4 PDF at desktop and at
+phone width.
 
 ## What is not here yet
 

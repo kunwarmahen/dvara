@@ -423,6 +423,8 @@ And anyone can start their conversation with an agent over:
 /chats                         every conversation, newest first
 /chats boiler                  only the ones that say "boiler"
 /chats 2                       go back into one (the one you're in is kept)
+/chats export 2                that one as a file to share (words, answers,
+                               tool names -- never what a tool returned)
 /chats delete 2                delete one for good (asks you to add "sure")
 ```
 
@@ -435,8 +437,8 @@ person's own file. `/chats` finds one by its words and goes back into
 it, on whichever channel you ask from
 ([notes/45](notes/45-going-back.md),
 [notes/50](notes/50-every-conversation-kept.md)). A page gets the same
-through `GET /web/chats`, `GET /web/chats/ID` and `DELETE
-/web/chats/ID`; Sarathi's home page has a History button on them.
+through `GET /web/chats`, `GET /web/chats/ID`, `GET
+/web/chats/ID/export` (Markdown) and `DELETE /web/chats/ID`; Sarathi's home page has a History button on them.
 
 With an agent that remembers people (below), anyone can see and choose
 what it keeps about them:

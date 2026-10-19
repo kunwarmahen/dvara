@@ -702,6 +702,11 @@ class Service:
             said, shot = await phoneview.look(self.sparsh, self._workspace(key))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="phone", files=(shot,) if shot else ())
+        if not unattended and past.export_pick(text) is not None:
+            # One of theirs, as a file to share: it goes with the answer.
+            said, made = self._past_export(key, who, agent, past.export_pick(text))
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="files", files=(made,) if made else ())
         if not unattended and past.is_word(text):
             # Earlier conversations: theirs to list and go back into.
             said = await self._past_words(key, who=who, agent=agent, thread=thread,
@@ -1600,6 +1605,23 @@ class Service:
             from yantra.skills.lesson import DROPPED
             said = f"{said}\n\n{DROPPED}"
         return said, past.transcript(payload)
+
+    def _past_export(self, key: str, who: Actor, agent: str,
+                     n: int) -> tuple[str, Path | None]:
+        """``/chats export N``: the conversation as a Markdown file in their
+        folder with this agent (``shared/``), sent with the answer. Words,
+        answers and the tools' names -- never a tool's output (Yantra's
+        history.export_markdown)."""
+        rows = self.past.listed(who.id, agent)
+        if not 1 <= n <= len(rows):
+            return f"There's no conversation {n}. Send /chats to see them.", None
+        kept = self.past.read(who.id, rows[n - 1].id)
+        if kept is None:
+            return "That conversation just went. Send /chats to see what's kept.", None
+        made = past.export_to(self._workspace(key) / past.SHARED, kept, agent)
+        return (f"Here is “{kept['title']}”, to share: your words, my answers and the "
+                f"names of the tools I used (never what they returned). It's kept in "
+                f"your files too, as {past.SHARED}/{made.name}."), made
 
     def _past_delete(self, who: Actor, agent: str, n: int, sure: bool,
                      open_id: str | None) -> str:

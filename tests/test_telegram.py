@@ -341,7 +341,8 @@ def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
                             "Send /tools to see what I can use.\n\n"
                             "Send /new to start our conversation over. Every "
                             "conversation is kept: /chats lists them, /chats and a "
-                            "word finds one, /chats N goes back into it."]
+                            "word finds one, /chats N goes back into it, /chats "
+                            "export N sends it to you as a file to share."]
 
 
 # ---- the reply -------------------------------------------------------------

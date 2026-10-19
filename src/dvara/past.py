@@ -11,6 +11,7 @@ thirty-first, was still gone.
     /chats trip             only the ones that say "trip"
     /chats 2                go back into that one
     /chats delete 2         ask to delete it for good
+    /chats export 2         that one as a file, to share
     /chats delete 2 sure    delete it for good
 
 EVERY CONVERSATION, AS IT GOES. Each turn writes its conversation to the
@@ -35,6 +36,13 @@ each overwrite the other, so it says where it is open. Nothing else
 moves: the folder, the files, the schedules and the ledger never
 belonged to a conversation. Like ``/new``, never under a turn still
 working on it.
+
+SHARED AS A FILE. ``/chats export N`` writes that conversation as a
+Markdown file (Yantra's ``export_markdown``: words, answers, the tools'
+names, never their output) into the person's folder with that agent,
+under ``shared/``, and it goes out with the answer: a document on
+Telegram, a file on the page. A page that wants it without a chat line
+asks ``GET /web/chats/ID/export``.
 
 DELETED MEANS GONE, ASKED ONCE. A chat has no dialog, so ``/chats delete
 N`` says which conversation that is and what to send to delete it; only
@@ -61,9 +69,13 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from yantra.history import END, HIT, ConversationLog, Kept, new_id, title_of
+from yantra.history import (END, HIT, ConversationLog, Kept, export_markdown, export_name,
+                            new_id, title_of)
 
 WORD = "/chats"
+#: Where a shared conversation's file is written, in the person's folder
+#: with that agent (so ``/files`` lists it too).
+SHARED = "shared"
 #: Rows shown in a chat's list; a page asks for as many as it wants.
 SHOWN_ROWS = 30
 
@@ -80,6 +92,25 @@ CAME = {"telegram": "Telegram", "web": "the page", "http": "HTTP"}
 def is_word(text: str) -> bool:
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].split("@")[0].lower() == WORD
+
+
+def export_pick(text: str) -> int | None:
+    """The N of ``/chats export N``, or None when that isn't what was said."""
+    if not is_word(text):
+        return None
+    parts = picked(text).split()
+    if len(parts) == 2 and parts[0].lower() == "export" and parts[1].isdigit():
+        return int(parts[1])
+    return None
+
+
+def export_to(folder: Path, kept: dict, agent: str) -> Path:
+    """``kept`` (``PastBook.read``) as a Markdown file in ``folder``; the
+    same conversation shared again writes over its own earlier file."""
+    folder.mkdir(parents=True, exist_ok=True)
+    made = folder / export_name(kept)
+    made.write_text(export_markdown(kept, agent=agent), encoding="utf-8")
+    return made
 
 
 def picked(text: str) -> str:

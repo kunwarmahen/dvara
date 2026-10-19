@@ -71,7 +71,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from yantra import parse_grant
 
@@ -539,6 +539,24 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=404, detail="that conversation is gone")
         return {**kept, "agent": kept["folder"],
                 "open": conversation_id in service.past.open_ids(actor)}
+
+    @app.get("/web/chats/{conversation_id}/export")
+    async def web_chat_export(conversation_id: str, actor: str = "",
+                              authorization: str | None = Header(default=None)) -> Response:
+        """One conversation as a Markdown file to share (past.py): words,
+        answers, the tools' names. Only ever the person's own."""
+        check(authorization)
+        web_for(actor)
+        kept = service.past.read(actor, conversation_id)
+        if kept is None:
+            raise HTTPException(status_code=404, detail="that conversation is gone")
+        from urllib.parse import quote
+
+        from yantra.history import export_markdown, export_name
+        return Response(export_markdown(kept, agent=kept["folder"] or "Agent"),
+                        media_type="text/markdown; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 f"attachment; filename*=UTF-8''{quote(export_name(kept))}"})
 
     @app.delete("/web/chats/{conversation_id}")
     async def web_chat_delete(conversation_id: str, actor: str = "",
