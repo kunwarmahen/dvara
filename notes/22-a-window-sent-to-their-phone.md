@@ -137,6 +137,9 @@ crosses; it simply hasn't been needed yet.
 * **Streaming through Telegram.** A bot can send pictures, but a sign-in
   needs taps where the person means them and typing into the field they
   chose. That's a page, not a chat.
+* ~~**Google's page in the window.**~~ Built once Telegram turned out to
+  hide the address the paste needs:
+  [note 52](52-googles-page-in-the-window.md).
 * **A window for a site Setu wrote the rules for itself** (`--site`).
   Its sign-in is checked by reading its page and asking the person
   whether it worked, which needs them at the machine anyway.

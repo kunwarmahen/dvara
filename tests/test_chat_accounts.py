@@ -110,6 +110,16 @@ SETU = """\
                  level_label="Read only", asked_level="read")
             sys.exit(0)
         emit(event="started", ref=ref, level="read", level_label="Read only")
+        if "--remote" in args:                # Google's page, in the streamed window
+            import time
+            emit(event="url", url="https://accounts.google.com/o/oauth2/auth?state=GOOD",
+                 paste="--paste" in args, window=True)
+            emit(event="link", url="http://beast.local:8767/w/TOKEN", expires_at=0)
+            time.sleep(0.3)
+            json.dump(have + [ref], open(path, "w"))
+            emit(event="connected", ref=ref, email="me@example.com", level="read",
+                 level_label="Read only", asked_level="read")
+            sys.exit(0)
         emit(event="url", url="https://accounts.google.com/o/oauth2/auth?state=GOOD", paste=True)
         for line in sys.stdin:
             if "state=GOOD" in line and "code=" in line:
@@ -229,6 +239,7 @@ class TestSigningInFromTheChat:
             self, make_service, fake_setu, agents_root, monkeypatch):
         monkeypatch.delenv("SETU_WINDOW_HOST", raising=False)
         monkeypatch.delenv("SETU_WINDOW_URL", raising=False)
+        monkeypatch.delenv("SETU_WINDOW_NAME", raising=False)
         mailer(agents_root)
         service = make_service([], actors=book(raj={"setu": True}))
         reply = run(turn(service, "raj", "/connect amazon"))
@@ -259,6 +270,31 @@ class TestSigningInFromTheChat:
         argv = json.loads((service.state / "setu" / "raj" / "argv.log")
                           .read_text().splitlines()[-1])
         assert "--remote" in argv and "--client-file" not in argv
+
+
+    def test_with_a_window_googles_page_is_streamed_and_nothing_is_pasted(
+            self, make_service, fake_setu, agents_root, monkeypatch):
+        monkeypatch.setenv("SETU_WINDOW_NAME", "beast.local")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        told: list[str] = []
+
+        async def notify(actor, text):
+            told.append(text)
+        service.accounts.notify = notify
+
+        async def go():
+            reply = await turn(service, "raj", "/connect gmail")
+            await asyncio.sleep(1.0)
+            await service.accounts.aclose()
+            return reply
+        reply = run(go())
+        assert "http://beast.local:8767/w/TOKEN" in reply.text
+        assert "accounts.google.com" not in reply.text and "127.0.0.1" not in reply.text
+        assert told and told[0].startswith("Connected gmail:personal")
+        argv = json.loads((service.state / "setu" / "raj" / "argv.log")
+                          .read_text().splitlines()[-1])
+        assert "--remote" in argv and "--paste" in argv
 
 
 class TestListingAndDisconnecting:

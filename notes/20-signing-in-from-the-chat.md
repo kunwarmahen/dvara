@@ -25,6 +25,11 @@ http://127.0.0.1:42631/?state=Exxcgjnhi_yj…&code=4/0AbCd…&scope=…
 
 and that's everything the sign-in was waiting for.
 
+(Telegram's own browser hides that address bar, and its share button
+shares the first link, not this one. So from Telegram, with a window
+address set, Google's page now opens in the streamed window instead, and
+nothing is pasted: [note 52](52-googles-page-in-the-window.md).)
+
 ## Three words, and they're the person's
 
 ```

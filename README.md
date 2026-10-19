@@ -372,8 +372,10 @@ A person with a folder of their own -- or one the owner let them manage
 -- signs in from the chat:
 
 ```
-/connect gmail                 they get Google's link, sign in on their phone, and
-                               send back the address of the page that won't load
+/connect gmail                 they sign in on their phone; with a window address
+                               set, Google's page is streamed to them (notes/52),
+                               else they send back the address of the page that
+                               won't load
 /accounts                      what's connected for them
 /accounts page                 a link to their own folder's page in Setu: once, on the
                                first device, for ten minutes (notes/31)
@@ -463,14 +465,20 @@ bot restarts.
 
 These go to dvara, never to an agent, and the pasted address goes only to
 the waiting sign-in ([notes/20](notes/20-signing-in-from-the-chat.md)).
+With a window address (below), Google's and Home Assistant's sign-in
+pages are streamed to their phone too, so the page's return to
+`127.0.0.1` lands on your computer and nothing is pasted. Telegram's own
+browser hides the address a paste needs
+([notes/52](notes/52-googles-page-in-the-window.md)).
 Their folder borrows your Google client file; while your Google app is in
 Testing mode, add each person's address as a test user (publishing the
 app ends that, and the weekly sign-out too; Setu's README). A folder you
 pointed them at (priya's, above) stays yours to change, at the machine:
 `SETU_HOME=<folder> setu connect gmail`. Sites signed in to through a
 browser window (Amazon, X) are streamed to their phone when you give
-the service a window address (`SETU_WINDOW_HOST`, and `SETU_WINDOW_URL`
-behind a tunnel); without one they're connected at the machine
+the service a window address (`SETU_WINDOW_HOST`, `SETU_WINDOW_NAME` for
+the name in its link, and `SETU_WINDOW_URL` behind a tunnel); without one
+they're connected at the machine
 ([notes/22](notes/22-a-window-sent-to-their-phone.md)). A
 person's tokens sit on your disk, where you could read them; say so to
 anyone you give a folder ([notes/19](notes/19-their-own-accounts.md)).
@@ -1194,7 +1202,7 @@ reads that person's key from `<state>/memory.json`
 | module | what it holds |
 |---|---|
 | `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), and the package's own `[[mcp]]` servers, last ([notes/48](notes/48-a-server-of-their-own.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)), behind its answer ([notes/51](notes/51-starting-over-at-once.md)), or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
-| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)) |
+| `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)); Google's page in the streamed window when one is set ([notes/52](notes/52-googles-page-in-the-window.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |

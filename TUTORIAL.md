@@ -922,11 +922,17 @@ setu_accounts = ["gmail:personal"]   # ...narrowed to one account
 
 raj signs in from the chat. If he asks about mail first, the agent says
 to send `/connect gmail` and the answer carries a **Connect gmail**
-button that sends it for him. He sends `/connect gmail`, gets Google's
-link, signs in on his phone, and sends back the address of the page that
-then fails to load (it starts `http://127.0.0.1`). dvara hands that to
-the waiting sign-in, never to an agent, and answers *"Connected
-gmail:personal (raj@example.com) at Read only"*. `/accounts` lists what
+button that sends it for him. He sends `/connect gmail` and gets a link.
+With a window address set (`SETU_WINDOW_HOST`, below), it opens Google's
+sign-in page running in a browser on your computer, shown on his phone.
+He signs in there, and dvara tells him *"Connected gmail:personal
+(raj@example.com) at Read only"*. Nothing is copied
+([notes/52](notes/52-googles-page-in-the-window.md)). Without one, he
+gets Google's own link, signs in on his phone, and sends back the address
+of the page that then fails to load (it starts `http://127.0.0.1`).
+Telegram's own browser hides that address, so set a window address if he
+uses Telegram. dvara hands the address to the waiting sign-in, never to
+an agent, and answers the same way. `/accounts` lists what
 he has; `/disconnect gmail:personal` removes one. `/lock` seals his
 folder with a passphrase only he knows, and `/unlock` opens it for a
 week at a time, so his schedules keep running
@@ -1673,6 +1679,7 @@ Each topic, and the note that argues it:
 | `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again (now every conversation: note 50) |
 | `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
+| `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
 | `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |
 

@@ -25,9 +25,19 @@ sentence for a model to read (``service.py``). A prompt injected into
 somebody's mail can ask an agent for anything; it cannot type a slash
 command into their chat.
 
-THE PASTED ADDRESS GOES TO THE SIGN-IN AND NOWHERE ELSE. ``/connect``
-starts ``setu connect --json --paste`` in the person's folder and sends
-them Google's link. They sign in on their phone; the browser then fails
+A SIGN-IN PAGE IN THE WINDOW, WHEN THERE IS ONE. With a window address
+set (``SETU_WINDOW_HOST``, ``_URL`` or ``_NAME``), ``/connect gmail``
+starts ``setu connect --json --remote --paste``: Google's page opens in a
+browser on this computer, streamed to their phone, and its return to
+``127.0.0.1`` lands here, where Setu is listening. Nothing is copied. A
+chat app's own browser hides the address of a page that would not load,
+and its share button sends the first link instead (Telegram's sent
+``accounts.google.com``), so the paste below was a step people could
+not take there.
+
+THE PASTED ADDRESS GOES TO THE SIGN-IN AND NOWHERE ELSE. Without a
+window, ``/connect`` starts ``setu connect --json --paste`` in the
+person's folder and sends them Google's link. They sign in on their phone; the browser then fails
 to load ``http://127.0.0.1:<port>/?state=...&code=...``. They copy that
 address and send it here. It is handed to the waiting sign-in's stdin --
 not to an agent, not to the conversation's history, not to the run log
@@ -403,8 +413,12 @@ class AccountDesk:
             return (f"{card.get('name') or connector} is signed in to in a browser window on "
                     "the owner's computer. They can sign you in there, or give this service a "
                     "window address (SETU_WINDOW_HOST) so it can be streamed to your phone.")
-        road = "--remote" if in_a_window else "--paste"
-        argv = [program, "connect", connector, "--as", account, "--json", road,
+        # a sign-in page goes in the window too when there is one: its
+        # return to 127.0.0.1 then lands on this computer, and nothing has
+        # to be copied out of a chat app's browser, which hides the address
+        roads = (["--remote"] if in_a_window else
+                 ["--remote", "--paste"] if window_set() else ["--paste"])
+        argv = [program, "connect", connector, "--as", account, "--json", *roads,
                 "--timeout", str(int(self.sign_in_for))]
         if level:
             argv += ["--level", level]
@@ -520,6 +534,8 @@ class AccountDesk:
                 except ValueError:
                     continue
                 kind = event.get("event")
+                if kind == "url" and event.get("window"):
+                    continue           # opened in the window: its link is what is sent
                 if not linked:
                     await waiting.events.put(event)
                     linked = kind in ("url", "link")
@@ -606,9 +622,9 @@ def _outcome(ref: str, event: dict[str, Any]) -> str:
 
 def window_set() -> bool:
     """Whether the owner said where a streamed sign-in window listens
-    (Setu's SETU_WINDOW_HOST or SETU_WINDOW_URL, in this service's own
-    environment)."""
-    return bool(os.environ.get("SETU_WINDOW_HOST") or os.environ.get("SETU_WINDOW_URL"))
+    (Setu's SETU_WINDOW_HOST, SETU_WINDOW_URL or SETU_WINDOW_NAME, in this
+    service's own environment)."""
+    return any(os.environ.get(f"SETU_WINDOW_{k}") for k in ("HOST", "URL", "NAME"))
 
 
 def _env(home: Path, key: str | None = None) -> dict[str, str]:
