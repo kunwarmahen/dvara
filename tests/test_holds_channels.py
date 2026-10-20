@@ -7,8 +7,9 @@ Each one has its own way to get a held turn wrong:
 * Telegram: a held reply with no way to answer it from the chat, a press
   by somebody else that carries the turn on, or the rest of the answer
   landing in the wrong chat;
-* the terminal: a call nobody named approved by default, or a held turn
-  that the ledger cannot tell from a refused one.
+* the terminal: a call nobody named approved by default, a held turn
+  that the ledger cannot tell from a refused one, or an id that starts
+  with a dash and is read as an option (one in 64 did).
 """
 
 from __future__ import annotations
@@ -316,3 +317,19 @@ def test_call_words_become_answers(owned, tmp_path, agents_root):
                                            "call-b": "leave it"}
     finally:
         service.close()
+
+
+def test_an_id_never_starts_with_a_dash(monkeypatch):
+    from dvara import holds
+
+    made = iter(["-looks-like-an-option", "_fine", "ok"])
+    monkeypatch.setattr(holds.secrets, "token_urlsafe", lambda n: next(made))
+    assert holds.fresh_id() == "_fine"
+
+
+def test_an_old_id_with_a_dash_is_still_resumed_after_two_dashes(owned):
+    from dvara.cli import build_parser
+
+    args = build_parser().parse_args([*owned, "resume", "--actor", "owner", "--approve",
+                                      "--", "-Xq3old"])
+    assert args.hold == "-Xq3old"

@@ -129,12 +129,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import secrets
 from contextlib import suppress
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
+from dvara.holds import fresh_id
 from yantra import HELD, REFUSED_TIMEOUT, REFUSED_UNATTENDED, REFUSED_USER
 
 #: Long enough that a person can pick up their phone, short enough that a
@@ -336,7 +336,7 @@ class AskDesk:
         # person accepted with it, and may be longer than the desk's.
         limit = (self.timeout if timeout is None
                  else max(0.0, timeout if scheduled else min(self.timeout, timeout)))
-        ask = Ask(id=secrets.token_urlsafe(16), actor=actor, agent=agent,
+        ask = Ask(id=fresh_id(), actor=actor, agent=agent,
                   thread=thread, tool=tool, summary=summary, picture=picture)
         loop = asyncio.get_running_loop()
         future: asyncio.Future[tuple[bool, str | None]] = loop.create_future()

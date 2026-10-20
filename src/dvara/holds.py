@@ -76,6 +76,18 @@ CREATE INDEX IF NOT EXISTS holds_actor ON holds (actor, held_at);
 """
 
 
+def fresh_id() -> str:
+    """A hold's or a question's id: random, URL-safe, and never starting
+    with a dash. ``token_urlsafe`` uses ``-`` too, so one id in 64 began
+    with one, and ``dvara resume -Xq3...`` read it as an option it didn't
+    know -- a held turn nobody could resume from the terminal (and a test
+    that failed about one full run in five)."""
+    while True:
+        made = secrets.token_urlsafe(16)
+        if not made.startswith("-"):
+            return made
+
+
 @dataclass(frozen=True)
 class Waiting:
     """One call a held turn is waiting on, as the person will see it."""
@@ -155,7 +167,7 @@ class HoldBook:
         hold one turn at a time; a second hold means the first was already
         set aside by the message that led to the second.
         """
-        hold = Hold(id=secrets.token_urlsafe(16), key=key, actor=actor,
+        hold = Hold(id=fresh_id(), key=key, actor=actor,
                     agent=agent, thread=thread, run_id=run_id,
                     held_at=held_at, calls=tuple(calls))
         with self._lock:

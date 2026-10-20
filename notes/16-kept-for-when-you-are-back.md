@@ -91,6 +91,16 @@ dvara resume ID --actor owner --approve      # or --refuse [REASON]
 dvara resume ID --actor owner --call CALL=yes --call "CALL=leave b.txt alone"
 ```
 
+**AN ID NEVER STARTS WITH A DASH.** Ids were `secrets.token_urlsafe`,
+whose letters include `-`, so one in 64 began with one, and `dvara
+resume -Xq3...` read it as an option it didn't know: *"the following
+arguments are required: hold"*. That turn couldn't be resumed from the
+terminal, and the test that made a hold failed about one full run in
+five. A hold's id and a question's id are now drawn again until the
+first letter isn't a dash (`holds.fresh_id`). A hold filed before that
+can still be named after two dashes: `dvara resume --actor owner
+--approve -- -Xq3...`.
+
 ```
 GET  /holds?actor=owner
 POST /holds/ID   {"actor": "owner", "answers": {"call_a": true, "call_b": "leave b.txt alone"}}
