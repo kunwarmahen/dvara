@@ -27,6 +27,7 @@ command into their chat.
 
 A SIGN-IN PAGE IN THE WINDOW, WHEN THERE IS ONE. With a window address
 set (``SETU_WINDOW_HOST``, ``_URL`` or ``_NAME``), ``/connect gmail``
+(and ``/connect server URL`` for a server that signs in on its own page)
 starts ``setu connect --json --remote --paste``: Google's page opens in a
 browser on this computer, streamed to their phone, and its return to
 ``127.0.0.1`` lands here, where Setu is listening. Nothing is copied. A
@@ -328,7 +329,10 @@ class AccountDesk:
                         "[a name] [read] [as NAME]")
         if url is None:
             return await self._server_page(program, home, own_folder)
-        argv = [program, "connect", "--server", url, "--as", account, "--json", "--paste",
+        # its own sign-in page goes in the window too when there is one: on a
+        # phone, 127.0.0.1 is the phone, and the page's return never gets here
+        roads = ["--remote", "--paste"] if window_set() else ["--paste"]
+        argv = [program, "connect", "--server", url, "--as", account, "--json", *roads,
                 "--timeout", str(int(self.sign_in_for))]
         argv += ["--id", name] if name else []
         argv += ["--level", level] if level else []
@@ -336,12 +340,14 @@ class AccountDesk:
         started, done = await self._launch(actor, guess, argv, home)
         if done["event"] == "timeout":
             return "That server didn't answer in time; nothing was saved."
-        if done["event"] == "url":
+        if done["event"] in ("url", "link"):
             # it signs in on its own page: the same road as Google's, and the
-            # outcome comes back as the reply to the paste
+            # outcome comes back as the reply to the paste, or as a notice
             ref = str(started.get("ref") or guess)
             if self._waiting.get(actor) is not None:
                 self._waiting[actor].ref = ref
+            if done["event"] == "link":
+                return self._window_link(ref, "its sign-in page", done["url"])
             return self._paste_back(ref, started.get("level_label") or level or
                                     "all its tools, the ones that change things asked "
                                     "about", done["url"])
@@ -437,15 +443,19 @@ class AccountDesk:
         if event.get("event") == "error":
             return f"I couldn't start that sign-in: {event.get('message')}"
         what = started.get("level_label") or level or "the least access"
-        minutes = int(self.sign_in_for // 60)
         if event.get("event") == "link":
-            return (f"To connect {ref} ({what}), open this on your phone:\n\n{event['url']}"
-                    f"\n\nYou'll see {card.get('name') or connector}'s sign-in page, running "
-                    "in a browser on this service's computer: tap and type as you would on "
-                    "the page. It opens on the first device only and works for "
-                    f"{minutes} minutes. Your sign-in stays in your own folder; I'll tell you "
-                    "when it's done.")
+            return self._window_link(ref, f"{card.get('name') or connector}'s sign-in page",
+                                     event["url"], what)
         return self._paste_back(ref, what, event["url"])
+
+    def _window_link(self, ref: str, page: str, url: str, what: str = "") -> str:
+        minutes = int(self.sign_in_for // 60)
+        named = f"{ref} ({what})" if what else ref
+        return (f"To connect {named}, open this on your phone:\n\n{url}"
+                f"\n\nYou'll see {page}, running in a browser on this service's computer: "
+                "tap and type as you would on the page. It opens on the first device only "
+                f"and works for {minutes} minutes. Your sign-in stays in your own folder; "
+                "I'll tell you when it's done.")
 
     def _paste_back(self, ref: str, what: str, url: str) -> str:
         minutes = int(self.sign_in_for // 60)

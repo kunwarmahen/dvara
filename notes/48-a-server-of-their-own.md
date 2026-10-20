@@ -95,6 +95,30 @@ Run against a stand-in server in `tests/test_chat_accounts.py`; Setu's
 own tests hold the sign-in itself, and its discovery was checked against
 Linear's and Notion's real servers.
 
+**In the window, when there is one.** Tried from Telegram on a phone with
+Notion, the paste road stalled: Notion's page ended on
+`http://127.0.0.1:…`, which on a phone is the phone, and Telegram's own
+browser kept the address out of reach. So with a window address set
+(`SETU_WINDOW_HOST`, `_URL` or `_NAME`), `/connect server URL` runs
+`setu connect --server URL --json --remote --paste`, the same road
+Google's page takes since notes/20: the server's sign-in page opens in a
+browser on the service's computer, streamed to the phone, and its return
+to `127.0.0.1` lands where Setu listens. The reply is the window's link,
+and the outcome comes as a notice:
+
+```
+To connect wiki:personal, open this on your phone:
+
+http://beast.local:8767/w/…
+
+You'll see its sign-in page, running in a browser on this service's computer: …
+```
+
+Setu's real run against Notion's server, with a window on this computer,
+sent `started`, `url` (with `window: true`), `link`, and on running out
+of time `error`, leaving no browser behind. Without a window address the
+paste road above is unchanged.
+
 ## A folder that isn't theirs
 
 A person pointed at the owner's folder with `setu_manage`

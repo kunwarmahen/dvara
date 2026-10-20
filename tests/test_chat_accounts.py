@@ -68,6 +68,17 @@ SETU = """\
             if "signs-in" in args[1]:         # it signs in on its own page
                 ref = "wiki:" + account
                 emit(event="started", ref=ref, level="write", scopes=[])
+                if "--remote" in args:        # its page, in the streamed window
+                    import time
+                    emit(event="url", url="https://auth.example.com/authorize?state=GOOD",
+                         paste="--paste" in args, window=True)
+                    emit(event="link", url="http://beast.local:8767/w/TOKEN", expires_at=0)
+                    time.sleep(0.3)
+                    json.dump(have + [ref], open(path, "w"))
+                    emit(event="connected", ref=ref, email="signs-in.example.com/mcp",
+                         level="write", level_label="All its tools", asked_level="write",
+                         tools=4)
+                    sys.exit(0)
                 emit(event="url", url="https://auth.example.com/authorize?state=GOOD",
                      paste="--paste" in args)
                 for line in sys.stdin:
@@ -500,6 +511,30 @@ class TestTheirOwnServer:
         argv = json.loads((home / "argv.log").read_text().splitlines()[-1])
         assert "--paste" in argv
         assert json.loads((home / "accounts.json").read_text()) == ["wiki:personal"]
+
+    def test_with_a_window_its_page_is_streamed_since_127_0_0_1_on_a_phone_is_the_phone(
+            self, make_service, fake_setu, agents_root, monkeypatch):
+        monkeypatch.setenv("SETU_WINDOW_NAME", "beast.local")
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        told: list[str] = []
+
+        async def notify(actor, text):
+            told.append(text)
+        service.accounts.notify = notify
+
+        async def go():
+            reply = await turn(service, "raj", "/connect server https://signs-in.example/mcp")
+            await asyncio.sleep(1.0)
+            await service.accounts.aclose()
+            return reply
+        reply = run(go())
+        assert "http://beast.local:8767/w/TOKEN" in reply.text and "wiki:personal" in reply.text
+        assert "auth.example.com" not in reply.text and "127.0.0.1" not in reply.text
+        assert told and told[0].startswith("Connected wiki:personal")
+        argv = json.loads((service.state / "setu" / "raj" / "argv.log")
+                          .read_text().splitlines()[-1])
+        assert "--remote" in argv and "--paste" in argv
 
     def test_changing_its_level_needs_no_link(self, make_service, fake_setu, agents_root):
         mailer(agents_root)

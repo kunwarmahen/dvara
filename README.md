@@ -380,8 +380,9 @@ A person with a folder of their own -- or one the owner let them manage
 /accounts page                 a link to their own folder's page in Setu: once, on the
                                first device, for ten minutes (notes/31)
 /connect server https://x/mcp  an MCP server of their own that needs no token; one
-                               that signs in on its own page sends its link, and the
-                               address it ends on is pasted back, as Google's; one
+                               that signs in on its own page sends its link (in the
+                               streamed window when there is one, else the address
+                               it ends on is pasted back), as Google's; one
                                that needs a token gets their page's link instead,
                                so no token is typed into a chat (notes/48)
 /disconnect gmail:personal     revoke and forget
