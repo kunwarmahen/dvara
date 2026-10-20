@@ -119,6 +119,14 @@ sent `started`, `url` (with `window: true`), `link`, and on running out
 of time `error`, leaving no browser behind. Without a window address the
 paste road above is unchanged.
 
+Then the real thing, from Telegram on an iPhone: Notion's sign-in, through
+Microsoft, which sent the person to their authenticator app for a number.
+Two things broke on the way and were fixed in Setu's window (the button
+that closed the browser before the page came back, and the picture a phone
+drops while another app is in front). Then it connected: 65 tools, 36 of
+them marked read by Notion itself, and an agent whose package needs
+`"*:read"` sees those 36.
+
 ## A folder that isn't theirs
 
 A person pointed at the owner's folder with `setu_manage`
