@@ -95,7 +95,8 @@ first turn to a bot that asks you before anything changes.
   ([notes/20](notes/20-signing-in-from-the-chat.md)).
 * **[Sparsh](https://github.com/kunwarmahen/sparsh)** — with `--sparsh`,
   the agents of the one person marked `phone = true` work the phone
-  plugged into this machine, and a step that can't be taken back (Send,
+  plugged into this machine (or, with several phones named, each
+  person's agents their own `phones`), and a step that can't be taken back (Send,
   Pay, Delete) comes to their chat as Yes and No buttons
   ([notes/30](notes/30-do-this-on-my-phone.md)).
 * **[Smritikosh](https://github.com/kunwarmahen/smritikosh)** — with

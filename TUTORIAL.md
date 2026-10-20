@@ -1196,6 +1196,39 @@ phone stayed locked for 5 minutes after you were asked to unlock it`.
 With no PIN, nothing is asked and the run just goes. `samay rm <id>`
 when you're done, or it runs every morning.
 
+**Several phones, each one person's.** Name the phones for Sparsh, and
+give each person theirs:
+
+```bash
+export SPARSH_PHONES="nexus=84B7N16128001616,pixel=emulator-5554"
+```
+
+```toml
+[actor.owner]
+phones = ["nexus"]
+
+[actor.ravi]
+phones = ["pixel"]
+agents = ["phone"]
+```
+
+Each person's agent gets only their own phones. Try it with the
+emulator as Ravi's:
+
+```bash
+dvara --sparsh /path/to/sparsh say --actor ravi --agent phone "Which phones can you work?"
+#   For now just one: the Pixel emulator (emulator-5554).
+dvara --sparsh /path/to/sparsh say --actor owner --agent phone "/phone pixel"
+#   pixel isn't one of your phones (nexus).
+```
+
+A phone listed under two people is refused when the file is read. For
+someone with several phones, `/phone` shows the first and names the
+others (`/phone NAME` shows that one). A schedule names its phone
+(`samay add … --phone nexus`). One that names none for a person with
+several is skipped with a sentence saying which phones they have
+([notes/54](notes/54-each-phone-ones.md)).
+
 ## 19 · A chat on a page
 
 Telegram was the one place a person could talk to their agent, and the
