@@ -141,7 +141,7 @@ phones through the house's own ntfy; and the owner's files changed from
 a page, each checked before it's written; and a turn watched while it
 runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools` and `/schedules` answered
-from the record — covered by 830 tests. The API is not stable.
+from the record — covered by 957 tests. The API is not stable.
 
 ## The shape of it
 

@@ -1218,7 +1218,7 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
                   ("learn", "Keep what I just did as a skill; /learn start to teach me")]
     words += [("tools", "What I can use for you")]
     if phone:
-        words += [("phone", "Your phone's screen, and what was done on it")]
+        words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
     if schedules:
         words += [("schedules", "Your schedules")]
     return words
