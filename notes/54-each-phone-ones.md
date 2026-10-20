@@ -113,8 +113,7 @@ from inside his turn, that is true.
 
 ## What is not here yet
 
-* Samay naming a schedule's phone. Dvara takes a name in `phone`, but a
-  schedule made in a chat still carries only `phone: true`. For a person
-  with one phone that's enough. For a person with several, the run is
-  refused with the sentence above until Samay carries the name.
+* ~~Samay naming a schedule's phone.~~ `samay add --phone nexus`, the
+  agent's `phone_name`; sent to Dvara as `phone: "nexus"` (Samay's
+  notes/06).
 * A real iPhone and a real Android with two people at once.
