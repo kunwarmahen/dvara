@@ -1203,6 +1203,9 @@ give each person theirs:
 export SPARSH_PHONES="nexus=84B7N16128001616,pixel=emulator-5554"
 ```
 
+Set it before Dvara starts: the phones are read once, at start, so a
+change means a restart.
+
 ```toml
 [actor.owner]
 phones = ["nexus"]
