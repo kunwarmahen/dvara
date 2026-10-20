@@ -129,7 +129,7 @@ from dvara.gate import LADDER
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage",
-                        "phone"})
+                        "phone", "phones"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -211,8 +211,16 @@ class Actor:
     setu_manage: bool = False
     #: The phone plugged into this machine is theirs: their agents may
     #: work it, through Sparsh, when the service was started with
-    #: --sparsh. At most one person in the file (``ActorBook``).
+    #: --sparsh. At most one person in the file (``ActorBook``). With
+    #: several phones named (Sparsh's ``$SPARSH_PHONES``), every one.
     phone: bool = False
+    #: The named phones that are theirs (``phones = ["nexus"]``): their
+    #: agents get these and no others. A phone has ONE owner (``ActorBook``).
+    phones: tuple[str, ...] = ()
+
+    @property
+    def has_phone(self) -> bool:
+        return self.phone or bool(self.phones)
 
     @property
     def manages_setu(self) -> bool:
@@ -265,12 +273,29 @@ class ActorBook:
 
         # ONE PHONE, ONE PERSON. The phone on this machine's cable is
         # somebody's, with their messages on it; two people's agents on
-        # it would read each other's and tap over each other.
+        # it would read each other's and tap over each other. ``phone =
+        # true`` is every phone, so it leaves none for anybody else.
         phones = [a.id for a in self._actors.values() if a.phone]
         if len(phones) > 1:
             raise ConfigProblem(
                 f"{where}: phone = true for both [actor.{phones[0]}] and "
                 f"[actor.{phones[1]}]; the phone on this machine is one person's")
+        named = [a.id for a in self._actors.values() if a.phones]
+        if phones and [n for n in named if n != phones[0]]:
+            other = next(n for n in named if n != phones[0])
+            raise ConfigProblem(
+                f"{where}: [actor.{phones[0]}] has phone = true, which is every phone "
+                f"here, and [actor.{other}] has phones too; give each their own "
+                f"with phones = [\"name\"]")
+        owner: dict[str, str] = {}
+        for actor in self._actors.values():
+            for name in actor.phones:
+                claimed = owner.setdefault(name, actor.id)
+                if claimed != actor.id:
+                    raise ConfigProblem(
+                        f"{where}: the phone {name!r} is in phones for both "
+                        f"[actor.{claimed}] and [actor.{actor.id}]; a phone is one "
+                        f"person's")
 
     def __len__(self) -> int:
         return len(self._actors)
@@ -360,6 +385,7 @@ class ActorBook:
                 setu_accounts=_setu_accounts(body, name, where),
                 setu_manage=_setu_manage(body, name, where),
                 phone=_phone(body, name, where),
+                phones=_phones(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -447,6 +473,24 @@ def _phone(body: dict, name: str, where) -> bool:
     if not isinstance(value, bool):
         raise ConfigProblem(f"{where}: [actor.{name}] phone must be true or false")
     return value
+
+
+#: A phone's name, as Sparsh takes it (its phones.py).
+PHONE_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,31}\Z")
+
+
+def _phones(body: dict, name: str, where) -> tuple[str, ...]:
+    value = body.get("phones", [])
+    if not isinstance(value, list) or not all(
+            isinstance(v, str) and PHONE_NAME.match(v) for v in value):
+        raise ConfigProblem(f"{where}: [actor.{name}] phones is a list of phone names "
+                            f"like [\"nexus\"] (lower case, digits, dashes)")
+    if value and body.get("phone") is True:
+        raise ConfigProblem(f"{where}: [actor.{name}] has phone = true (every phone) and "
+                            f"phones (some); keep one")
+    if len(set(value)) != len(value):
+        raise ConfigProblem(f"{where}: [actor.{name}] names a phone twice in phones")
+    return tuple(value)
 
 
 def _setu_manage(body: dict, name: str, where) -> bool:

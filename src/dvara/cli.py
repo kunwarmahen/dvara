@@ -435,7 +435,8 @@ def _sparsh(asked: str | None) -> str | None:
         raise ConfigProblem(f"--sparsh: {exc}") from None
     assert found is not None
     data, program = found
-    phones = ", ".join(p.get("serial", "?") for p in ready_phones(data)) or "none attached yet"
+    phones = ", ".join((f"{p['name']}: " if p.get("name") else "") + p.get("serial", "?")
+                       for p in ready_phones(data)) or "none attached yet"
     print(f"dvara: the phone through sparsh {data.get('version')} ({program}); "
           f"phone: {phones}", file=sys.stderr)
     return program

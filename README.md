@@ -357,7 +357,10 @@ setu_manage = true                   # ...and /connect, /disconnect reach it
 **Their phone.** `phone = true` says the phone plugged into this machine
 is theirs: with `--sparsh`, their agents can work it (*Your phone, from
 the chat*, below). One person at most: two marked is an error naming
-both.
+both. With several phones named in Sparsh (`SPARSH_PHONES`),
+`phones = ["nexus"]` gives a person theirs: their agents reach those and
+no others, and a phone under two people is an error naming both
+([notes/54](notes/54-each-phone-ones.md)).
 
 Each turn reads Setu in that person's folder and starts their
 connections there, so their agent can only open their accounts, and only
@@ -880,7 +883,9 @@ refusal with its reason and code (`user`, `timeout`, `policy`,
 schedule made on Yantra's page): the person's phone in use is waited on
 up to ten minutes, locked asks them in their chat to unlock it for
 `wait` seconds, asleep is woken; `{go: false, said}` is the skip, in
-words. Only for someone marked `phone = true`.
+words. Only for someone marked `phone = true` or given `phones`; `phone`
+in the body names which of theirs (`"nexus"`), needed when they have
+several.
 
 **The web channel: a chat on a page.** `dvara serve --web` gives every
 person a list of lines kept on disk: what they said on a page, what
@@ -1001,8 +1006,25 @@ dvara --ask --sparsh /path/to/sparsh telegram --agent phone        # or DVARA_SP
 phone = true            # the phone on this machine is yours
 ```
 
+Several phones, each someone's (Sparsh's `SPARSH_PHONES` names them):
+
+```toml
+[actor.owner]
+phones = ["nexus", "iphone"]
+
+[actor.asha]
+phones = ["asha-phone"]
+```
+
 * **One person's phone.** Only the person marked `phone = true` gets the
-  phone tools. Two marked is an error.
+  phone tools. Two marked is an error. With `phones`, each person's
+  turns start Sparsh with only theirs (`sparsh mcp --phone NAME`), a
+  phone listed under two people is an error, and `phone = true` beside
+  anyone's `phones` is one too: it means every phone. `/phone` shows
+  their first phone and names the others; `/phone asha-phone` shows that
+  one. A schedule works the phone it names, or their only one; for a
+  person with several, one that names none is refused, not guessed
+  ([notes/54](notes/54-each-phone-ones.md)).
 * **Their yes, as buttons.** Reading the screen and ordinary taps run
   without asking. Sparsh holds a tap on Send, Pay, Buy, Delete and the
   like, typing a password, and Enter beside a Send button. Its `confirm`
@@ -1212,7 +1234,7 @@ reads that person's key from `<state>/memory.json`
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
-| `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)) |
+| `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
@@ -1221,12 +1243,12 @@ reads that person's key from `<state>/memory.json`
 | `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
-| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)) |
+| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)); whose phones, one owner each ([notes/54](notes/54-each-phone-ones.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)); a scheduled run's own wait, after which a question lapses ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
-| `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
+| `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)); of several, the one the schedule names ([notes/54](notes/54-each-phone-ones.md)) |
 | `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)) |

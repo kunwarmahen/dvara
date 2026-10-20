@@ -141,8 +141,9 @@ stops the start. 676 tests before, 689 after.
   124). The second was a screen that went dark mid-task, now kept on
   while the agent works (Sparsh's note 09). The ring card, from a real
   chat, waits for a task that needs a tap by position.
-* **More than one phone**, one per person. One cable, one person, for
-  now.
+* ~~**More than one phone**, one per person.~~ `phones = ["nexus"]`,
+  one owner per phone, each person's turns started with only theirs
+  ([note 54](54-each-phone-ones.md)).
 * ~~**A phone in a scheduled run.**~~ When its schedule says so, after
   the phone is checked free, with the steps its person granted
   ([note 33](33-the-phone-on-a-schedule.md)).

@@ -186,6 +186,8 @@ class PhoneRun:
 
     #: Held taps its person let it do unasked, as they accepted them.
     steps: tuple[str, ...] = ()
+    #: The one of its person's named phones it works (() when unnamed).
+    phones: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -491,7 +493,8 @@ class Service:
         return who.id, await self.notices.send(who.id, self._told_at(who), text,
                                                extra=extra)
 
-    async def phone_ready(self, *, actor: str, wait: float, about: str) -> str | None:
+    async def phone_ready(self, *, actor: str, wait: float, about: str,
+                          phone: bool | str = True) -> str | None:
         """Is ``actor``'s phone free for a run Dvara isn't running
         (``POST /phone/ready``)? None: go. Otherwise why it's skipped.
 
@@ -500,14 +503,19 @@ class Service:
         asked here. Before it starts, the SAME CHECK a phone schedule here
         gets (ready.py): in use, waited on up to ten minutes; locked, its
         person asked in their chat to unlock it, for ``wait`` seconds;
-        asleep, woken. Refused for someone without the phone.
+        asleep, woken. Refused for someone without the phone. ``phone``:
+        which of their phones, by name (``phone_for``).
         """
         self.refresh()
         who = self.actors.get(actor)
-        if self.sparsh is None or not who.phone:
+        if self.sparsh is None or not who.has_phone:
             raise Refused(f"{actor} has no phone this service can work: it needs "
-                          "--sparsh and phone = true for them")
-        return await ready.ready(ready.through(self.sparsh),
+                          "--sparsh and phone = true (or phones = [...]) for them")
+        try:
+            which = phone_for(who, phone)
+        except Refused as exc:
+            return f"skipped: {exc}"     # a skip in its logbook, not a missing person
+        return await ready.ready(ready.through(self.sparsh, *which),
                                  wait=wait or DEFAULT_SCHEDULE_WAIT,
                                  ask=self._asker(who), about=" ".join(about.split())[:120])
 
@@ -594,7 +602,7 @@ class Service:
                       via: Channel | None = None,
                       unattended: bool = False,
                       allow_tools: Sequence[str] = (),
-                      phone: bool = False,
+                      phone: bool | str = False,
                       phone_steps: Sequence[str] = (),
                       wait: float | None = None,
                       came_by: str | None = None,
@@ -703,11 +711,12 @@ class Service:
                          stop_reason="new")
         if not unattended and phoneview.is_word(text):
             # The phone's screen and last steps: its person's, not a turn.
-            if self.sparsh is None or not who.phone:
+            if self.sparsh is None or not who.has_phone:
                 return Reply(text=phoneview.NOT_YOURS if self.sparsh is not None
                              else "There's no phone on this service.", run_id=None,
                              agent=agent, actor=actor, stop_reason="phone")
-            said, shot = await phoneview.look(self.sparsh, self._workspace(key))
+            said, shot = await phoneview.look(self.sparsh, self._workspace(key),
+                                              mine=who.phones, asked=phoneview.asked(text))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="phone", files=(shot,) if shot else ())
         if not unattended and past.export_pick(text) is not None:
@@ -766,10 +775,16 @@ class Service:
 
         scheduled = None
         if unattended and phone:
-            if self.sparsh is None or not who.phone:
+            if self.sparsh is None or not who.has_phone:
                 return Reply(text=f"{actor} has no phone this service can work: it "
-                                  "needs --sparsh and phone = true for them",
+                                  "needs --sparsh and phone = true (or phones = [...]) "
+                                  "for them",
                              run_id=None, agent=agent, actor=actor, stop_reason="refused")
+            try:
+                which = phone_for(who, phone)
+            except Refused as exc:
+                return Reply(text=str(exc), run_id=None, agent=agent, actor=actor,
+                             stop_reason="refused")
             if not works_phone(spec):
                 # Before the phone is looked at: a person asked to unlock it
                 # for a run that can't touch it gets up for nothing.
@@ -777,13 +792,13 @@ class Service:
                                   "allow leaves out mcp__sparsh__* (add it, as "
                                   "examples/agents/phone does)",
                              run_id=None, agent=agent, actor=actor, stop_reason="refused")
-            skip = await ready.ready(ready.through(self.sparsh),
+            skip = await ready.ready(ready.through(self.sparsh, *which),
                                      wait=wait or DEFAULT_SCHEDULE_WAIT,
                                      ask=self._asker(who), about=" ".join(text.split())[:120])
             if skip is not None:
                 return Reply(text=skip, run_id=None, agent=agent, actor=actor,
                              stop_reason="skipped")
-            scheduled = PhoneRun(steps=tuple(phone_steps))
+            scheduled = PhoneRun(steps=tuple(phone_steps), phones=which)
 
         async with self._locks.hold(key):
             # Costing zero until something is spent. The distinction the
@@ -1045,7 +1060,7 @@ class Service:
         when there are none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
-        phone = (self.sparsh is not None and who.phone and works_phone(spec)
+        phone = (self.sparsh is not None and who.has_phone and works_phone(spec)
                  and (not is_unattended() or phone_run is not None))
         remembering = (self.memory is not None and spec.memory == self.memory.name
                        and getattr(agent, "memory", None) is not None)
@@ -1062,7 +1077,8 @@ class Service:
             await self._schedules(agent, manager, who=who, run=run)
         if phone:
             await self._phone(agent, manager, who=who,
-                              grants=list(phone_run.steps) if phone_run else None)
+                              grants=list(phone_run.steps) if phone_run else None,
+                              only=phone_run.phones if phone_run else ())
         if remembering:
             assert remembers is not None
             await self._remembering(agent, manager, who=who, remembers=remembers)
@@ -1246,13 +1262,13 @@ class Service:
                          person=who.id, agent=run.agent, runner="dvara",
                          seen_at=SEEN_HERE, clock_off=CLOCK_OFF,
                          # a turn with the phone makes schedules that work it
-                         phone=self.sparsh is not None and who.phone)
+                         phone=self.sparsh is not None and who.has_phone)
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
 
     async def _phone(self, agent, manager, *, who: Actor,
-                     grants: list[str] | None = None) -> None:
+                     grants: list[str] | None = None, only: tuple[str, ...] = ()) -> None:
         """Sparsh's tools, for the phone's own person.
 
         THEIR PHONE, ASKED THERE. Only the one person the owner marked
@@ -1265,17 +1281,27 @@ class Service:
         with a screenshot when the model is local and can see, as at a
         keyboard (``YANTRA_PHONE_SHOTS``).
 
+        THEIR PHONES, NO OTHERS. With several phones named (Sparsh's
+        ``$SPARSH_PHONES``), a person's ``phones`` are all their agents
+        get: Sparsh is started with only those (``--phone NAME``), so
+        another person's phone is not a phone this turn can reach --
+        and a scheduled run, only the one it was checked free on.
+
         WITH NOBODY THERE, ONLY WHEN ITS SCHEDULE SAYS SO (``deliver``):
         the phone was checked free first, and ``grants`` are the held
         taps its person let it do unasked. And a Sparsh that will not
         start costs the turn its phone, never the turn."""
         from yantra.mcp import MCPError
         from yantra.sparsh_link import Sparsh, SparshLinkError, load, shots
+        from yantra.sparsh_link import only as narrowed
 
+        names = only or who.phones
         try:
             found = await asyncio.to_thread(load, "on", self.sparsh, False)
             assert found is not None
-            link = Sparsh(mode="on", path=self.sparsh, data=found[0], program=found[1])
+            data = narrowed(found[0], *names) if names else found[0]
+            link = Sparsh(mode="on", path=self.sparsh, data=data, program=found[1],
+                          only=tuple(names))
             provider = agent.provider
             link.shots, link.shots_why = shots(
                 getattr(provider, "name", ""),
@@ -1998,6 +2024,26 @@ class Service:
 
 
 # ---- small pure helpers ----------------------------------------------------
+
+
+def phone_for(who: Actor, asked: bool | str) -> tuple[str, ...]:
+    """Which of ``who``'s phones a scheduled run works: the one it names,
+    or their only one; () when they have every phone (``phone = true``)
+    and it names none. Refused, in a sentence for its logbook, when it
+    names a phone that isn't theirs -- or names none and they have
+    several: a run that guessed would tap on the wrong one's apps."""
+    if isinstance(asked, str) and asked:
+        if who.phones and asked not in who.phones:
+            raise Refused(f"the phone {asked!r} isn't one of {who.id}'s "
+                          f"({', '.join(who.phones)})")
+        return (asked,)
+    if len(who.phones) == 1:
+        return who.phones
+    if who.phones:
+        raise Refused(f"this schedule doesn't say which phone, and {who.id} has "
+                      f"{len(who.phones)} ({', '.join(who.phones)}): make it again "
+                      f"naming one")
+    return ()
 
 
 def works_phone(spec: AgentSpec) -> bool:

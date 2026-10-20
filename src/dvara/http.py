@@ -75,7 +75,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from yantra import parse_grant
 
-from dvara.actors import Channel
+from dvara.actors import PHONE_NAME, Channel
 from dvara.asks import NotYours
 from dvara.errors import ConfigProblem, Refused
 from dvara.holds import NoSuchHold, NotYourHold
@@ -271,8 +271,10 @@ def create_app(service: Service, *, token: str,
         phone = body.get("phone", False)
         phone_steps = body.get("phone_steps") or []
         wait = body.get("wait")
-        if not isinstance(phone, bool):
-            raise HTTPException(status_code=400, detail="phone is true or false")
+        if not isinstance(phone, bool) and not (
+                isinstance(phone, str) and PHONE_NAME.match(phone)):
+            raise HTTPException(status_code=400,
+                                detail="phone is true, false, or one phone's name")
         if not isinstance(phone_steps, list) or not all(
                 isinstance(s, str) for s in phone_steps):
             raise HTTPException(status_code=400,
@@ -358,8 +360,14 @@ def create_app(service: Service, *, token: str,
         if isinstance(wait, bool) or not isinstance(wait, (int, float)) or wait < 0:
             raise HTTPException(status_code=400, detail="wait is seconds, 0 or more")
         try:
+            phone = body.get("phone", True)
+            if not isinstance(phone, bool) and not (
+                    isinstance(phone, str) and PHONE_NAME.match(phone)):
+                raise HTTPException(status_code=400,
+                                    detail="phone is true or one phone's name")
             skip = await service.phone_ready(actor=actor, wait=float(wait),
-                                             about=str(body.get("about") or ""))
+                                             about=str(body.get("about") or ""),
+                                             phone=phone)
         except Refused as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
         return {"go": skip is None, "said": skip or ""}

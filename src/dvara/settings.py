@@ -65,7 +65,8 @@ def person(actor) -> dict:
             "permissions": actor.permissions, "max_usd_per_day": actor.max_usd_per_day,
             "max_usd_per_turn": actor.max_usd_per_turn, "receipt": actor.receipt,
             "setu": setu, "setu_accounts": list(actor.setu_accounts or []) or None,
-            "setu_manage": actor.setu_manage, "phone": actor.phone, "telegram": telegram,
+            "setu_manage": actor.setu_manage, "phone": actor.phone,
+            "phones": list(actor.phones) or None, "telegram": telegram,
             "other_channels": [f"{c.kind}:{c.id}" for c in actor.channels
                                if c.kind != "telegram"]}
 

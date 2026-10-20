@@ -50,11 +50,13 @@ class Phone:
     wake: Callable[[], Awaitable[None]]
 
 
-def through(sparsh: str) -> Phone:
-    """The phone, through the sparsh program the door was started with."""
+def through(sparsh: str, name: str = "") -> Phone:
+    """The phone, through the sparsh program the door was started with;
+    ``name``, one of several Sparsh names (``--phone``)."""
+    which = ["--phone", name] if name else []
 
     def run(*args: str) -> str:
-        done = subprocess.run([sparsh, *args], capture_output=True, text=True,
+        done = subprocess.run([sparsh, *args, *which], capture_output=True, text=True,
                               timeout=STATE_TIMEOUT)
         if done.returncode != 0:
             said = (done.stderr or done.stdout).strip().splitlines()

@@ -8,7 +8,9 @@ moves its numbers.
 
 THEIRS, AND ONLY THEIRS. The phone on this machine's cable is one
 person's, messages and all (``phone = true``, note 30). Anyone else's
-``/phone`` gets one sentence and no screen.
+``/phone`` gets one sentence and no screen. With several phones named,
+each person sees only their own (``phones = [...]``): ``/phone nexus``
+names one, and the others are listed under the first.
 
 A PEEK, NOT A LOOK. Sparsh's ``look --peek`` reads the screen without
 becoming the agent's last look, so an agent working the phone keeps its
@@ -39,6 +41,12 @@ def is_word(text: str) -> bool:
     return bool(first) and first[0].split("@")[0].lower() == WORD
 
 
+def asked(text: str) -> str:
+    """``/phone nexus``: the phone named after the word ("" for none)."""
+    rest = text.strip().split(maxsplit=1)[1:]
+    return rest[0].strip().lower() if rest else ""
+
+
 def _element(e: dict) -> str:
     label = (e.get("label") or "").strip()
     return f"{e.get('n')} {e.get('kind')}" + (f' "{label}"' if label else "")
@@ -66,9 +74,16 @@ def words(screen: dict, steps: list[dict], name: str) -> str:
     return "\n".join(out)
 
 
-async def look(sparsh: str | None, folder: Path) -> tuple[str, Path | None]:
-    """(what to say, the screenshot kept in their folder or None)."""
-    from yantra.sparsh_link import Sparsh, SparshLinkError, load, ready_phones
+async def look(sparsh: str | None, folder: Path, *, mine: tuple[str, ...] = (),
+               asked: str = "") -> tuple[str, Path | None]:
+    """(what to say, the screenshot kept in their folder or None).
+
+    ``mine``: the person's named phones (``phones = [...]``), the only
+    ones shown -- () is every phone (``phone = true``). ``asked``: the
+    one ``/phone NAME`` names; else the first of theirs that is ready,
+    and the others said by name."""
+    from yantra.sparsh_link import (Sparsh, SparshLinkError, load, named, only,
+                                    ready_phones)
 
     try:
         found = await asyncio.to_thread(load, "on", sparsh, False)
@@ -76,13 +91,25 @@ async def look(sparsh: str | None, folder: Path) -> tuple[str, Path | None]:
         return f"I can't reach your phone right now: {exc}", None
     if found is None:
         return "Sparsh isn't on here, so there's no phone to show.", None
-    link = Sparsh(mode="on", path=sparsh, data=found[0], program=found[1])
-    phones = ready_phones(found[0])
+    data = found[0]
+    try:
+        data = only(data, *mine) if mine else data
+        if asked:
+            if mine and asked not in mine:
+                return (f"{asked} isn't one of your phones ({', '.join(mine)})."), None
+            data = only(data, asked)
+    except SparshLinkError as exc:
+        return f"I can't find that phone: {exc}", None
+    link = Sparsh(mode="on", path=sparsh, data=data, program=found[1])
+    phones = ready_phones(data)
     if not phones:
         return ("No phone is ready: plug it in, or reconnect its Wi-Fi (on the "
                 "home page, Settings → Sarathi → Your phone)."), None
     phone = phones[0]
     serial = phone.get("serial") or ""
+    # The rest of theirs, ready or not, by name (data is already theirs only).
+    others = [] if asked else [n["name"] for n in named(data)
+                               if n["name"] != phone.get("name")]
     try:
         peeked = await asyncio.to_thread(link.peek, serial, True)
         steps = await asyncio.to_thread(link.recent, serial, STEPS)
@@ -93,4 +120,9 @@ async def look(sparsh: str | None, folder: Path) -> tuple[str, Path | None]:
         shot = Path(folder) / ".phone" / "screen.png"
         shot.parent.mkdir(parents=True, exist_ok=True)
         shot.write_bytes(base64.b64decode(peeked["shot"]))
-    return words(peeked.get("screen") or {}, steps, phone.get("model") or serial), shot
+    said = words(peeked.get("screen") or {}, steps,
+                 phone.get("name") or phone.get("model") or serial)
+    if others:
+        said += "\n\nYour other phones: " + ", ".join(
+            f"{WORD} {name}" for name in others)
+    return said, shot
