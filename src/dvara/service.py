@@ -113,6 +113,7 @@ from yantra.config import guess_provider
 from yantra.errors import ConfigError, ToolError
 from yantra.hold import check_answers, held_task
 from yantra.session import snapshot
+from yantra.tools.selector import select_when_many
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
@@ -988,6 +989,12 @@ class Service:
         sent = self._send_file_tool(agent, who)
         servers = await self._servers(agent, who=who, run=run, key=key, spec=spec,
                                       phone_run=phone_run, remembers=remembers)
+        # Every tool is in now, MCP's too: past twenty, only those this turn's
+        # words point at are sent (Yantra's own rule, as at its terminal). A
+        # person's accounts grow without a word to the package: 227 tools sent
+        # whole overflowed a local model's window, which then cut the top of
+        # the prompt and answered a question it could no longer see.
+        select_when_many(agent, width=spec.tools_per_turn)
         if not is_unattended():
             self.seen.tools_were(who.id, run.agent, agent)
         try:

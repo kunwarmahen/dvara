@@ -53,6 +53,9 @@ def seal_ambient_env(monkeypatch):
     for name in list(os.environ):
         if name.startswith(("YANTRA_", "DVARA_")):
             monkeypatch.delenv(name, raising=False)
+    # Every tool sent, so a test of which tools a person is ALLOWED sees
+    # them all; test_many_tools.py takes this away to test selection.
+    monkeypatch.setenv("YANTRA_TOOLS_PER_TURN", "0")
 
 
 class ScriptedProvider(Provider):
