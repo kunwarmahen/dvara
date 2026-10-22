@@ -47,7 +47,7 @@ sentence alone.
 ## What the page is handed
 
 For each agent, `show` says which boxes start ticked -- by exact name or
-by a pattern the owner wrote, so `browser_*` ticks all five browser
+by a pattern the owner wrote, so `browser_*` ticks all six browser
 boxes -- and which allow entries NO BOX STANDS FOR (`amazon_*`,
 `x_*`, an old `mcp__homeassistant*`). Those go under **Advanced** as
 written and are saved back with the boxes, so a save from the page never
