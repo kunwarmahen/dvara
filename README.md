@@ -411,7 +411,10 @@ These are answered by dvara too, from that person's folder and nowhere
 else. An agent whose package lists `send_file` can send one itself
 ("send me the log", or a schedule's weekly report). It's a write, so it
 asks in a chat, and in a schedule it runs only if the card allowed it
-([notes/26](notes/26-the-file-itself.md)).
+([notes/26](notes/26-the-file-itself.md)). A picture of a signed-in site
+("send me a screenshot of my chart") is one such file: the site's
+`screenshot` saves it under `screenshots/` in their folder, and
+`send_file` sends it (Yantra's notes/137).
 
 And the other way: a photo or a file sent to the bot (or with the
 paperclip on the page) is kept in their folder with that agent under
