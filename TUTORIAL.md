@@ -517,7 +517,8 @@ instead means "never mind", and the waiting calls are set aside.
   photo or file they send lands in the folder under `from-you/` and the
   agent is told ([note 44](notes/44-what-they-send.md)). An agent that lists
   `send_file` can send one too, asked like any write
-  ([note 26](notes/26-the-file-itself.md)). An agent that edits the folder you
+  ([note 26](notes/26-the-file-itself.md)) -- a signed-in site's
+  screenshot included, which the site's tools save under `screenshots/`. An agent that edits the folder you
   review and commit is an agent whose package has stopped being
   reviewable — and being reviewable is the one property the whole format
   exists to have.
