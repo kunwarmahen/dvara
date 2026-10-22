@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS runs (
     waited_seconds REAL,          -- how long it waited on a person
     resumes      TEXT,            -- the held Run this one carried on
     unattended   INTEGER,         -- 1: a program asked for it, nobody typed it
-    came_by      TEXT             -- telegram, web, samay, cli, http
+    came_by      TEXT             -- telegram, web, samay, prahari, cli, http
 );
 -- Conversations a program started and nobody will continue, whose
 -- history and workspace were let go (Service.tidy). The runs stay.
@@ -128,7 +128,7 @@ ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
 #: The ways a turn can come in, as ``came_by`` writes them. Not enforced
 #: -- an HTTP bridge may name its own -- but these are the ones Dvara's
 #: own channels and Samay write, and the page has a word for each.
-CAME_BY = ("telegram", "web", "samay", "cli", "http")
+CAME_BY = ("telegram", "web", "samay", "prahari", "cli", "http")
 
 
 @dataclass(frozen=True)

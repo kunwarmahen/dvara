@@ -47,6 +47,10 @@ FAMILIES = (
     {"name": "mcp__samay__*", "group": "Schedules (Samay)",
      "said": "See your schedules, and make, pause or remove them (each change asks first)",
      "asks": True, "prefix": "mcp__samay__"},
+    {"name": "mcp__prahari__*", "group": "Watches (Prahari)",
+     "said": "See what you're watching for, and make, mend, pause or remove a watch "
+             "(each change asks first)",
+     "asks": True, "prefix": "mcp__prahari__"},
     {"name": "mcp__sparsh__*", "group": "Your phone (Sparsh)",
      "said": "Work the phone on this computer (Send, Pay, Delete and passwords ask first)",
      "asks": False, "prefix": "mcp__sparsh__"},

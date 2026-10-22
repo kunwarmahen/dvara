@@ -164,6 +164,16 @@ CONNECT_THERE = ("the person cannot connect one from here; the owner of this "
                  "service connects it for them -- say so, and say which")
 
 
+#: Where a person on a channel sees their watches: by asking.
+WATCHES_HERE = ("The person sees their watches by asking you: list them with "
+                "`mcp__prahari__list_watches`, and pause, mend or delete one when they "
+                "say so.")
+#: Prahari not running, on a service: the owner's to start.
+WATCH_OFF = ("Prahari is not running on this service right now: when you make a "
+             "watch, say it will start looking once the service's owner starts it. "
+             "Do not ask the person to run anything.")
+
+
 #: A stopped clock, on a service: the owner's to start, not the person's.
 CLOCK_OFF = ("Samay's clock is not running on this service right now: when you "
              "make a schedule, say it will start running once the service's owner "
@@ -256,6 +266,8 @@ class Service:
                  hold_for: float = DEFAULT_KEEP,
                  samay: str | None = None,
                  sparsh: str | None = None,
+                 prahari: str | None = None,
+                 prahari_for: str = "",
                  keep_unattended: float = KEEP_UNATTENDED,
                  web: bool = False,
                  memory: Store | None = None,
@@ -298,6 +310,12 @@ class Service:
         #: (``--sparsh``): the turns of the one person marked ``phone`` get
         #: its tools (``_phone``). None: no turn does.
         self.sparsh = sparsh
+        #: The prahari program, when the owner turned watches on
+        #: (``--prahari``), and the one person whose watches they are
+        #: (``--prahari-for``): only that person's turns get its tools
+        #: (``_watches``), because a look runs with this computer's accounts.
+        self.prahari = prahari
+        self.prahari_for = prahari_for
         #: The owner's memory store (``--memory``, memory.py): a package
         #: that asks for memory gets this one, for its person. None: the
         #: package's own choice, still filed under the person's name.
@@ -1060,12 +1078,14 @@ class Service:
         when there are none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
+        watching = (self.prahari is not None and not is_unattended()
+                    and who.id == self.prahari_for)
         phone = (self.sparsh is not None and who.has_phone and works_phone(spec)
                  and (not is_unattended() or phone_run is not None))
         remembering = (self.memory is not None and spec.memory == self.memory.name
                        and getattr(agent, "memory", None) is not None)
         packaged = bool(getattr(spec, "mcp", ()))
-        if not (accounts or schedules or phone or remembering or packaged):
+        if not (accounts or schedules or watching or phone or remembering or packaged):
             return None
         from yantra.mcp import MCPManager
 
@@ -1075,6 +1095,8 @@ class Service:
             await self._accounts(agent, manager, who=who, spec=spec)
         if schedules:
             await self._schedules(agent, manager, who=who, run=run)
+        if watching:
+            await self._watches(agent, manager, who=who, run=run)
         if phone:
             await self._phone(agent, manager, who=who,
                               grants=list(phone_run.steps) if phone_run else None,
@@ -1266,6 +1288,32 @@ class Service:
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
+
+    async def _watches(self, agent, manager, *, who: Actor, run: Run) -> None:
+        """Prahari's tools for this turn's person -- only the one named by
+        ``--prahari-for``.
+
+        ONE SERVER PER TURN, as for Samay: ``prahari mcp --for <actor>
+        --runner dvara`` starts beside the agent and stops with the turn. A
+        watch made here wakes this agent, as this person, on this road:
+        their allowance and the owner's rules apply when it fires, and the
+        news comes to their channels. Making one is a write, asked about on
+        their channel with Yantra's card in words (its notes/140).
+
+        A SCHEDULED TURN GETS NONE, and a Prahari that will not start costs
+        the turn its watches, never the turn."""
+        from yantra.mcp import MCPError
+        from yantra.prahari_link import Prahari, PrahariLinkError, load
+
+        try:
+            found = await asyncio.to_thread(load, "on", self.prahari)
+            assert found is not None
+            link = Prahari(mode="on", data=found[0], program=found[1], person=who.id,
+                           agent=run.agent, runner="dvara", seen_at=WATCHES_HERE,
+                           off=WATCH_OFF)
+            await asyncio.to_thread(link.connect, manager, agent)
+        except (MCPError, PrahariLinkError) as exc:
+            self._note(f"dvara: watches are off for this turn -- prahari: {exc}")
 
     async def _phone(self, agent, manager, *, who: Actor,
                      grants: list[str] | None = None, only: tuple[str, ...] = ()) -> None:

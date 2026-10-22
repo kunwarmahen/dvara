@@ -143,6 +143,19 @@ def build_parser() -> argparse.ArgumentParser:
                              "(PATH names the samay program; also DVARA_SAMAY). "
                              "Set SAMAY_DVARA_URL and SAMAY_DVARA_TOKEN here "
                              "too: Samay checks each schedule against them")
+    parser.add_argument("--prahari", nargs="?", const="on", default=None,
+                        metavar="PATH",
+                        help="let one person's agent offer to tell them when "
+                             "something happens (a price, a mail, a phone's "
+                             "notification), through Prahari: watches made only "
+                             "after they say yes on their channel. A watch looks "
+                             "with this computer's accounts, so it is for the one "
+                             "person named by --prahari-for. Off unless asked for "
+                             "(PATH names the prahari program; also DVARA_PRAHARI)")
+    parser.add_argument("--prahari-for", default=None, metavar="ACTOR",
+                        dest="prahari_for",
+                        help="whose watches these are: the person whose accounts "
+                             "this computer holds (also DVARA_PRAHARI_FOR)")
     parser.add_argument("--memory", default=None, metavar="FILE",
                         help="where people's memories are kept, for a package "
                              "that asks for memory: an MCP config naming one "
@@ -246,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     runs.add_argument("--agent", default=None)
     runs.add_argument("--came-by", default=None, metavar="WAY",
                       help="only turns that came in this way: telegram, web, "
-                           "samay, cli, http")
+                           "samay, prahari, cli, http")
     runs.add_argument("--limit", type=int, default=20)
 
     case = subs.add_parser(
@@ -353,6 +366,9 @@ def _service(args) -> Service:
     if args.keep_unattended < 0:
         raise ConfigProblem("--keep-unattended is a number of days, 0 or more")
     samay = _samay(args.samay or os.environ.get("DVARA_SAMAY"))
+    prahari, prahari_for = _prahari(
+        getattr(args, "prahari", None) or os.environ.get("DVARA_PRAHARI"),
+        getattr(args, "prahari_for", None) or os.environ.get("DVARA_PRAHARI_FOR"))
     sparsh = _sparsh(args.sparsh or os.environ.get("DVARA_SPARSH"))
     memory = _memory(args.memory or os.environ.get("DVARA_MEMORY"))
     try:
@@ -366,6 +382,8 @@ def _service(args) -> Service:
             model=args.model,
             hold_for=args.hold_for,
             samay=samay,
+            prahari=prahari,
+            prahari_for=prahari_for,
             sparsh=sparsh,
             memory=memory,
             keep_unattended=args.keep_unattended * 86400,
@@ -418,6 +436,37 @@ def _samay(asked: str | None) -> str | None:
           f"clock is {'running' if data.get('serving') else 'NOT running (samay serve)'}",
           file=sys.stderr)
     return program
+
+
+def _prahari(asked: str | None, whose: str | None) -> tuple[str | None, str]:
+    """The prahari program, and the one person whose watches it keeps,
+    checked now. ASKED FOR OR OFF, like Samay. ONE PERSON: a look runs
+    this computer's Yantra with this computer's accounts, so a watch made
+    by anybody else would read the owner's mail on their behalf. Named,
+    never guessed."""
+    if not asked or asked.strip().lower() == "off":
+        return None, ""
+    whose = (whose or "").strip()
+    if not whose:
+        raise ConfigProblem("--prahari needs --prahari-for ACTOR: a watch looks with "
+                            "this computer's accounts, so it is one person's -- the "
+                            "person whose accounts these are")
+    from yantra.prahari_link import PrahariLinkError, load, resolve_mode
+
+    mode, path = resolve_mode(asked, "")
+    try:
+        found = load("on", path)
+    except PrahariLinkError as exc:
+        raise ConfigProblem(f"--prahari: {exc}") from None
+    assert found is not None
+    data, program = found
+    if not os.environ.get("PRAHARI_DVARA_URL"):
+        print("dvara: watches on, but PRAHARI_DVARA_URL is not set here; Prahari "
+              "will refuse a watch on this road until it is", file=sys.stderr)
+    print(f"dvara: watches through prahari {data.get('version')} ({program}) for "
+          f"{whose}; it is {'watching' if data.get('serving') else 'NOT running (prahari serve)'}",
+          file=sys.stderr)
+    return program, whose
 
 
 def _sparsh(asked: str | None) -> str | None:

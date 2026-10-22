@@ -1677,6 +1677,43 @@ they cost nothing. To change a schedule, ask the agent; to change what
 an agent may use, change its package
 ([notes/42](notes/42-seeing-the-work.md)).
 
+## 25 · A watch asked for in the chat
+
+A schedule does something at a time. A *watch* waits for something to
+happen: *"tell me when ALAB drops under $50"*, *"tell me when a mail
+from the bank comes"*. With [Prahari](https://github.com/kunwarmahen/prahari)
+installed, `--prahari` lets your agent offer one. Prahari looks with no
+model, one tool call every so often, and the agent wakes only when the
+thing happens.
+
+```bash
+export PRAHARI_DVARA_URL=http://127.0.0.1:8765 PRAHARI_DVARA_TOKEN=$DVARA_TOKEN
+dvara --ask --prahari /path/to/prahari --prahari-for mahen serve --port 8765 --telegram helper
+#   dvara: watches through prahari 0.1.0 (/path/to/prahari) for mahen; it is watching
+```
+
+Ask *"tell me when a mail from alerts@bank.example arrives"*. The agent
+picks a tool it has that reads (a Gmail search), tries it once, tells
+you what it sees now, and asks. The card in your chat says the exact
+call it will run and how often, in capitals if that call isn't
+read-only, then when it tells you, and what happens then. When the mail
+comes, you get a line in this chat.
+
+**One person's.** A look runs this computer's Yantra with this
+computer's accounts. A watch made by anybody else would read your mail
+on their behalf, so `--prahari-for` names the one person whose watches
+these are, and everybody else's turns get none of Prahari's tools. Like
+schedules, it's off unless you turn it on, a scheduled turn gets none,
+and a package with `[tools] allow` must list `mcp__prahari__*` (the tool
+picker calls it *Watches (Prahari)*). A watch that fires with work to
+do runs here as you, and Dvara's page labels it `prahari`
+([notes/55](notes/55-a-watch-for-one-person.md)).
+
+Your phone can tell Prahari itself: an Android phone's WhatsApp
+notification, through MacroDroid, knocks on Prahari's inlet, and a
+watch that listens decides. That's set up on Prahari's page, not here;
+its README has the three steps.
+
 ---
 
 # Where to read next
@@ -1725,6 +1762,7 @@ Each topic, and the note that argues it:
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
 | `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |
+| `notes/55-a-watch-for-one-person.md` | Prahari's watches offered in the chat, for the one person named by `--prahari-for`, because a look runs with this computer's accounts |
 
 ---
 
@@ -1797,5 +1835,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 785 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 966 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*

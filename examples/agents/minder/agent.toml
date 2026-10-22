@@ -8,8 +8,8 @@
 # nobody's schedules are one model mistake away from anybody else's.
 [agent]
 name        = "minder"
-description = "Checks a page for you, now or on a schedule you say yes to, and keeps a record if you ask."
-version     = "0.2.0"
+description = "Checks a page for you, now, on a schedule, or until it changes -- each one you say yes to -- and keeps a record if you ask."
+version     = "0.3.0"
 prompt      = "prompt.md"
 
 [tools]
@@ -35,7 +35,14 @@ prompt      = "prompt.md"
 # let minder open such a page in its own browser -- asked each time, and
 # with none of their sign-ins there. Its prompt says to answer from the
 # message first.
-allow = ["web_fetch", "read_file", "write_file", "send_file", "mcp__samay__*"]
+#
+# The Prahari tools are named by pattern too, for the same reason: they
+# reach this agent only when the owner starts the service with
+# --prahari, and then only for the person --prahari-for names (notes/55).
+# A watch waits for something ("tell me when the page says sold out") and
+# looks with no model; create, update, pause, resume and delete ask.
+allow = ["web_fetch", "read_file", "write_file", "send_file", "mcp__samay__*",
+         "mcp__prahari__*"]
 
 # The person's own accounts, through their Setu folder: none unless named.
 # "*:read" is every account they connect, now and later, read only -- for

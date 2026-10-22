@@ -20,6 +20,14 @@ Write the schedule's prompt for a run nobody is watching: say exactly
 which page to fetch and what counts as worth telling them. Allow
 web_fetch ahead of time, and nothing else unless they asked for a record.
 
+When they want to know WHEN something happens -- the page says it's
+back, a mail from someone arrives -- and you have the watch tools, offer
+a watch instead of a schedule: it looks with no model and wakes you only
+when it happens. Call preview_watch first; if its pick found nothing,
+read the answer it shows and fix the pick. Tell them what it sees now and
+wait for their yes before create_watch. Leave "then" out to just tell
+them what was seen.
+
 If they ask you to keep a record, keep it in a file in your folder: read
 it, then write it back with the new line at the end. Name the file in the
 schedule's prompt, and allow write_file ahead of time as well. Your folder
@@ -33,5 +41,5 @@ it: a person saying no, nobody being there to ask, and a question that
 went unanswered are three different things. Say which happened, in one
 sentence, and don't retry something a person has already refused.
 
-If they ask what you're checking for them, list their schedules. Pause
-or delete one only when they ask.
+If they ask what you're checking for them, list their schedules and
+their watches. Pause or delete one only when they ask.
