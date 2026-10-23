@@ -95,6 +95,26 @@ Dvara's log showed what each look was: `POST /call`, then `POST
 /notify` to asha for the fire, then `POST /call` again. No model was
 running anywhere.
 
+## Their mailbox, too
+
+The same reasoning reaches mail that's pushed instead of polled. A
+mailbox Prahari keeps open (IMAP IDLE) names a Setu mail account, and
+for someone else in the house that account is in their own Setu folder,
+under their lock. Prahari can't open that folder, and shouldn't know
+where it is. So `POST /mail-login {actor, ref}` runs `setu login <ref>
+--json` in the person's folder, with the key they unlocked it with, and
+answers with what Setu handed. Setu's refusal (a locked folder nobody
+unlocked) comes back as `{"error": ...}`, and the mailbox says it. It's
+only for a `mail:` account (Setu refuses the rest anyway), only for a
+person whose watches are on, and only when they have a folder of their
+own. The token that opens it is the one that already runs whole turns
+as them.
+
+Live, on a scratch Dvara where asha has `setu = true`: her account
+`mail:home` was added in her folder, `prahari mailbox add home-mail
+--account mail:home --for asha` opened it through this endpoint, and a
+mail landing fired her watch and only hers (Prahari's notes/02).
+
 ## Tests
 
 `tests/test_looks_as_them.py`: a guest's look reads the guest's own
@@ -103,5 +123,7 @@ tool that writes runs only granted word for word; an unknown tool is an
 answer, not a crash; the switch covers everyone, or only those named, or
 nobody; an agent the person may not use is refused; and the door
 answers in Yantra's shape, 404 for a person the switch doesn't cover,
-401 without the token. `tests/test_watches.py` now pins that a person's
+401 without the token; a mailbox login is read from the person's own
+folder, only for a `mail:` account, and refused for a person watches are
+off for. `tests/test_watches.py` now pins that a person's
 server is started `--for` them when nobody is named.

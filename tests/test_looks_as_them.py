@@ -132,3 +132,55 @@ class TestTheDoor:
             reply = client.post("/call", headers={"Authorization": f"Bearer {TOKEN}"},
                                 json={"actor": "guest"})
         assert reply.status_code == 400 and "agent, tool" in reply.json()["detail"]
+
+
+class TestAMailboxLogin:
+    """The mailbox Prahari keeps open for someone: its login comes from THEIR
+    Setu folder, with the key they unlocked it with -- never this computer's."""
+
+    def setu(self, tmp_path):
+        program = tmp_path / "setu"
+        log = tmp_path / "setu.calls"
+        program.write_text(
+            "#!/usr/bin/env python3\nimport json, os, sys\n"
+            f"open({str(log)!r}, 'a').write(json.dumps({{'argv': sys.argv[1:], "
+            "'home': os.environ.get('SETU_HOME'), 'key': os.environ.get('SETU_VAULT_KEY')})"
+            " + '\\n')\n"
+            "print(json.dumps({'server': 'imap.example.com', 'port': 993, "
+            "'user': 'asha@example.com', 'password': 'p', 'folder': 'INBOX', 'tls': True}))\n")
+        program.chmod(0o755)
+        return program, log
+
+    def house(self):
+        from dvara.actors import ActorBook
+        return ActorBook.from_dict({"actor": {"owner": {}, "asha": {"setu": True}}})
+
+    def test_it_is_read_from_their_own_folder(self, make_service, tmp_path):
+        import json as _json
+        service = make_service([], prahari="/usr/bin/true", actors=self.house())
+        program, log = self.setu(tmp_path)
+        service.accounts.setu = str(program)
+        said = asyncio.run(service.mail_login(actor="asha", ref="mail:home"))
+        assert said["user"] == "asha@example.com"
+        call = _json.loads(log.read_text())
+        assert call["argv"] == ["login", "mail:home", "--json"]
+        assert call["home"] == str(service.state / "setu" / "asha")
+
+    def test_only_a_mail_account_and_only_with_a_folder_of_their_own(self, make_service,
+                                                                     tmp_path):
+        service = make_service([], prahari="/usr/bin/true", actors=self.house())
+        service.accounts.setu = str(self.setu(tmp_path)[0])
+        with pytest.raises(Refused, match="only a mail account"):
+            asyncio.run(service.mail_login(actor="asha", ref="gmail:personal"))
+        with pytest.raises(Refused, match="no Setu folder"):
+            asyncio.run(service.mail_login(actor="owner", ref="mail:home"))
+
+    def test_the_door_answers_and_refuses_a_person_watches_are_off_for(self, make_service,
+                                                                       tmp_path):
+        service = make_service([], prahari="/usr/bin/true", prahari_for="owner",
+                               actors=self.house())
+        with TestClient(create_app(service, token=TOKEN)) as client:
+            reply = client.post("/mail-login",
+                                headers={"Authorization": f"Bearer {TOKEN}"},
+                                json={"actor": "asha", "ref": "mail:home"})
+        assert reply.status_code == 404 and "watches are off" in reply.json()["detail"]

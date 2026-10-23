@@ -142,7 +142,7 @@ a page, each checked before it's written; and a turn watched while it
 runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools` and `/schedules` answered
 from the record; and with `--prahari`, its owner's agent offers to tell
-them when something happens — covered by 979 tests. The API is not stable.
+them when something happens — covered by 982 tests. The API is not stable.
 
 ## The shape of it
 
@@ -851,6 +851,7 @@ POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, rea
 POST /phone/ready  {actor, wait, about}           -> {go, said}
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
 POST /call         {actor, agent, tool, args, allow_tools}  -> yantra.call.v1
+POST /mail-login   {actor, ref}                  -> their mail login, from their Setu folder
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}
 POST /web/message  {actor, agent, text}          -> {line}
@@ -898,6 +899,12 @@ several.
 runs by Yantra's rule, a tool that reads or the one call `allow_tools`
 grants word for word; no run is written and no allowance spent. 404 for
 a person watches are off for ([notes/56](notes/56-a-look-as-them.md)).
+`/mail-login` is the mailbox Prahari keeps open for someone: it runs
+`setu login mail:<account> --json` in their own Setu folder, with the
+key they unlocked it with, and answers with what Setu handed (Setu's
+refusal, such as a locked folder, as `{"error"}`). Only a `mail:`
+account, only for a person whose watches are on, only with a folder of
+their own.
 
 **The web channel: a chat on a page.** `dvara serve --web` gives every
 person a list of lines kept on disk: what they said on a page, what
@@ -1032,6 +1039,9 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
 * Each person has their own key to Prahari's inlet, so their phone's
   knocks reach only their watches: their agent's `inlet_address` tool
   gives it to them.
+* A mailbox Prahari keeps open for someone (mail the moment it lands)
+  is a mail account in THEIR Setu folder (their `/accounts page` link,
+  the Mail card); Prahari gets its login through `POST /mail-login`.
 
 ### Your phone, from the chat
 

@@ -83,6 +83,7 @@ happened and the gate knows why, and neither of them knows both.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import sys
 from contextlib import asynccontextmanager
@@ -594,6 +595,48 @@ class Service:
                 if servers is not None:
                     await asyncio.to_thread(servers.shutdown)
         return as_json(called, needs=list(record.needs), busy=list(record.busy))
+
+    async def mail_login(self, *, actor: str, ref: str) -> dict:
+        """A person's mail login, for the mailbox Prahari keeps open for them
+        (``POST /mail-login``).
+
+        THE PASSWORD IS IN THEIR SETU FOLDER, AND ONLY DVARA KNOWS WHERE.
+        A mailbox names a Setu mail account (``mail:home``); the server, the
+        address and the app password are in the person's own folder, under
+        their lock. This runs ``setu login <ref> --json`` in that folder,
+        with the key they unlocked it with, and answers with what Setu
+        handed -- only to the caller with Dvara's token, Prahari, which
+        already runs whole turns as them.
+
+        Only a ``mail:`` account (Setu refuses the rest anyway), only for a
+        person whose watches are on, only with a folder of their own. A
+        locked folder nobody unlocked is Setu's refusal, said back."""
+        import subprocess
+
+        from yantra.setu_link import home_env
+
+        self.refresh()
+        if not self.watches_for(actor):
+            raise Refused(f"watches are off for {actor} on this service")
+        who = self.actors.get(actor)
+        if not ref.startswith("mail:"):
+            raise Refused("only a mail account's login is handed out")
+        home = self.setu_home(who)
+        if home is None:
+            raise Refused(f"{actor} has no Setu folder on this service, so no mail "
+                          "account to open")
+        program = self.accounts._program()
+        if program is None:
+            raise Refused("setu is not installed where this service can run it")
+        env = home_env(str(home), self.accounts.keys.key_for(who.id))
+        done = await asyncio.to_thread(
+            subprocess.run, [program, "login", ref, "--json"], capture_output=True,
+            text=True, env=env, stdin=subprocess.DEVNULL, timeout=30)
+        try:
+            said = json.loads((done.stdout or "").strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            said = {"error": " ".join((done.stderr or "setu said nothing").split())[:300]}
+        return said if isinstance(said, dict) else {"error": "setu said something else"}
 
     def _looker(self, spec: AgentSpec, who: Actor, key: str):
         """The person's agent, for a call: built as a turn's is, around a

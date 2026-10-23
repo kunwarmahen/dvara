@@ -22,7 +22,9 @@ on the same desk, through the same owner's rules; only the turn lives
 elsewhere. ``/phone/ready`` is the check before such a run that works
 the phone: in use, locked (its person asked to unlock it), asleep (woken),
 exactly as a phone schedule here is checked. ``/call`` runs one tool as a
-person with no model -- a watch's look, with their own accounts.
+person with no model -- a watch's look, with their own accounts --
+and ``/mail-login`` hands the mailbox Prahari keeps open for them their
+mail login, from their own Setu folder.
 
 THE TOKEN AUTHENTICATES THE CALLER, NOT THE PERSON. That distinction is
 the whole security posture of this layer. A caller here is a channel
@@ -399,6 +401,22 @@ def create_app(service: Service, *, token: str,
             return await service.call(actor=body["actor"], agent=body["agent"],
                                       tool=body["tool"], arguments=arguments,
                                       allow_tools=allow_tools)
+        except Refused as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+
+    @app.post("/mail-login")
+    async def mail_login(request: Request,
+                         authorization: str | None = Header(default=None)) -> dict:
+        """A person's mail login from their own Setu folder, for the mailbox
+        Prahari keeps open for them (service.mail_login). Setu's refusal is
+        the answer (``{"error": ...}``); 404 for a person watches are off for."""
+        check(authorization)
+        body = await request.json()
+        actor, ref = body.get("actor"), body.get("ref")
+        if not isinstance(actor, str) or not actor or not isinstance(ref, str) or not ref:
+            raise HTTPException(status_code=400, detail="missing or empty: actor, ref")
+        try:
+            return await service.mail_login(actor=actor, ref=ref)
         except Refused as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
 
