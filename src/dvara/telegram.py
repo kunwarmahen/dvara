@@ -773,7 +773,9 @@ class TelegramBot:
         lines.append("Send /new to start our conversation over. Every conversation "
                      "is kept: /chats lists them, /chats and a word finds one, "
                      "/chats N goes back into it, /chats export N sends it "
-                     "to you as a file to share.")
+                     "to you as a file to share. /keep test keeps the one "
+                     "we're in as a test, with the words my answer must say "
+                     "after it: /keep test May 20, refund.")
         return "\n\n".join(lines)
 
     def _reply_messages(self, text: str, receipt: str | None) -> list[str]:

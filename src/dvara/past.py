@@ -55,6 +55,15 @@ its last few exchanges, so a phone shows where it was; a page gets the
 whole of it (``transcript``: the person's words and the agent's answers,
 never a tool's output) to draw in place.
 
+KEPT AS A TEST. ``/keep test [WORDS, ...]`` keeps the conversation open
+here, and ``/chats test N [WORDS, ...]`` one from the list, as a test of
+this agent (Yantra's kept_tests.py, its note 141): its last turn,
+replayed by the night run with the tools answering from what they said
+then -- nothing real runs -- and the words, comma-separated, what the
+answer must say. Each person's tests are their own, in Yantra's tests
+folder under ``people/<person>/<agent>/``, which the night run reads
+with everyone else's.
+
 THE PERSON'S WORDS, NOT THE MODEL'S, like ``/new`` and ``/files``:
 answered here, never a turn, nothing spent.
 """
@@ -92,6 +101,40 @@ CAME = {"telegram": "Telegram", "web": "the page", "http": "HTTP"}
 def is_word(text: str) -> bool:
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].split("@")[0].lower() == WORD
+
+
+KEEP = "/keep"
+
+
+def keep_test_words(text: str) -> str | None:
+    """The words after ``/keep test``, or None when that isn't what was said."""
+    parts = text.strip().split(maxsplit=2)
+    if len(parts) < 2 or parts[0].split("@")[0].lower() != KEEP or parts[1].lower() != "test":
+        return None
+    return parts[2] if len(parts) > 2 else ""
+
+
+def test_pick(text: str) -> tuple[int, str] | None:
+    """``/chats test N [WORDS]`` -> (N, words), or None."""
+    if not is_word(text):
+        return None
+    parts = picked(text).split(maxsplit=2)
+    if len(parts) >= 2 and parts[0].lower() == "test" and parts[1].isdigit():
+        return int(parts[1]), parts[2] if len(parts) > 2 else ""
+    return None
+
+
+def tested(case_id: str, title: str, used: list[str], words: list[str]) -> str:
+    """What a chat says once one is kept as a test."""
+    checks = []
+    if used:
+        checks.append(f"use {', '.join(used)} again")
+    if words:
+        checks.append(f"say {', '.join(words)}")
+    checks.append("give the same facts as last time")
+    return (f"Kept “{title}” as a test ({case_id}). Each time the tests run, I'm "
+            f"asked it again with the tools answering from what they said then "
+            f"(nothing real runs), and I must {', and '.join(checks)}.")
 
 
 def export_pick(text: str) -> int | None:
@@ -317,7 +360,8 @@ def listing(agent: str, rows: list[Kept], words: str = "", *,
         out.append(f"… and {len(rows) - SHOWN_ROWS} older. Add a word to find one: "
                    f"/chats trip")
     out += ["", "Send /chats N to go back into one, /chats WORDS to find one, "
-                "/chats delete N to delete one for good."]
+                "/chats test N to keep one as a test, /chats delete N to delete "
+                "one for good."]
     return "\n".join(out)
 
 

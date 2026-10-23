@@ -342,7 +342,10 @@ def test_start_is_answered_here_and_never_reaches_the_model(make_bot,
                             "Send /new to start our conversation over. Every "
                             "conversation is kept: /chats lists them, /chats and a "
                             "word finds one, /chats N goes back into it, /chats "
-                            "export N sends it to you as a file to share."]
+                            "export N sends it to you as a file to share. "
+                            "/keep test keeps the one we're in as a test, with "
+                            "the words my answer must say after it: /keep test "
+                            "May 20, refund."]
 
 
 # ---- the reply -------------------------------------------------------------

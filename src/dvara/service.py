@@ -873,6 +873,12 @@ class Service:
                                               mine=who.phones, asked=phoneview.asked(text))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="phone", files=(shot,) if shot else ())
+        if not unattended and (past.keep_test_words(text) is not None
+                               or past.test_pick(text) is not None):
+            # One of theirs, kept as a test of this agent: not a turn.
+            said = self._past_test(key, who, agent, spec, text)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="new")
         if not unattended and past.export_pick(text) is not None:
             # One of theirs, as a file to share: it goes with the answer.
             said, made = self._past_export(key, who, agent, past.export_pick(text))
@@ -1859,6 +1865,33 @@ class Service:
             from yantra.skills.lesson import DROPPED
             said = f"{said}\n\n{DROPPED}"
         return said, past.transcript(payload)
+
+    def _past_test(self, key: str, who: Actor, agent: str, spec: AgentSpec,
+                   text: str) -> str:
+        """``/keep test`` (this one) or ``/chats test N`` (from the list),
+        kept in the person's own tests of this agent (past.py)."""
+        from yantra.kept_tests import keep_from_log, people_root
+        chosen = past.test_pick(text)
+        if chosen is None:
+            if not self.sessions.load_latest(key):
+                return "There's nothing to keep yet: ask me something first."
+            conversation, words = self.past.current(key), past.keep_test_words(text) or ""
+        else:
+            n, words = chosen
+            rows = self.past.listed(who.id, agent)
+            if not 1 <= n <= len(rows):
+                return f"There's no conversation {n}. Send /chats to see them."
+            conversation = rows[n - 1].id
+        wanted = [w.strip() for w in words.split(",") if w.strip()]
+        try:
+            case_id, _, recording = keep_from_log(
+                self.past.log(who.id), conversation, agent, words=wanted,
+                root=people_root(who.id), package=spec.root, person=who.id)
+        except ConfigError as exc:
+            return f"I couldn't keep that as a test: {exc}."
+        title = next((r.title for r in self.past.listed(who.id, agent)
+                      if r.id == conversation), recording.question[:80])
+        return past.tested(case_id, title, recording.used, wanted)
 
     def _past_export(self, key: str, who: Actor, agent: str,
                      n: int) -> tuple[str, Path | None]:

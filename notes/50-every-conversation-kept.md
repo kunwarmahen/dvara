@@ -139,4 +139,6 @@ phone width.
   which conversation a line belonged to. Blanking them on delete, cost
   figures kept, was weighed and turned down: the owner's record of each
   run stays whole. Telegram keeps its own copy on the phone.
+* ~~**A conversation as a test.**~~ Built: `/keep test` and `/chats
+  test N` ([note 57](57-a-test-of-your-own.md)).
 * **Naming a conversation.** Its title is its first words.

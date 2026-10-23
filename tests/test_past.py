@@ -308,3 +308,58 @@ def test_the_page_carries_one_on(make_service):
         finish(client, auth, "and then?")
     rows = service.past.listed("owner", "greeter")
     assert [(r.title, r.turns) for r in rows][0] == ("where should we go?", 2)
+
+
+# ---- kept as a test (Yantra's kept_tests.py) ----------------------------------
+
+
+def test_keep_test_keeps_this_one_in_the_persons_own_tests(make_service, tmp_path,
+                                                           monkeypatch):
+    from yantra.eval_suite import load_cases
+    monkeypatch.setenv("YANTRA_TESTS", str(tmp_path / "tests"))
+    service = make_service([says("The trip is on Friday.")])
+    say(service, "when is the school trip?")
+    kept = say(service, "/keep test Friday, trip")
+    assert kept.run_id is None
+    assert kept.text.startswith("Kept “when is the school trip?” as a test")
+    assert "say Friday, trip" in kept.text and "nothing real runs" in kept.text
+    suite = tmp_path / "tests" / "people" / "owner" / "greeter"
+    [case] = load_cases(suite)
+    assert case.answer_contains == ["Friday", "trip"]
+    about = json.loads((suite / "agent.json").read_text())
+    assert about["person"] == "owner" and about["package"].endswith("greeter")
+
+
+def test_chats_test_n_keeps_one_from_the_list(make_service, tmp_path, monkeypatch):
+    monkeypatch.setenv("YANTRA_TESTS", str(tmp_path / "tests"))
+    service = make_service([says("Friday."), says("Hello.")])
+    say(service, "when is the school trip?")
+    say(service, "/new")
+    say(service, "hi")
+    kept = say(service, "/chats test 2")
+    assert "“when is the school trip?”" in kept.text
+    assert "no conversation 9" in say(service, "/chats test 9").text
+
+
+def test_nothing_to_keep_yet_is_said(make_service, tmp_path, monkeypatch):
+    monkeypatch.setenv("YANTRA_TESTS", str(tmp_path / "tests"))
+    service = make_service([])
+    assert "nothing to keep yet" in say(service, "/keep test").text
+
+
+def test_one_persons_tests_are_never_anothers(make_service, tmp_path, monkeypatch):
+    monkeypatch.setenv("YANTRA_TESTS", str(tmp_path / "tests"))
+    service = make_service([says("Friday.")])
+    say(service, "when is the trip?")
+    theirs = say(service, "/chats test 1", actor="guest")
+    assert "no conversation 1" in theirs.text
+    assert not (tmp_path / "tests").exists()
+
+
+def test_keep_test_is_only_those_words():
+    assert past.keep_test_words("/keep test May 20, refund") == "May 20, refund"
+    assert past.keep_test_words("/keep test") == ""
+    assert past.keep_test_words("/keep") is None
+    assert past.keep_test_words("/keep tests") is None
+    assert past.test_pick("/chats test 3 refund") == (3, "refund")
+    assert past.test_pick("/chats test") is None
