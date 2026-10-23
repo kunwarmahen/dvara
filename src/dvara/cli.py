@@ -145,17 +145,17 @@ def build_parser() -> argparse.ArgumentParser:
                              "too: Samay checks each schedule against them")
     parser.add_argument("--prahari", nargs="?", const="on", default=None,
                         metavar="PATH",
-                        help="let one person's agent offer to tell them when "
+                        help="let people's agents offer to tell them when "
                              "something happens (a price, a mail, a phone's "
                              "notification), through Prahari: watches made only "
-                             "after they say yes on their channel. A watch looks "
-                             "with this computer's accounts, so it is for the one "
-                             "person named by --prahari-for. Off unless asked for "
-                             "(PATH names the prahari program; also DVARA_PRAHARI)")
+                             "after they say yes on their channel, each looking "
+                             "with its person's own accounts (POST /call). Off "
+                             "unless asked for (PATH names the prahari program; "
+                             "also DVARA_PRAHARI)")
     parser.add_argument("--prahari-for", default=None, metavar="ACTOR",
                         dest="prahari_for",
-                        help="whose watches these are: the person whose accounts "
-                             "this computer holds (also DVARA_PRAHARI_FOR)")
+                        help="only these people get watches, a comma list "
+                             "(default: everyone; also DVARA_PRAHARI_FOR)")
     parser.add_argument("--memory", default=None, metavar="FILE",
                         help="where people's memories are kept, for a package "
                              "that asks for memory: an MCP config naming one "
@@ -438,19 +438,16 @@ def _samay(asked: str | None) -> str | None:
     return program
 
 
-def _prahari(asked: str | None, whose: str | None) -> tuple[str | None, str]:
-    """The prahari program, and the one person whose watches it keeps,
-    checked now. ASKED FOR OR OFF, like Samay. ONE PERSON: a look runs
-    this computer's Yantra with this computer's accounts, so a watch made
-    by anybody else would read the owner's mail on their behalf. Named,
-    never guessed."""
+def _prahari(asked: str | None, whose: str | None) -> tuple[str | None, tuple[str, ...]]:
+    """The prahari program, and the people whose watches it keeps,
+    checked now. ASKED FOR OR OFF, like Samay. EACH PERSON'S OWN ACCOUNTS:
+    a watch's look comes back here as its person (``POST /call``), so a
+    watch made by a guest reads the guest's mail, never the owner's.
+    ``--prahari-for`` narrows it to the people named (a comma list); not
+    given, everyone on the roster may make watches."""
     if not asked or asked.strip().lower() == "off":
-        return None, ""
-    whose = (whose or "").strip()
-    if not whose:
-        raise ConfigProblem("--prahari needs --prahari-for ACTOR: a watch looks with "
-                            "this computer's accounts, so it is one person's -- the "
-                            "person whose accounts these are")
+        return None, ()
+    names = tuple(n.strip() for n in (whose or "").split(",") if n.strip())
     from yantra.prahari_link import PrahariLinkError, load, resolve_mode
 
     mode, path = resolve_mode(asked, "")
@@ -464,9 +461,10 @@ def _prahari(asked: str | None, whose: str | None) -> tuple[str | None, str]:
         print("dvara: watches on, but PRAHARI_DVARA_URL is not set here; Prahari "
               "will refuse a watch on this road until it is", file=sys.stderr)
     print(f"dvara: watches through prahari {data.get('version')} ({program}) for "
-          f"{whose}; it is {'watching' if data.get('serving') else 'NOT running (prahari serve)'}",
+          f"{', '.join(names) or 'everyone'}; it is "
+          f"{'watching' if data.get('serving') else 'NOT running (prahari serve)'}",
           file=sys.stderr)
-    return program, whose
+    return program, names
 
 
 def _sparsh(asked: str | None) -> str | None:

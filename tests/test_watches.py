@@ -1,12 +1,12 @@
-"""The owner's agent offers a watch, and the owner says yes on their channel.
+"""A person's agent offers a watch, and they say yes on their channel.
 
-The bias these tests encode: A WATCH LOOKS WITH THIS COMPUTER'S ACCOUNTS,
-SO IT IS ONE PERSON'S. Prahari's tools reach only the turns of the
-person named by ``--prahari-for``; anyone else on the same service gets
-none, because a watch they made would read the owner's mail for them.
-Like Samay's: each turn's server is started for that person on this
-road and stopped when the turn ends, a scheduled turn gets none, and
-watches stay off unless the owner turned them on -- and named whose.
+The bias these tests encode: A WATCH IS ITS PERSON'S. Prahari's server is
+started ``--for`` the turn's own person on this road, so the watches it
+makes and lists are theirs, and its looks come back here as them
+(``POST /call``, test_looks_as_them.py). When the owner names people
+(``--prahari-for``), only their turns get the tools. Like Samay's: each
+turn's server is stopped when the turn ends, a scheduled turn gets none,
+and watches stay off unless the owner turned them on.
 
 Prahari here is a fake program on disk speaking the real contract.
 """
@@ -79,7 +79,7 @@ def tools_sent(service) -> set[str]:
     return {t.name for t in service.scripted.requests[0]["tools"]}
 
 
-class TestThePersonNamed:
+class TestEachPersonsOwn:
     def test_their_turn_gets_the_tools_for_them_on_this_road(self, make_service, prahari):
         service = make_service([says("ok")], prahari=str(prahari[0]), prahari_for="owner")
         asyncio.run(service.deliver(actor="owner", agent="greeter", thread="t", text="hi"))
@@ -91,7 +91,16 @@ class TestThePersonNamed:
         assert "once the service's owner starts it" in system
         assert "prahari serve" not in system
 
-    def test_anybody_else_gets_none(self, make_service, prahari):
+    def test_with_nobody_named_anyone_gets_them_for_themselves(self, make_service,
+                                                               prahari):
+        from dvara.actors import ActorBook
+        house = ActorBook.from_dict({"actor": {"owner": {}, "asha": {}}})
+        service = make_service([says("ok")], prahari=str(prahari[0]), actors=house)
+        asyncio.run(service.deliver(actor="asha", agent="greeter", thread="t", text="hi"))
+        started = [a for a in logged(prahari[1]) if "mcp" in a][0]
+        assert started[-6:] == ["--for", "asha", "--agent", "greeter", "--runner", "dvara"]
+
+    def test_with_people_named_anybody_else_gets_none(self, make_service, prahari):
         service = make_service([says("ok")], prahari=str(prahari[0]), prahari_for="owner")
         asyncio.run(service.deliver(actor="guest", agent="greeter", thread="t", text="hi"))
         assert not any("mcp" in a for a in logged(prahari[1]))     # never started for them
@@ -121,11 +130,14 @@ class TestThePersonNamed:
 
 class TestTheOwnersSwitch:
     def test_off_unless_asked_for(self):
-        assert _prahari(None, "owner") == (None, "") and _prahari("off", None) == (None, "")
+        assert _prahari(None, "owner") == (None, ()) and _prahari("off", None) == (None, ())
 
-    def test_on_needs_whose(self, prahari):
-        with pytest.raises(ConfigProblem, match="--prahari-for ACTOR"):
-            _prahari(str(prahari[0]), None)
+    def test_on_with_nobody_named_is_for_everyone(self, prahari, capsys):
+        assert _prahari(str(prahari[0]), None) == (str(prahari[0]), ())
+        assert "for everyone" in capsys.readouterr().err
+
+    def test_names_are_a_comma_list(self, prahari):
+        assert _prahari(str(prahari[0]), "owner, guest")[1] == ("owner", "guest")
 
     def test_asked_for_and_missing_stops_the_start(self, tmp_path):
         with pytest.raises(ConfigProblem, match="--prahari"):
@@ -134,7 +146,7 @@ class TestTheOwnersSwitch:
     def test_found_is_announced_and_a_missing_url_is_warned(self, prahari, capsys,
                                                            monkeypatch):
         monkeypatch.delenv("PRAHARI_DVARA_URL", raising=False)
-        assert _prahari(str(prahari[0]), "owner") == (str(prahari[0]), "owner")
+        assert _prahari(str(prahari[0]), "owner") == (str(prahari[0]), ("owner",))
         err = capsys.readouterr().err
         assert "watches through prahari 0.1.0" in err and "for owner" in err
         assert "PRAHARI_DVARA_URL is not set" in err

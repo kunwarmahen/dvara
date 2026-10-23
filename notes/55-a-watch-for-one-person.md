@@ -40,7 +40,14 @@ keys. Sarathi passes its own owner.
 
 The first fix is recorded as not built, in Prahari's README too.
 
+> ~~Not built: a look through Dvara as the person.~~ Built: `POST /call`,
+> [note 56](56-a-look-as-them.md). `--prahari` now covers everyone, and
+> `--prahari-for` narrows it to the people named.
+
 ## On the Dvara road, the look is plain Yantra
+
+(Since [note 56](56-a-look-as-them.md), it isn't: the look comes back to
+Dvara as the person, with the watch's own agent.)
 
 A watch made here wakes `--agent <roster name> --runner dvara`: when it
 fires, Dvara runs that agent by name. But a look can't use a roster

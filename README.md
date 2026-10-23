@@ -142,7 +142,7 @@ a page, each checked before it's written; and a turn watched while it
 runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools` and `/schedules` answered
 from the record; and with `--prahari`, its owner's agent offers to tell
-them when something happens — covered by 966 tests. The API is not stable.
+them when something happens — covered by 979 tests. The API is not stable.
 
 ## The shape of it
 
@@ -850,6 +850,7 @@ POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /messa
 POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code, via}
 POST /phone/ready  {actor, wait, about}           -> {go, said}
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
+POST /call         {actor, agent, tool, args, allow_tools}  -> yantra.call.v1
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}
 POST /web/message  {actor, agent, text}          -> {line}
@@ -891,6 +892,12 @@ up to ten minutes, locked asks them in their chat to unlock it for
 words. Only for someone marked `phone = true` or given `phones`; `phone`
 in the body names which of theirs (`"nexus"`), needed when they have
 several.
+
+`/call` runs one tool once, as a person, with no model: a watch's look
+(Prahari). Their agent is built with their own accounts, and the tool
+runs by Yantra's rule, a tool that reads or the one call `allow_tools`
+grants word for word; no run is written and no allowance spent. 404 for
+a person watches are off for ([notes/56](notes/56-a-look-as-them.md)).
 
 **The web channel: a chat on a page.** `dvara serve --web` gives every
 person a list of lines kept on disk: what they said on a page, what
@@ -996,7 +1003,7 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
 ### Watches, asked for in the chat
 
 With [Prahari](https://github.com/kunwarmahen/prahari) installed,
-`--prahari` lets one person's agent offer a watch: *"tell me when a mail
+`--prahari` lets each person's agent offer a watch: *"tell me when a mail
 from the bank arrives"*, *"tell me when ALAB drops under $50"*. Prahari
 looks with no model and wakes the agent only when the thing happens;
 the person says yes on a card in their chat that names the exact call
@@ -1004,23 +1011,27 @@ it will run.
 
 ```bash
 export PRAHARI_DVARA_URL=http://127.0.0.1:8765 PRAHARI_DVARA_TOKEN=$DVARA_TOKEN
-dvara --ask --prahari /path/to/prahari --prahari-for mahen serve --port 8765
-#   dvara: watches through prahari 0.1.0 (/path/to/prahari) for mahen; it is watching
+dvara --ask --prahari /path/to/prahari serve --port 8765
+#   dvara: watches through prahari 0.1.0 (/path/to/prahari) for everyone; it is watching
 ```
 
-* ONE PERSON'S: a look runs this computer's Yantra with this computer's
-  accounts, so `--prahari-for ACTOR` (or `DVARA_PRAHARI_FOR`) names whose
-  watches they are, and nobody else's turns get the tools. `--prahari`
-  without it refuses to start.
-* Each of that person's turns starts `prahari mcp --for <them> --agent
-  <this agent> --runner dvara` and stops it when the turn ends; a
-  scheduled turn gets none.
+* EACH PERSON'S OWN: a watch's look comes back here as its person
+  (`POST /call`): their agent, their own Setu folder, one tool, no model.
+  So a guest's watch reads the guest's mail, never the owner's
+  ([notes/56](notes/56-a-look-as-them.md)). `--prahari-for asha,mahen`
+  (or `DVARA_PRAHARI_FOR`) narrows the watches to the people named.
+* Each of their turns starts `prahari mcp --for <them> --agent <this
+  agent> --runner dvara` and stops it when the turn ends; a scheduled
+  turn gets none.
 * A package with `[tools] allow` must list `mcp__prahari__*` (*Watches
   (Prahari)* in the tool picker).
 * A watch that fires with work to do runs here as the person
   (`came_by: prahari` on the page, `dvara runs --came-by prahari`), and
   what it sees reaches their channels through `/notify`
   ([notes/55](notes/55-a-watch-for-one-person.md)).
+* Each person has their own key to Prahari's inlet, so their phone's
+  knocks reach only their watches: their agent's `inlet_address` tool
+  gives it to them.
 
 ### Your phone, from the chat
 
@@ -1261,7 +1272,7 @@ reads that person's key from `<state>/memory.json`
 
 | module | what it holds |
 |---|---|
-| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), Prahari's, for the one person named ([notes/55](notes/55-a-watch-for-one-person.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), and the package's own `[[mcp]]` servers, last ([notes/48](notes/48-a-server-of-their-own.md)), then past twenty tools only those the turn's words point at ([notes/53](notes/53-the-tools-a-turn-is-sent.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)), behind its answer ([notes/51](notes/51-starting-over-at-once.md)), or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
+| `service.py` | `Service.deliver` — one message in, one reply out ([notes/01](notes/01-the-door.md)); `Service.resume` — a held turn answered ([notes/16](notes/16-kept-for-when-you-are-back.md)); a turn's Samay tools, for its person ([notes/18](notes/18-a-schedule-asked-for-in-the-chat.md)), Prahari's, for its person ([notes/55](notes/55-a-watch-for-one-person.md)), and a watch's look made as them (`Service.call`, [notes/56](notes/56-a-look-as-them.md)), its person's own accounts ([notes/19](notes/19-their-own-accounts.md)), and the phone, for its one person ([notes/30](notes/30-do-this-on-my-phone.md)), and its memory, the person's own ([notes/37](notes/37-their-own-memories.md)), and the package's own `[[mcp]]` servers, last ([notes/48](notes/48-a-server-of-their-own.md)), then past twenty tools only those the turn's words point at ([notes/53](notes/53-the-tools-a-turn-is-sent.md)), looked back over at `/new` ([notes/38](notes/38-what-they-said-in-passing.md)), behind its answer ([notes/51](notes/51-starting-over-at-once.md)), or after 30 quiet minutes, and every Setu folder checked daily (`Service.chores`, [notes/39](notes/39-while-nobody-is-writing.md)); `Service.tidy` — finished scheduled runs let go ([notes/24](notes/24-a-conversation-nobody-will-continue.md)); one folder per person per agent ([notes/25](notes/25-the-persons-folder.md)) |
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)); Google's page in the streamed window when one is set ([notes/52](notes/52-googles-page-in-the-window.md)), and a server's own sign-in page too ([notes/48](notes/48-a-server-of-their-own.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
@@ -1302,7 +1313,7 @@ reads that person's key from `<state>/memory.json`
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
-| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (with `--prahari-for`), `--sparsh` and `--memory` checked at the start |
+| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

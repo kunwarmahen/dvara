@@ -174,6 +174,10 @@ WATCH_OFF = ("Prahari is not running on this service right now: when you make a 
              "Do not ask the person to run anything.")
 
 
+#: The thread a watch's look is keyed under: one folder per person per
+#: agent (``_workspace``), never a conversation.
+LOOK_THREAD = "prahari-look"
+
 #: A stopped clock, on a service: the owner's to start, not the person's.
 CLOCK_OFF = ("Samay's clock is not running on this service right now: when you "
              "make a schedule, say it will start running once the service's owner "
@@ -267,7 +271,7 @@ class Service:
                  samay: str | None = None,
                  sparsh: str | None = None,
                  prahari: str | None = None,
-                 prahari_for: str = "",
+                 prahari_for: Sequence[str] = (),
                  keep_unattended: float = KEEP_UNATTENDED,
                  web: bool = False,
                  memory: Store | None = None,
@@ -311,11 +315,13 @@ class Service:
         #: its tools (``_phone``). None: no turn does.
         self.sparsh = sparsh
         #: The prahari program, when the owner turned watches on
-        #: (``--prahari``), and the one person whose watches they are
-        #: (``--prahari-for``): only that person's turns get its tools
-        #: (``_watches``), because a look runs with this computer's accounts.
+        #: (``--prahari``), and the people it is for when the owner named
+        #: some (``--prahari-for``; none named: everyone). Each person's
+        #: watches look with their own accounts, through ``call``.
         self.prahari = prahari
-        self.prahari_for = prahari_for
+        self.prahari_for = tuple(n.strip() for n in (
+            prahari_for.split(",") if isinstance(prahari_for, str) else prahari_for)
+            if n.strip())
         #: The owner's memory store (``--memory``, memory.py): a package
         #: that asks for memory gets this one, for its person. None: the
         #: package's own choice, still filed under the person's name.
@@ -536,6 +542,93 @@ class Service:
         return await ready.ready(ready.through(self.sparsh, *which),
                                  wait=wait or DEFAULT_SCHEDULE_WAIT,
                                  ask=self._asker(who), about=" ".join(about.split())[:120])
+
+    def watches_for(self, actor: str) -> bool:
+        """Whether this person's turns get Prahari's tools: watches are on
+        (``--prahari``), and ``--prahari-for`` -- when the owner named
+        anyone -- names them."""
+        return self.prahari is not None and (not self.prahari_for
+                                              or actor in self.prahari_for)
+
+    async def call(self, *, actor: str, agent: str, tool: str, arguments: dict,
+                   allow_tools: Sequence[str] = ()) -> dict:
+        """One tool, once, as this person, and no model (``POST /call``).
+
+        A WATCH LOOKS WITH ITS PERSON'S ACCOUNTS. Prahari repeats a watch's
+        check with no model; at the computer that is ``yantra --call``,
+        with the computer's accounts -- the owner's. A watch made by
+        someone else in the house must look with THEIR mail, so the look
+        comes here: their agent is built as for a turn, with their own Setu
+        folder (``_accounts``) and the package's own servers, and the one
+        tool runs by Yantra's own rule (its calling.py): a tool that reads,
+        or the one call they granted word for word when they accepted the
+        watch.
+
+        NOTHING ELSE A TURN HAS. No model is asked, so no allowance is spent
+        and no run is written (a look every half hour would bury the
+        person's page); no conversation, no memory, no schedules, no phone.
+        It is unattended: a sign-in wall comes back in ``needs_person``,
+        never as a window opened for nobody.
+
+        Only for a person whose watches are on (``watches_for``).
+        """
+        from yantra.calling import Called, as_json, call_once
+
+        self.refresh()
+        if not self.watches_for(actor):
+            raise Refused(f"watches are off for {actor} on this service: it was not "
+                          "started with --prahari for them")
+        who = self.actors.may(actor, agent)
+        spec = self.roster.spec(agent)
+        key = session_key(actor, agent, LOOK_THREAD)
+        with unattended_scope() as record:
+            try:
+                looker = self._looker(spec, who, key)
+            except ConfigError as exc:
+                return as_json(Called(False, tool, detail=f"that agent cannot run: {exc}"))
+            servers = await self._look_servers(looker, who=who, spec=spec, key=key)
+            try:
+                called = await asyncio.to_thread(call_once, looker, tool, arguments,
+                                                 list(allow_tools))
+            finally:
+                if servers is not None:
+                    await asyncio.to_thread(servers.shutdown)
+        return as_json(called, needs=list(record.needs), busy=list(record.busy))
+
+    def _looker(self, spec: AgentSpec, who: Actor, key: str):
+        """The person's agent, for a call: built as a turn's is, around a
+        provider that is never asked (one with no key will do)."""
+        provider_name = self.provider_name or spec.provider or guess_provider()
+        try:
+            provider = self._provider(provider_name)
+        except ConfigError:
+            provider_name = "ollama"
+            provider = self._provider(provider_name)
+        return spec.build_async(
+            permissions=self.policy.gate(
+                spec.permissions_mode, actor_mode=who.permissions, desk=self.asks,
+                actor=who.id, agent=spec.name, thread=LOOK_THREAD, reach=who.reach(),
+                decisions=Decisions()),
+            cwd=self._workspace(key), provider=provider, provider_name=provider_name,
+            model=self.model or spec.model or default_model(provider_name),
+            own_skills_only=True)
+
+    async def _look_servers(self, agent, *, who: Actor, spec: AgentSpec, key: str):
+        """A call's servers: the person's accounts and the package's own --
+        what a look can read with -- and nothing that a turn alone needs."""
+        accounts = who.setu is not None and bool(spec.connections)
+        packaged = bool(getattr(spec, "mcp", ()))
+        if not (accounts or packaged):
+            return None
+        from yantra.mcp import MCPManager
+
+        manager = MCPManager(agent.registry, agent=agent,
+                             memory_path=self._workspace(key) / ".yantra" / "mcp.json")
+        if accounts:
+            await self._accounts(agent, manager, who=who, spec=spec)
+        if packaged:
+            await self._packaged(manager, spec=spec)
+        return manager
 
     async def ask(self, *, actor: str, tool: str, summary: str,
                   arguments: dict, timeout: float, agent: str = "",
@@ -1078,8 +1171,7 @@ class Service:
         when there are none to start."""
         accounts = who.setu is not None and bool(spec.connections)
         schedules = self.samay is not None and not is_unattended()
-        watching = (self.prahari is not None and not is_unattended()
-                    and who.id == self.prahari_for)
+        watching = self.watches_for(who.id) and not is_unattended()
         phone = (self.sparsh is not None and who.has_phone and works_phone(spec)
                  and (not is_unattended() or phone_run is not None))
         remembering = (self.memory is not None and spec.memory == self.memory.name
@@ -1290,15 +1382,15 @@ class Service:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
 
     async def _watches(self, agent, manager, *, who: Actor, run: Run) -> None:
-        """Prahari's tools for this turn's person -- only the one named by
-        ``--prahari-for``.
+        """Prahari's tools for this turn's person (``watches_for``).
 
         ONE SERVER PER TURN, as for Samay: ``prahari mcp --for <actor>
         --runner dvara`` starts beside the agent and stops with the turn. A
         watch made here wakes this agent, as this person, on this road:
         their allowance and the owner's rules apply when it fires, and the
         news comes to their channels. Making one is a write, asked about on
-        their channel with Yantra's card in words (its notes/140).
+        their channel with Yantra's card in words (its notes/140). Its looks
+        come back here as them (``call``), with their own accounts.
 
         A SCHEDULED TURN GETS NONE, and a Prahari that will not start costs
         the turn its watches, never the turn."""

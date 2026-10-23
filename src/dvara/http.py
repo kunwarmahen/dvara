@@ -21,7 +21,8 @@ ahead of time. The question is the same question a turn here would put,
 on the same desk, through the same owner's rules; only the turn lives
 elsewhere. ``/phone/ready`` is the check before such a run that works
 the phone: in use, locked (its person asked to unlock it), asleep (woken),
-exactly as a phone schedule here is checked.
+exactly as a phone schedule here is checked. ``/call`` runs one tool as a
+person with no model -- a watch's look, with their own accounts.
 
 THE TOKEN AUTHENTICATES THE CALLER, NOT THE PERSON. That distinction is
 the whole security posture of this layer. A caller here is a channel
@@ -371,6 +372,35 @@ def create_app(service: Service, *, token: str,
         except Refused as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
         return {"go": skip is None, "said": skip or ""}
+
+    @app.post("/call")
+    async def call(request: Request,
+                   authorization: str | None = Header(default=None)) -> dict:
+        """One tool, once, as one person, with no model (service.call):
+        a watch's look, made with its person's own accounts. 200 with
+        ``yantra.call.v1`` either way -- a tool that failed or was refused
+        is the look's answer; 404 for a person watches are off for."""
+        check(authorization)
+        body = await request.json()
+        missing = [f for f in ("actor", "agent", "tool")
+                   if not isinstance(body.get(f), str) or not body[f].strip()]
+        if missing:
+            raise HTTPException(status_code=400,
+                                detail=f"missing or empty: {', '.join(missing)}")
+        arguments = body.get("args") or {}
+        if not isinstance(arguments, dict):
+            raise HTTPException(status_code=400, detail="args is an object")
+        allow_tools = body.get("allow_tools") or []
+        if not isinstance(allow_tools, list) or not all(
+                isinstance(g, str) for g in allow_tools):
+            raise HTTPException(status_code=400,
+                                detail="allow_tools is a list of grants")
+        try:
+            return await service.call(actor=body["actor"], agent=body["agent"],
+                                      tool=body["tool"], arguments=arguments,
+                                      allow_tools=allow_tools)
+        except Refused as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
 
     @app.post("/notify")
     async def notify(request: Request,
