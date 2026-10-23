@@ -144,7 +144,7 @@ the person keeps for themselves, and `/tools` and `/schedules` answered
 from the record; and with `--prahari`, its owner's agent offers to tell
 them when something happens; and limits for a child (hours, messages a
 day, an approver), facts everyone in the house knows, and a ready-made
-morning brief — covered by 1039 tests. The API is not stable.
+morning brief, and `dvara keeps` for a backup of the house — covered by 1044 tests. The API is not stable.
 
 ## The shape of it
 
@@ -1430,6 +1430,7 @@ reads that person's key from `<state>/memory.json`
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
+| `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches and the folder's lock left out, nothing opened |
 | `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
 | `limits.py` | a person's limits that aren't money: the hours their agents answer, a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |

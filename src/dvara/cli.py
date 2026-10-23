@@ -19,6 +19,7 @@ how the receipts in the notes were produced.
     dvara serve --host 127.0.0.1 --port 8765
     dvara telegram --agent researcher
     dvara status --json
+    dvara keeps --json
     dvara page --as owner --port 8785
 
 ``--ask`` is where a front end becomes a channel. The escalating gate
@@ -208,6 +209,12 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--json", dest="json_out", action="store_true",
                         help="print dvara.status.v1, for a program that "
                              "started this one")
+
+    keeps = subs.add_parser(
+        "keeps", help="where the agents, people and conversations are kept, "
+                      "for a backup")
+    keeps.add_argument("--json", dest="json_out", action="store_true",
+                       help="print dvara.keeps.v1")
 
     page = subs.add_parser(
         "page", help="the owner's page: people, agents, runs, spending, each "
@@ -501,6 +508,23 @@ def _sparsh(asked: str | None) -> str | None:
     return program
 
 
+def _keeps(args) -> int:
+    """``dvara keeps``: the places a backup takes (keeps.py). Paths only,
+    nothing opened: a running service's folder is left as it is."""
+    from dvara.keeps import report
+
+    said = report(Path(args.root).expanduser(), Path(args.actors).expanduser(),
+                  Path(args.state).expanduser(), _policy_path(args))
+    if args.json_out:
+        print(json.dumps(said))
+        return 0
+    for place in said["keeps"]:
+        print(f"{place['id']:<7} {place['path']}"
+              + ("" if place["exists"] else "  (not there yet)"))
+        print(f"        {place['what']}")
+    return 0
+
+
 def _policy_path(args) -> Path:
     """The rules: the file named, else policy.toml beside the actors file,
     so a page that writes it and the running service read the same one."""
@@ -630,6 +654,8 @@ def main(argv: list[str] | None = None) -> int:
     # lock and CPython closes it the moment nothing points at it.
     if args.command == "status":
         return _status(args)
+    if args.command == "keeps":
+        return _keeps(args)
     if args.command == "page":
         return _page(args)
     if args.command == "settings":
