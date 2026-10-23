@@ -1179,7 +1179,10 @@ Nothing is kept until they send `/remember 1 3` (or `all`); what they
 turn down with `/remember not 2` (or `none`) is never offered again; and
 `/memory` shows them what is kept, with `/memory forget ID` to take one
 back. The list waits in `<state>/offered.json`, yours alone
-([notes/38](notes/38-what-they-said-in-passing.md)).
+([notes/38](notes/38-what-they-said-in-passing.md)). A memory an answer
+drew on says when, `(used 2026-10-23)`, and stays among the newest: Yantra
+tells the store at the end of each turn, so a fact someone relies on
+doesn't age out of what their conversations start with (Yantra's note 143).
 
 **An account you made yourself.** To give someone a Smritikosh account
 you made in its dashboard: sign in as them, make a key under **Settings →

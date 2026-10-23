@@ -163,6 +163,20 @@ def test_memory_lists_their_own_and_forgets_by_id(make_service, remembers):
     assert service.scripted.requests == []          # no model was asked
 
 
+def test_memory_says_when_one_was_last_used(make_service, remembers):
+    # an answer that drew on it keeps it fresh (Yantra reports it); the
+    # list says when, so a person can see why an old fact is still first
+    from yantra.memory.local import LocalStore
+    store = LocalStore()
+    rdu = store.remember("owner", "Lives near RDU", {})
+    store.remember("owner", "Prefers tea", {})
+    store.used("owner", [rdu])
+    listed = say(make_service([]), "/memory").text
+    first = listed.splitlines()[1]
+    assert first.startswith(f"#{rdu}  Lives near RDU  (used 20")
+    assert "Prefers tea" in listed and "tea  (used" not in listed
+
+
 def test_a_package_that_keeps_no_memories_says_so_and_new_asks_no_model(make_service):
     service = make_service([says("hi")])
     say(service, "hello")

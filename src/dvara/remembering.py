@@ -296,7 +296,10 @@ def memory_list(items, short) -> str:
                 "keeping, I'll ask you first.")
     shown = items[:LISTED]
     lines = [f"What I remember about you ({len(items)}):"]
-    lines += [f"#{short(i.id)}  {i.statement}" for i in shown]
+    # a memory an answer drew on says when: listed first, it stays fresh
+    lines += [f"#{short(i.id)}  {i.statement}"
+              + (f"  (used {i.used[:10]})" if getattr(i, "used", "") else "")
+              for i in shown]
     if len(items) > LISTED:
         lines.append(f"…and {len(items) - LISTED} more.")
     lines.append("Send /memory forget ID to remove one (/memory forget "
