@@ -473,6 +473,22 @@ what it keeps about them:
 /remember not 2                not that one, never offered again (or /remember none)
 ```
 
+**A job a restart stopped.** Every step of every turn is saved as it
+happens. When Dvara comes back after `sarathi down && up` or a crash,
+each person who had a job running is told what it was and how far it
+got, once, and `/carry` carries it on from the last step: nothing done
+is done again, and the agent looks at the screen again before it acts.
+Anything else they send leaves it. A schedule's run is Samay's to carry
+on (`carry_on` on `POST /message`)
+([notes/59](notes/59-a-job-a-restart-stopped.md)).
+
+```
+I stopped part way through "return the blue kettle" (6 steps done:
+phone_open_app, phone_tap) when I was restarted (minder). Send /carry to
+carry on from there -- I'll look again before I do anything. Anything
+else leaves it.
+```
+
 `/new` answers at once and looks back over the conversation behind the
 answer: what it noticed comes as a message of its own, numbered, and
 nothing comes if it noticed nothing
@@ -859,6 +875,8 @@ The reasoning is in [notes/29](notes/29-the-owners-page.md).
 ```
 POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, receipt, files, ...}
                    (+ "stream": true -> NDJSON: text, using, step lines, then {kind: reply, ...})
+                   (+ "carry_on": true -> the turn a restart stopped in this thread, from
+                    its last step; stop_reason "nothing" when there is none)
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
@@ -1312,6 +1330,7 @@ reads that person's key from `<state>/memory.json`
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
+| `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |

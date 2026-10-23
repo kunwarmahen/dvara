@@ -301,10 +301,16 @@ def create_app(service: Service, *, token: str,
         stream = body.get("stream", False)
         if not isinstance(stream, bool):
             raise HTTPException(status_code=400, detail="stream is true or false")
+        # Carry on the job a restart stopped in this thread (carrying.py),
+        # from its last step; ``text`` is then only what it was asked.
+        carry_on = body.get("carry_on", False)
+        if not isinstance(carry_on, bool):
+            raise HTTPException(status_code=400, detail="carry_on is true or false")
         turn = dict(actor=actor, via=via, agent=body["agent"], thread=body["thread"],
                     text=body["text"], unattended=unattended, allow_tools=allow_tools,
                     phone=phone, phone_steps=phone_steps,
-                    wait=float(wait) if wait is not None else None, came_by=came_by)
+                    wait=float(wait) if wait is not None else None, came_by=came_by,
+                    carry_on=carry_on)
         if stream:
             return _streamed(service, turn)
         return answer_of(await service.deliver(**turn))

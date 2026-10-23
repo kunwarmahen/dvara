@@ -118,7 +118,7 @@ from yantra.tools.selector import select_when_many
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (attached, files, fresh, heard, learning, money, past, patience,
+from dvara import (attached, carrying, files, fresh, heard, learning, money, past, patience,
                    phoneview, ready, remembering, seen, signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
@@ -128,7 +128,8 @@ from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Decisions, Policy
 from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
                          NotYourHold, Waiting, waiting_text)
-from dvara.keys import session_key, workspace_parts
+from dvara.carrying import NOTHING as NOTHING_STOPPED
+from dvara.keys import parse_key, session_key, workspace_parts
 from dvara.learning import Learning
 from dvara.locks import KeyedLocks
 from dvara.memory import PEOPLE_FILE, MemoryProblem, Person, Store, person
@@ -761,8 +762,13 @@ class Service:
                       wait: float | None = None,
                       came_by: str | None = None,
                       watch: Watcher | None = None,
-                      attachments: Sequence[attached.Attachment] = ()) -> Reply:
+                      attachments: Sequence[attached.Attachment] = (),
+                      carry_on: bool = False) -> Reply:
         """Run one turn for one person, and answer them either way.
+
+        ``carry_on`` (or a person's ``/carry``) carries on the job a
+        restart stopped part way in this conversation (carrying.py)
+        instead of starting ``text``.
 
         Never raises for anything a person could have caused. A refusal is
         a reply; so is a crash inside somebody's tool. The caller is a
@@ -937,6 +943,14 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
+        carrying_on = carry_on or (not unattended and carrying.is_word(text))
+        if carrying_on:
+            stopped = self._stopped(key)
+            if stopped is None:
+                return Reply(text=carrying.NOTHING, run_id=None, agent=agent,
+                             actor=actor, stop_reason="nothing")
+            text = stopped.get("message") or text   # the Run is the job's
+
         scheduled = None
         if unattended and phone:
             if self.sparsh is None or not who.has_phone:
@@ -977,13 +991,15 @@ class Service:
             try:
                 if not unattended:
                     reply = await self._turn(spec=spec, who=who, key=key,
-                                             run=run, watch=watch, kept=kept)
+                                             run=run, watch=watch, kept=kept,
+                                             carrying=carrying_on)
                     return replace(reply, heard=heard_as) if heard_as else reply
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
                                              ahead=tuple(allow_tools),
-                                             phone_run=scheduled, wait_for=wait)
+                                             phone_run=scheduled, wait_for=wait,
+                                             carrying=carrying_on)
                 self._tidy_quietly()
                 return replace(reply, needs=tuple(record.needs),
                                busy=tuple(record.busy))
@@ -1108,7 +1124,8 @@ class Service:
                     phone_run: PhoneRun | None = None,
                     wait_for: float | None = None,
                     watch: Watcher | None = None,
-                    kept: Sequence[attached.Kept] = ()) -> Reply:
+                    kept: Sequence[attached.Kept] = (),
+                    carrying: bool = False) -> Reply:
         provider_name = self.provider_name or spec.provider or guess_provider()
         model = self.model or spec.model or default_model(provider_name)
         run.model = model
@@ -1181,7 +1198,7 @@ class Service:
                 agent, key=key, run=run, resuming=resuming, answers=answers,
                 door=door, decisions=decisions, wait=wait, ceiling=ceiling,
                 provider_name=provider_name, who=who, watch=Safely(watch),
-                kept=kept)
+                kept=kept, carrying=carrying)
             return replace(reply, files=tuple(sent)) if sent else reply
         finally:
             if servers is not None:
@@ -1507,11 +1524,20 @@ class Service:
                         resuming: Hold | None, answers, door: str | None,
                         decisions: Decisions, wait, ceiling, provider_name: str,
                         who: Actor, watch: Safely | None = None,
-                        kept: Sequence[attached.Kept] = ()) -> Reply:
+                        kept: Sequence[attached.Kept] = (),
+                        carrying: bool = False) -> Reply:
         self._rehydrate(agent, key)
+        # EVERY STEP IS SAVED, not only the turn's end: a restart in the
+        # middle of a job leaves it here as far as it got (carrying.py).
+        agent.on_step = lambda a: self.sessions.save(
+            a, provider_name=provider_name, session_id=key)
         if resuming is not None:
             events = self._carry_on(agent, resuming, answers or {}, run,
                                     decisions, door)
+        elif carrying:
+            if agent.unfinished is None:
+                raise Refused(NOTHING_STOPPED)
+            events = agent.carry_on()
         else:
             if agent.held is not None:
                 # A NEW MESSAGE SETS A HELD TURN ASIDE -- Yantra answers the
@@ -2126,6 +2152,8 @@ class Service:
         loop = asyncio.get_running_loop()
         # the first check a few minutes in, not at every restart's first second
         checked = loop.time() - max(0.0, self.check_every - FIRST_CHECK_AFTER)
+        # once, as it starts: the jobs the last restart stopped part way
+        await self._chore(self.tell_stopped)
         while True:
             await self._chore(self.look_back_quiet)
             if self.check_every and loop.time() - checked >= self.check_every:
@@ -2247,6 +2275,34 @@ class Service:
         work = self.state / "work" / actor / agent
         work.mkdir(parents=True, exist_ok=True)
         return work
+
+    def _stopped(self, key: str) -> dict | None:
+        """The job a restart stopped part way in this conversation, if
+        its newest checkpoint is one (Yantra's carry.py)."""
+        payload = self.sessions.load_latest(key)
+        return (payload or {}).get("unfinished") or None
+
+    async def tell_stopped(self) -> int:
+        """As the service starts: each person with a job a restart stopped
+        part way is told what and how far, once, and that ``/carry``
+        carries it on (carrying.py). A schedule's or a watch's run is
+        Samay's or Prahari's to carry on. Returns how many were told."""
+        told = carrying.Told(self.state / "carry-told.json")
+        sent = 0
+        for key, info in self.sessions.unfinished():
+            try:
+                actor, agent, thread = parse_key(key)
+            except ValueError:
+                continue
+            if not carrying.is_peoples(thread) or told.already(key, info):
+                continue
+            try:
+                await self.notify(actor=actor, text=carrying.stopped_words(agent, info))
+            except Refused:
+                continue          # no longer on the roster
+            told.mark(key, info)
+            sent += 1
+        return sent
 
     def _rehydrate(self, agent, key: str) -> None:
         """Restore the conversation; keep the identity we just built.

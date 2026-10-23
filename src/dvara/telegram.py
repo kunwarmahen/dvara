@@ -1203,6 +1203,7 @@ def ending(answer: Answer | None) -> str:
 def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over"),
+             ("carry", "Carry on a job a restart stopped"),
              ("chats", "Our conversations: find, open, delete"),
              ("tests", "Answers kept as tests, and how each did")]
     if _writes_files(spec):

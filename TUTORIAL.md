@@ -1285,6 +1285,25 @@ its own conversation (one on Telegram doesn't continue there), and the
 person is the same person on both, with the same allowance, rules and
 questions ([notes/34](notes/34-a-chat-on-a-page.md)).
 
+### A job a restart stopped
+
+Every step of a turn is saved as it happens. Restart Dvara in the middle
+of a long job, and when it comes back the person gets a message:
+*"I stopped part way through "…" (2 steps done: read_file) when I was
+restarted. Send /carry to carry on from there."* Try it on the terminal
+channel. Start a job that takes a few steps, stop it hard part way
+(Ctrl-C on `dvara say` is the person stopping it, which isn't the same,
+so use `kill -9`), then:
+
+```bash
+dvara say --actor owner --agent greeter "/carry"
+```
+
+It goes on from the last saved step. Nothing is done twice, and the
+agent is told it stopped, so it looks again before acting. Anything else
+you send instead leaves the job as it is
+([notes/59](notes/59-a-job-a-restart-stopped.md)).
+
 ### Old conversations, found again
 
 Every conversation is kept as it goes, on every channel, in a file of
