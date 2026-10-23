@@ -1819,6 +1819,9 @@ Each topic, and the note that argues it:
 | `notes/55-a-watch-for-one-person.md` | Prahari's watches offered in the chat, each person's server started for them, and a fire run here as them |
 | `notes/56-a-look-as-them.md` | `POST /call`: a watch's look made as its person, with their own accounts and no model, so watches are everyone's |
 | `notes/57-a-test-of-your-own.md` | `/keep test`, `/chats test N`: a conversation kept as a test in the person's own suite, replayed each night |
+| `notes/58-outside-text-asks.md` | after an email, a page or a server's answer, a change asks the person, even under a rule or a grant |
+| `notes/59-a-job-a-restart-stopped.md` | every step saved; a job a restart stopped told to its person once, and `/carry` carries it on from its last step |
+| `notes/60-a-run-step-by-step.md` | `/steps` and the page's **Steps**: a run's own turn, step by step; anybody else's as shape only |
 
 ---
 

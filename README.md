@@ -448,6 +448,8 @@ And anyone can start their conversation with an agent over:
 /chats test 2 turn 1           an earlier answer in that conversation
 /tests                         your kept tests, and how each did last time
 /tests delete 1                take one back (the conversation stays)
+/carry                         carry on a job a restart stopped, from its last step
+/steps                         what your last turn did, step by step (/steps 2: turn 2)
 ```
 
 A chat is one conversation for as long as it lasts, and a long one can
