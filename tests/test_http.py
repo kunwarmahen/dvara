@@ -457,3 +457,12 @@ def test_stream_is_true_or_false(client):
         "actor": "owner", "agent": "greeter", "thread": "t1", "text": "hi",
         "stream": "yes"})
     assert response.status_code == 400
+
+
+def test_a_runs_steps_need_the_token_and_name_the_run(client):
+    reply = client.post("/message", headers=auth(), json={
+        "actor": "owner", "agent": "greeter", "thread": "t", "text": "hi"}).json()
+    assert client.get(f"/runs/{reply['run_id']}/steps").status_code == 401
+    view = client.get(f"/runs/{reply['run_id']}/steps", headers=auth()).json()
+    assert view["format"] == "yantra.steps.v1" and view["run"] == reply["run_id"]
+    assert client.get("/runs/nope/steps", headers=auth()).status_code == 404

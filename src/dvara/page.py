@@ -9,6 +9,7 @@ those at a time, in a terminal. This page shows them together:
     GET /api/people          everyone in the actors file, with today's spend
     GET /api/agents          the agents in the root
     GET /api/runs?actor=&agent=&limit=N   newest first
+    GET /api/runs/ID/steps   one run step by step; anybody else's as shape only
     GET /api/files           each person's folder per agent: names, sizes, dates
     GET /api/file?agent=A&path=P          one of the owner's own files, as text
     GET /api/schedules       each person's schedules, as Samay says them
@@ -293,6 +294,8 @@ class Api:
             limit = _int((query.get("limit") or ["50"])[0], "limit")
             return 200, {"runs": self.recent(actor, agent, max(1, min(limit, MAX_RUNS)),
                                              came_by=came_by)}
+        if len(parts) == 3 and parts[0] == "runs" and parts[2] == "steps":
+            return 200, self.run_steps(parts[1], markdown=bool(query.get("markdown")))
         if parts == ["files"]:
             return 200, {"folders": self.folders()}
         if parts == ["file"]:
@@ -471,6 +474,25 @@ class Api:
                came_by: str | None = None) -> list[dict[str, Any]]:
         return [self._run(r) for r in self.runs.recent(actor=actor, agent=agent,
                                                        came_by=came_by, limit=limit)]
+
+    def run_steps(self, run_id: str, *, markdown: bool = False) -> dict[str, Any]:
+        """One run, step by step (runsteps.py). The owner's own whole;
+        anybody else's as its shape, by the rule above."""
+        from yantra import steps
+
+        from dvara import runsteps
+        run = self.runs.get(run_id)
+        mine = run is not None and run.actor == self.owner
+        try:
+            view = runsteps.timeline(runsteps.sessions_in(self.state), run, words=mine)
+        except runsteps.NoSteps as exc:
+            raise ApiError(404, str(exc)) from None
+        if markdown:
+            if not mine:
+                raise ApiError(403, "a file for a bug report has a person's words: "
+                                    "only your own runs make one")
+            return {"name": f"steps-{run_id}.md", "markdown": steps.markdown(view)}
+        return view
 
     def _run(self, run: Run) -> dict[str, Any]:
         mine = run.actor == self.owner

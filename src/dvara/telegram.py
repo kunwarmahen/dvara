@@ -1204,6 +1204,7 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over"),
              ("carry", "Carry on a job a restart stopped"),
+             ("steps", "What my last answer did, step by step"),
              ("chats", "Our conversations: find, open, delete"),
              ("tests", "Answers kept as tests, and how each did")]
     if _writes_files(spec):

@@ -489,6 +489,13 @@ carry on from there -- I'll look again before I do anything. Anything
 else leaves it.
 ```
 
+**What a turn did.** `/steps` answers with the last turn one step at a
+time (the tool, what it was given, what came back, how long, who said
+yes), and `/steps 2` with the second. The owner's page has **Steps** on
+every run. The owner sees anybody else's run as its shape only, without
+what the tools were given and read
+([notes/60](notes/60-a-run-step-by-step.md)).
+
 `/new` answers at once and looks back over the conversation behind the
 answer: what it noticed comes as a message of its own, numbered, and
 nothing comes if it noticed nothing
@@ -877,6 +884,7 @@ POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, re
                    (+ "stream": true -> NDJSON: text, using, step lines, then {kind: reply, ...})
                    (+ "carry_on": true -> the turn a restart stopped in this thread, from
                     its last step; stop_reason "nothing" when there is none)
+GET  /runs/{id}/steps                            -> yantra.steps.v1: that run, step by step
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
@@ -1330,6 +1338,7 @@ reads that person's key from `<state>/memory.json`
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
+| `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat ([notes/60](notes/60-a-run-step-by-step.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |

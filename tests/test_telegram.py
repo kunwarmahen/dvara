@@ -917,7 +917,7 @@ def menu_of(fake):
 def test_the_menu_offers_new_and_files_to_an_agent_that_writes_them(make_bot):
     fake = FakeTelegram([])
     asyncio.run(make_bot(fake).run())
-    assert menu_of(fake) == ["new", "carry", "chats", "tests", "files", "file", "tools"]
+    assert menu_of(fake) == ["new", "carry", "steps", "chats", "tests", "files", "file", "tools"]
 
 
 def test_the_account_words_are_offered_only_where_the_package_asks_for_accounts(
@@ -929,8 +929,8 @@ def test_the_account_words_are_offered_only_where_the_package_asks_for_accounts(
     fake = FakeTelegram([])
     asyncio.run(make_bot(fake, service=make_service([], actors=actors),
                          agent="reader").run())
-    assert menu_of(fake) == ["new", "carry", "chats", "tests", "accounts", "connect", "disconnect",
-                             "lock", "unlock", "tools"]
+    assert menu_of(fake) == ["new", "carry", "steps", "chats", "tests", "accounts",
+                             "connect", "disconnect", "lock", "unlock", "tools"]
 
 
 def test_the_memory_words_are_offered_only_where_the_package_remembers(
@@ -942,7 +942,8 @@ def test_the_memory_words_are_offered_only_where_the_package_remembers(
     fake = FakeTelegram([])
     asyncio.run(make_bot(fake, service=make_service([], actors=actors),
                          agent="keeper").run())
-    assert menu_of(fake) == ["new", "carry", "chats", "tests", "memory", "remember", "tools"]
+    assert menu_of(fake) == ["new", "carry", "steps", "chats", "tests", "memory",
+                             "remember", "tools"]
 
 
 def test_a_menu_telegram_refuses_costs_the_menu_never_the_bot(make_bot):

@@ -943,6 +943,10 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
+        if not unattended and text.strip().lower().split()[:1] == ["/steps"]:
+            # what their last turn (or turn N) did, step by step: not a turn
+            return Reply(text=self._steps_words(key, text), run_id=None, agent=agent,
+                         actor=actor, stop_reason="steps")
         carrying_on = carry_on or (not unattended and carrying.is_word(text))
         if carrying_on:
             stopped = self._stopped(key)
@@ -1527,6 +1531,8 @@ class Service:
                         kept: Sequence[attached.Kept] = (),
                         carrying: bool = False) -> Reply:
         self._rehydrate(agent, key)
+        # the turn's steps are noted under its run id (runsteps.py)
+        agent.turn_tag = run.id
         # EVERY STEP IS SAVED, not only the turn's end: a restart in the
         # middle of a job leaves it here as far as it got (carrying.py).
         agent.on_step = lambda a: self.sessions.save(
@@ -2275,6 +2281,25 @@ class Service:
         work = self.state / "work" / actor / agent
         work.mkdir(parents=True, exist_ok=True)
         return work
+
+    def _steps_words(self, key: str, text: str) -> str:
+        from yantra import steps
+        payload = self.sessions.load_latest(key)
+        if payload is None:
+            return "Nothing here yet: ask me something first."
+        asked = text.split()[1:2]
+        try:
+            view = steps.timeline(payload, int(asked[0]) if asked and asked[0].isdigit()
+                                  else None)
+        except LookupError as exc:
+            return str(exc)
+        return steps.text(view)
+
+    def run_steps(self, run_id: str) -> dict:
+        """One run, step by step, whole (runsteps.py): for the door's own
+        callers. NoSteps when there is no such run or nothing left of it."""
+        from dvara import runsteps
+        return runsteps.timeline(self.sessions, self.runs.get(run_id))
 
     def _stopped(self, key: str) -> dict | None:
         """The job a restart stopped part way in this conversation, if

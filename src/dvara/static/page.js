@@ -199,7 +199,62 @@ function runCard(r) {
   } else {
     card.append(h("span.private", {}, "What was said stays theirs."));
   }
+  const open = h("button.btn.small", { type: "button",
+    title: "what this run did, step by step" }, "Steps");
+  const shown = h("div.run-steps", {});
+  open.addEventListener("click", async () => {
+    if (shown.childElementCount) { shown.replaceChildren(); return; }
+    try {
+      shown.replaceChildren(...stepsView(await api(`/api/runs/${encodeURIComponent(r.id)}/steps`), r));
+    } catch (err) {
+      shown.replaceChildren(h("p.meta", {}, `No steps: ${err.message}`));
+    }
+  });
+  card.append(h("div.actions", {}, open), shown);
   return card;
+}
+
+// -- a run, step by step (runsteps.py) ---------------------------------------
+//
+// Anybody else's run comes as its shape only: tools, times, who said yes.
+
+const secs = (n) => (n === null || n === undefined ? ""
+  : n < 0.001 ? "<1ms" : n < 1 ? `${Math.round(n * 1000)}ms` : `${n.toFixed(1)}s`);
+
+function stepsView(v, r) {
+  const rows = v.steps.map((s) => {
+    const meta = [s.at ? new Date(s.at).toLocaleTimeString() : "",
+      s.answered_by ? `asked ${s.answered_by}, ${secs(s.waited)}` : "",
+      s.ran !== null && s.ran !== undefined ? `ran ${secs(s.ran)}` : "",
+      s.refused ? `refused (${s.refused})` : "",
+      s.error && !s.refused ? "failed" : "",
+      s.pictured ? `${s.pictured} picture(s)` : ""].filter(Boolean).join(" · ");
+    return h("div.run-step", {},
+      h("b", {}, `${s.n}. ${s.tool}`), meta ? h("span.meta", {}, ` ${meta}`) : null,
+      s.arguments ? h("pre", {}, JSON.stringify(s.arguments, null, 2)) : null,
+      s.result ? h("pre", {}, s.result) : null,
+      ...(s.pictures || []).map((p) => /^[A-Za-z0-9+/=]+$/.test(p.data)
+        ? h("img.ask-picture", { src: `data:${p.media_type};base64,${p.data}`,
+                                 alt: `what ${s.tool} saw` }) : null));
+  });
+  const out = [h("p.meta", {}, `${v.seconds !== null ? v.seconds + "s" : ""}`
+    + (v.outcome ? ` · ${v.outcome}` : "")), ...rows];
+  if (!v.steps.length) out.push(h("p.meta", {}, "No tools: it answered from what it knew."));
+  if (v.words !== false) {
+    const save = h("button.btn.small", { type: "button",
+      title: "this run as a Markdown file; it holds what the tools were given and read" },
+      "File for a bug report");
+    save.addEventListener("click", async () => {
+      const got = await api(`/api/runs/${encodeURIComponent(r.id)}/steps?markdown=1`);
+      const link = h("a", { href: URL.createObjectURL(new Blob([got.markdown],
+        { type: "text/markdown" })), download: got.name });
+      link.click();
+    });
+    out.push(h("div.actions", {}, save));
+  } else {
+    out.push(h("span.private", {}, "What the tools were given and read stays theirs."));
+  }
+  return out;
 }
 
 async function drawRuns() {

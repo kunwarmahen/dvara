@@ -315,6 +315,19 @@ def create_app(service: Service, *, token: str,
             return _streamed(service, turn)
         return answer_of(await service.deliver(**turn))
 
+    @app.get("/runs/{run_id}/steps")
+    async def run_steps(run_id: str,
+                        authorization: str | None = Header(default=None)) -> dict:
+        """One run, step by step (yantra.steps.v1): each tool, what it was
+        given, what came back, when, how long, who said yes. What Samay
+        shows for a schedule's run on this road."""
+        check(authorization)
+        from dvara.runsteps import NoSteps
+        try:
+            return service.run_steps(run_id)
+        except NoSteps as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+
     @app.post("/ask")
     async def ask(request: Request,
                   authorization: str | None = Header(default=None)) -> dict:
