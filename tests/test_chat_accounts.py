@@ -45,7 +45,8 @@ SETU = """\
             "connections": [{"ref": r, "connector": r.split(":")[0], "email": "me@example.com",
                              "level_label": "Read only", "installed": True} for r in have],
             "connectors": [{"id": "gmail", "name": "Gmail", "auth": "google"},
-                           {"id": "amazon", "name": "Amazon", "auth": "browser"}]}))
+                           {"id": "amazon", "name": "Amazon", "auth": "browser"},
+                           {"id": "mail", "name": "Mail (IMAP)", "auth": "password"}]}))
     elif cmd == "page-link":
         if not os.environ.get("SETU_PAGE_URL"):
             print("error: a person's link needs an address", file=sys.stderr); sys.exit(2)
@@ -245,6 +246,14 @@ class TestSigningInFromTheChat:
             return stolen
         assert "no sign-in waiting" in run(go()).text
         assert not (service.state / "setu" / "raj" / "accounts.json").exists()
+
+    def test_a_mail_password_is_never_asked_for_in_the_chat(self, make_service,
+                                                           fake_setu, agents_root):
+        mailer(agents_root)
+        service = make_service([], actors=book(raj={"setu": True}))
+        reply = run(turn(service, "raj", "/connect mail as work"))
+        assert "shouldn't be typed into a chat" in reply.text
+        assert "/accounts page" in reply.text and "Mail (IMAP)" in reply.text
 
     def test_a_window_site_with_no_window_address_says_how_one_is_set(
             self, make_service, fake_setu, agents_root, monkeypatch):

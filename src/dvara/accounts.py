@@ -14,6 +14,8 @@ THREE WORDS, AND THEY ARE THE PERSON'S, NOT THE MODEL'S.
     /connect server                their page's link, to add one that needs a token
     /accounts                      what is connected here, for you
     /accounts page                 a one-time link to their folder's page
+                                   (where a mail account's app password goes:
+                                   /connect mail sends them there)
     /disconnect gmail:work         revoke it and forget it
     /lock, /unlock [days]          a passphrase only they know (unlocked.py)
 
@@ -414,6 +416,12 @@ class AccountDesk:
             status = {}
         card = next((c for c in status.get("connectors") or [] if c.get("id") == connector),
                     {})
+        if card.get("auth") == "password":
+            # an app password must not sit in a chat's history: it is typed
+            # on their own page, where it goes straight to Setu
+            return (f"{card.get('name') or 'Mail'} takes an app password, which shouldn't "
+                    "be typed into a chat. Add it on your own accounts page instead: send "
+                    "/accounts page for a link, and fill in the Mail (IMAP) card there.")
         in_a_window = card.get("auth") == "browser"
         if in_a_window and not window_set():
             return (f"{card.get('name') or connector} is signed in to in a browser window on "

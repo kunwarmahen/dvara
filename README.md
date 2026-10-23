@@ -142,7 +142,7 @@ a page, each checked before it's written; and a turn watched while it
 runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools` and `/schedules` answered
 from the record; and with `--prahari`, its owner's agent offers to tell
-them when something happens — covered by 982 tests. The API is not stable.
+them when something happens — covered by 983 tests. The API is not stable.
 
 ## The shape of it
 
@@ -390,6 +390,9 @@ A person with a folder of their own -- or one the owner let them manage
                                it ends on is pasted back), as Google's; one
                                that needs a token gets their page's link instead,
                                so no token is typed into a chat (notes/48)
+/connect mail                  mail by IMAP takes an app password, never typed into a
+                               chat: they're sent to /accounts page, whose Mail
+                               (IMAP) card takes it straight to Setu
 /disconnect gmail:personal     revoke and forget
 /lock, /unlock [days]          a passphrase only they know (notes/21); a folder of
                                their own only -- a shared one is locked at the computer
