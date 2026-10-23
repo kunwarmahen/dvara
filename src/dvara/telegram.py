@@ -775,7 +775,8 @@ class TelegramBot:
                      "/chats N goes back into it, /chats export N sends it "
                      "to you as a file to share. /keep test keeps the one "
                      "we're in as a test, with the words my answer must say "
-                     "after it: /keep test May 20, refund.")
+                     "after it: /keep test May 20, refund. /tests shows them "
+                     "and how each did; /tests delete N takes one back.")
         return "\n\n".join(lines)
 
     def _reply_messages(self, text: str, receipt: str | None) -> list[str]:
@@ -1202,7 +1203,8 @@ def ending(answer: Answer | None) -> str:
 def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over"),
-             ("chats", "Our conversations: find, open, delete")]
+             ("chats", "Our conversations: find, open, delete"),
+             ("tests", "Answers kept as tests, and how each did")]
     if _writes_files(spec):
         words += [("files", "What I keep for you"),
                   ("file", "Send one of them: /file NAME")]

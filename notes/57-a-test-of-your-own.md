@@ -17,7 +17,18 @@ the chat keeps one the same way:
 ```
 
 The words after the command, comma-separated, are what the answer must
-say. None is fine: the tools it used and the judge still check it.
+say. None is fine: the tools it used and the judge still check it. An
+earlier answer in a conversation is kept by its turn, counting what the
+person asked: `/chats test 2 turn 1 7:45`.
+
+```
+/tests                            your kept tests of this agent, and how each did
+/tests delete 2                   take one back; the conversation stays in /chats
+```
+
+A failed one shows its first reason (*judge: the reference says 8:15*).
+That is usually how a person finds out the answer they kept was wrong
+and deletes it. Telegram's `/` menu lists `/tests`.
 
 ```
 you:    when does the school trip leave?
@@ -48,7 +59,7 @@ nothing to keep, and says so.
 
 ## Tests
 
-`tests/test_past.py`, five more:
+`tests/test_past.py`, seven more:
 
 * `/keep test` keeps this one in the person's own tests, with its
   words, agent and package;
@@ -56,10 +67,11 @@ nothing to keep, and says so.
   said;
 * nothing to keep yet is said;
 * one person's number never reaches another's conversations;
-* only those words are the command.
+* only those words are the command;
+* `/tests` lists and takes one back, and the conversation stays;
+* `/chats test N turn K` keeps that turn, and a turn not there is said.
 
 ## What is not here yet
 
-* **Seeing your tests and their nights.** The night's summary is the
-  owner's card on Sarathi's home page. A person behind Dvara has no
-  `/tests` yet to see theirs, or delete one.
+* ~~**Seeing your tests and their nights.**~~ Built: `/tests` and
+  `/tests delete N` (above).

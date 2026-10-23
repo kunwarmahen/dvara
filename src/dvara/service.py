@@ -873,6 +873,10 @@ class Service:
                                               mine=who.phones, asked=phoneview.asked(text))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="phone", files=(shot,) if shot else ())
+        if not unattended and past.is_tests(text):
+            # Their kept tests: listed, or one taken back. Not a turn.
+            return Reply(text=self._past_tests(who, agent, text), run_id=None,
+                         agent=agent, actor=actor, stop_reason="new")
         if not unattended and (past.keep_test_words(text) is not None
                                or past.test_pick(text) is not None):
             # One of theirs, kept as a test of this agent: not a turn.
@@ -1876,9 +1880,11 @@ class Service:
             if not self.sessions.load_latest(key):
                 return "There's nothing to keep yet: ask me something first."
             conversation, words = self.past.current(key), past.keep_test_words(text) or ""
+            turn = None
         else:
             n, words = chosen
             rows = self.past.listed(who.id, agent)
+            turn, words = past.turn_of(words)
             if not 1 <= n <= len(rows):
                 return f"There's no conversation {n}. Send /chats to see them."
             conversation = rows[n - 1].id
@@ -1886,12 +1892,32 @@ class Service:
         try:
             case_id, _, recording = keep_from_log(
                 self.past.log(who.id), conversation, agent, words=wanted,
-                root=people_root(who.id), package=spec.root, person=who.id)
+                root=people_root(who.id), package=spec.root, person=who.id,
+                turn=turn)
         except ConfigError as exc:
             return f"I couldn't keep that as a test: {exc}."
         title = next((r.title for r in self.past.listed(who.id, agent)
                       if r.id == conversation), recording.question[:80])
         return past.tested(case_id, title, recording.used, wanted)
+
+    def _past_tests(self, who: Actor, agent: str, text: str) -> str:
+        """``/tests`` lists the person's kept tests of this agent;
+        ``/tests delete N`` takes one back (its case and recording; the
+        conversation stays in /chats)."""
+        from yantra.kept_tests import forget, kept_in, people_root, suite_dir
+        suite = suite_dir(agent, people_root(who.id))
+        kept = kept_in(suite)
+        verb, _, rest = past.picked(text).partition(" ")
+        if verb.lower() == "delete" and rest.strip().isdigit():
+            n = int(rest.strip())
+            if not 1 <= n <= len(kept):
+                return f"There's no kept test {n}. Send /tests to see them."
+            forget(suite, kept[n - 1].id)
+            return (f"Taken back: “{kept[n - 1].question[:80]}” is no longer a test. "
+                    f"The conversation is still in /chats.")
+        if verb:
+            return "Send /tests to see your kept tests, /tests delete N to take one back."
+        return past.tests_listing(agent, kept)
 
     def _past_export(self, key: str, who: Actor, agent: str,
                      n: int) -> tuple[str, Path | None]:

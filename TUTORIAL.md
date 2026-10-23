@@ -1304,7 +1304,9 @@ An answer that was right (and checked) can be kept as a test:
 one from the list. The words, comma-separated, are what the answer must
 say. Each night, if the owner turned it on, the question is asked again
 with the tools answering from what they said then, so nothing real
-runs. The owner hears only when one breaks (note 57).
+runs. The owner hears only when one breaks. `/chats test 2 turn 1`
+keeps an earlier answer; `/tests` shows yours and how each did, and
+`/tests delete N` takes one back (note 57).
 
 On Sarathi's home page the same thing is the **History** button: a
 search box, the list, a conversation to read, **Carry on in the chat**,

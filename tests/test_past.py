@@ -363,3 +363,31 @@ def test_keep_test_is_only_those_words():
     assert past.keep_test_words("/keep tests") is None
     assert past.test_pick("/chats test 3 refund") == (3, "refund")
     assert past.test_pick("/chats test") is None
+
+
+def test_tests_lists_and_takes_one_back(make_service, tmp_path, monkeypatch):
+    monkeypatch.setenv("YANTRA_TESTS", str(tmp_path / "tests"))
+    service = make_service([says("The trip is on Friday.")])
+    say(service, "when is the school trip?")
+    say(service, "/keep test Friday")
+    listed = say(service, "/tests")
+    assert listed.run_id is None
+    assert "1. when is the school trip? — not run yet (must say Friday)" in listed.text
+    assert "no kept test 4" in say(service, "/tests delete 4").text
+    gone = say(service, "/tests delete 1")
+    assert "Taken back" in gone.text and "still in /chats" in gone.text
+    assert "haven't kept any" in say(service, "/tests").text
+    assert service.past.listed("owner", "greeter")          # the conversation stays
+
+
+def test_chats_test_n_turn_k_keeps_that_turn(make_service, tmp_path, monkeypatch):
+    from yantra.eval_suite import load_cases
+    monkeypatch.setenv("YANTRA_TESTS", str(tmp_path / "tests"))
+    service = make_service([says("Friday."), says("Bring lunch.")])
+    say(service, "when is the trip?")
+    say(service, "what should she bring?")
+    kept = say(service, "/chats test 1 turn 1 Friday")
+    assert "“when is the trip?”" in kept.text or "Kept" in kept.text
+    [case] = load_cases(tmp_path / "tests" / "people" / "owner" / "greeter")
+    assert case.user_message == "when is the trip?" and case.answer_contains == ["Friday"]
+    assert "has 2 turns, not 7" in say(service, "/chats test 1 turn 7").text

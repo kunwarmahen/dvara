@@ -56,13 +56,15 @@ whole of it (``transcript``: the person's words and the agent's answers,
 never a tool's output) to draw in place.
 
 KEPT AS A TEST. ``/keep test [WORDS, ...]`` keeps the conversation open
-here, and ``/chats test N [WORDS, ...]`` one from the list, as a test of
+here, and ``/chats test N [turn K] [WORDS, ...]`` one from the list (its
+last turn, or turn K), as a test of
 this agent (Yantra's kept_tests.py, its note 141): its last turn,
 replayed by the night run with the tools answering from what they said
 then -- nothing real runs -- and the words, comma-separated, what the
 answer must say. Each person's tests are their own, in Yantra's tests
 folder under ``people/<person>/<agent>/``, which the night run reads
-with everyone else's.
+with everyone else's. ``/tests`` lists them with how each did last time,
+and ``/tests delete N`` takes one back.
 
 THE PERSON'S WORDS, NOT THE MODEL'S, like ``/new`` and ``/files``:
 answered here, never a turn, nothing spent.
@@ -122,6 +124,40 @@ def test_pick(text: str) -> tuple[int, str] | None:
     if len(parts) >= 2 and parts[0].lower() == "test" and parts[1].isdigit():
         return int(parts[1]), parts[2] if len(parts) > 2 else ""
     return None
+
+
+def turn_of(words: str) -> tuple[int | None, str]:
+    """``turn K rest`` -> (K, rest); anything else is all words."""
+    parts = words.split(maxsplit=2)
+    if len(parts) >= 2 and parts[0].lower() == "turn" and parts[1].isdigit():
+        return int(parts[1]), parts[2] if len(parts) > 2 else ""
+    return None, words
+
+
+TESTS = "/tests"
+
+
+def is_tests(text: str) -> bool:
+    first = text.strip().split(maxsplit=1)[:1]
+    return bool(first) and first[0].split("@")[0].lower() == TESTS
+
+
+def tests_listing(agent: str, kept: list) -> str:
+    """``/tests``: the person's kept tests of this agent, each with how it
+    did on its last run."""
+    if not kept:
+        return (f"You haven't kept any conversation with {agent} as a test yet. "
+                f"Right after an answer you checked, send /keep test and the words "
+                f"it must say.")
+    out = [f"Your kept tests of {agent}:"]
+    for n, k in enumerate(kept, start=1):
+        mark = {True: "passed", False: "failed", None: "not run yet"}[k.passed]
+        out.append(f"{n}. {k.question[:80]} — {mark}"
+                   + (f" (must say {', '.join(k.words)})" if k.words else ""))
+        if k.passed is False and k.why:
+            out.append(f"    {k.why[0][:200]}")
+    out += ["", "Send /tests delete N to take one back (the conversation stays)."]
+    return "\n".join(out)
 
 
 def tested(case_id: str, title: str, used: list[str], words: list[str]) -> str:
