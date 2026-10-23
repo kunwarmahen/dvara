@@ -1299,6 +1299,13 @@ good. The conversation open now can't be deleted until you `/new`.
 Telegram's command menu lists `/chats` as *Our conversations: find,
 open, delete*.
 
+An answer that was right (and checked) can be kept as a test:
+`/keep test 7:45, coach` keeps the conversation open now, `/chats test 2`
+one from the list. The words, comma-separated, are what the answer must
+say. Each night, if the owner turned it on, the question is asked again
+with the tools answering from what they said then, so nothing real
+runs. The owner hears only when one breaks (note 57).
+
 On Sarathi's home page the same thing is the **History** button: a
 search box, the list, a conversation to read, **Carry on in the chat**,
 and **Delete**. Deleting there clears the person's history. The page's
@@ -1768,6 +1775,7 @@ Each topic, and the note that argues it:
 | `notes/47-a-voice-note.md` | a voice note heard into words before the turn by a local model that hears, and what was heard shown |
 | `notes/55-a-watch-for-one-person.md` | Prahari's watches offered in the chat, each person's server started for them, and a fire run here as them |
 | `notes/56-a-look-as-them.md` | `POST /call`: a watch's look made as its person, with their own accounts and no model, so watches are everyone's |
+| `notes/57-a-test-of-your-own.md` | `/keep test`, `/chats test N`: a conversation kept as a test in the person's own suite, replayed each night |
 
 ---
 
