@@ -1755,7 +1755,8 @@ their own accounts and runs the one call, with no model (`POST /call`).
 So when Asha asks to hear about her bank's mail, it's Asha's inbox that
 is searched, never yours. To keep watches to a few people, add
 `--prahari-for mahen,asha`. Like schedules, it's off unless you turn it
-on, a scheduled turn gets none, and a package with `[tools] allow` must
+on; a scheduled turn gets no watch tools at all (schedules it may only
+read, section 28); and a package with `[tools] allow` must
 list `mcp__prahari__*` (the tool picker calls it *Watches (Prahari)*). A
 watch that fires with work to do runs here as its person, and Dvara's
 page labels it `prahari` ([notes/55](notes/55-a-watch-for-one-person.md),
