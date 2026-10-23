@@ -338,6 +338,15 @@ name and it grants them nothing at all. An unrecognised mode ranks below
 every real rung, so a typo and a mode from a future version of the format
 both fail closed.
 
+**One call no rung or rule answers.** A tool that spends, and any change
+made after the turn read text nobody in the house wrote (an email, a
+page, whatever a connection returned), asks every time: the card starts
+*Asked because this turn read text you didn't write (an email from …)*.
+Neither the yolo rung nor an `allow` rule in `policy.toml` covers it.
+With somebody to ask it's a question, and with nobody it's refused, and
+the model is told not to act on that text ([notes/58](notes/58-outside-text-asks.md);
+Yantra's notes/142).
+
 **Two kinds of silence**, and this is the part that took a rewrite:
 
 * **An actor who names no mode has no opinion** and drops out of the
