@@ -146,6 +146,9 @@ class SendFile(Tool):
         "required": ["path"],
     }
     read_only = False
+    # It goes only to the person asking, so after an email it is no
+    # change anyone else could have planted (Yantra's outside.py).
+    acts = False
 
     def __init__(self, deliver: Deliver) -> None:
         self._deliver = deliver

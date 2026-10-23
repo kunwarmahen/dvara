@@ -445,6 +445,9 @@ And anyone can start their conversation with an agent over:
                                real runs); the words are what the answer
                                must say
 /keep test May 20, refund      the same, for the conversation you're in
+/chats test 2 turn 1           an earlier answer in that conversation
+/tests                         your kept tests, and how each did last time
+/tests delete 1                take one back (the conversation stays)
 ```
 
 A chat is one conversation for as long as it lasts, and a long one can
@@ -541,6 +544,13 @@ Three rules hold it up, and the third is the one worth carrying away:
   `"git status*"` matches `git status; rm -rf ~` and `"~/notes/*"`
   matches `~/notes/../../.ssh/id_rsa`. Write the exact strings — a near
   miss is still *asked*, not refused.
+* **No standing yes covers a call that asks every time.** A spend, or a
+  change after the turn read an email, a page or a server's answer
+  (Yantra's notes/142), is put to the person even under an `allow` rule
+  or `--yolo`, with what was read on the card's first line; with nobody
+  to ask it is refused, and the model is told why. `send_file` is not
+  such a change: it goes only to the person asking
+  ([notes/58](notes/58-outside-text-asks.md)).
 
 `--policy` is required if you name it and optional as `policy.toml`
 beside the actors file (`~/dvara/policy.toml` by default), so a typo in
@@ -1298,7 +1308,7 @@ reads that person's key from `<state>/memory.json`
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
-| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's ([notes/57](notes/57-a-test-of-your-own.md)) |
+| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
@@ -1312,7 +1322,7 @@ reads that person's key from `<state>/memory.json`
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)); a scheduled run's own wait, after which a question lapses ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
 | `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)); of several, the one the schedule names ([notes/54](notes/54-each-phone-ones.md)) |
-| `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)) |
+| `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); no standing yes and no yolo rung covers an `always_ask` call (a spend, or a change after outside text), which is asked or refused in words ([notes/58](notes/58-outside-text-asks.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
