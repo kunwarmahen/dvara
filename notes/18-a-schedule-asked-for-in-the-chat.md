@@ -52,9 +52,11 @@ process starts per turn, `samay status --json` and the server, which is
 small next to a model turn. The status is read fresh each turn so the
 agent knows whether Samay's clock is running *now*.
 
-**A SCHEDULED TURN GETS NONE.** A turn Samay started (`unattended`, note
-17) has nobody to say yes. It gets no Samay tools and no prompt layer
-telling it to offer.
+**A SCHEDULED TURN MAKES NONE.** A turn Samay started (`unattended`, note
+17) has nobody to say yes. It gets no tool that makes, pauses or deletes
+a schedule, and no prompt layer telling it to offer one. It does get the
+two that read, `list_schedules` and `schedule_runs`, so a morning brief
+can say how last night's tests went ([note 63](63-a-morning-brief.md)).
 
 **A SAMAY THAT WON'T START COSTS THE TOOLS, NOT THE TURN.** If the
 server fails, the turn goes on without it, and the owner is told once

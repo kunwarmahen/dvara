@@ -109,3 +109,6 @@ GET /memory/asha-scratch?app_ids=default&limit=100 HTTP/1.1" 200 OK
   ([note 38](38-what-they-said-in-passing.md)).
 * **The example packages.** None of them asks for memory, so turning
   `--memory` on changes nothing until a package says `[memory] via`.
+* ~~**Facts for everyone in the house.**~~ The owner's, shown whole in
+  every agent's turn, beside each person's own and never in their store
+  ([note 62](62-what-everyone-knows.md)).

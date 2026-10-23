@@ -67,6 +67,8 @@ def person(actor) -> dict:
             "setu": setu, "setu_accounts": list(actor.setu_accounts or []) or None,
             "setu_manage": actor.setu_manage, "phone": actor.phone,
             "phones": list(actor.phones) or None, "telegram": telegram,
+            "hours": str(actor.hours) if actor.hours else None,
+            "max_turns_per_day": actor.max_turns_per_day, "approver": actor.approver,
             "other_channels": [f"{c.kind}:{c.id}" for c in actor.channels
                                if c.kind != "telegram"]}
 
@@ -120,10 +122,22 @@ def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None
                        # what its people kept, for "make it a tool" (promoting.py)
                        "learned": promoting.learned(state, folder.name)})
     out["agents"] = agents
+    out["household"] = household(state) if state is not None else None
     out["examples"] = sorted(p.name for p in examples.iterdir()
                              if (p / "agent.toml").is_file()) \
         if examples is not None and examples.is_dir() else []
     return out
+
+
+def household(state: Path) -> dict:
+    """What everyone's agents know, and the offers waiting (household.py)."""
+    from dataclasses import asdict
+
+    from dvara.household import Household
+
+    house = Household(state)
+    return {"facts": [asdict(f) for f in house.facts()],
+            "offered": [asdict(f) for f in house.offered()]}
 
 
 # ---- writing -----------------------------------------------------------------------

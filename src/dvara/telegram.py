@@ -1222,7 +1222,9 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
     if getattr(spec, "skills", None):
         words += [("skills", "Skills I've learned, and ones to keep"),
                   ("learn", "Keep what I just did as a skill; /learn start to teach me")]
-    words += [("tools", "What I can use for you")]
+    # every agent is told what everyone in the house knows (household.py)
+    words += [("household", "What everyone's agents know; /remember for everyone …"),
+              ("tools", "What I can use for you")]
     if phone:
         words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
     if schedules:

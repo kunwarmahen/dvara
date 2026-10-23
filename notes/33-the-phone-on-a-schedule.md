@@ -156,6 +156,9 @@ phone out (refused before asking; no phone and no word of one).
 * ~~**A real phone, with a real lock** and a real Telegram chat to ask
   in.~~ A Nexus 6P with a PIN, asked on Telegram: *Live, on a real
   phone*, above.
+* ~~**A schedule that only reads the battery.**~~ A package whose only
+  phone tool is `phone_status` has the phone on every run with no phone
+  job ([note 63](63-a-morning-brief.md)).
 * **Asking the person in the run's own words for a lapsed step,
   afterwards** ("it's in the compose box: send it?"). The agent says so
   in its answer today; nothing turns that into a button.

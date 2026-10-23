@@ -121,6 +121,7 @@ from pathlib import Path
 
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import LADDER
+from dvara.limits import Hours
 
 #: Keys an actor table may carry. UNKNOWN KEYS ARE ERRORS: a misspelled
 #: ``max_usd_per_day`` that quietly means "no ceiling" is the exact
@@ -129,7 +130,8 @@ from dvara.gate import LADDER
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage",
-                        "phone", "phones"})
+                        "phone", "phones", "hours", "max_turns_per_day",
+                        "approver"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -217,6 +219,14 @@ class Actor:
     #: The named phones that are theirs (``phones = ["nexus"]``): their
     #: agents get these and no others. A phone has ONE owner (``ActorBook``).
     phones: tuple[str, ...] = ()
+    #: When their agents answer, on this machine's clock (limits.py);
+    #: None for every hour of the day.
+    hours: Hours | None = None
+    #: Messages a day they may send that reach an agent; None, no limit.
+    max_turns_per_day: int | None = None
+    #: Who is asked when their agents want to change something: another
+    #: actor's id (limits.py). None asks them, as it always did.
+    approver: str | None = None
 
     @property
     def has_phone(self) -> bool:
@@ -296,6 +306,15 @@ class ActorBook:
                         f"{where}: the phone {name!r} is in phones for both "
                         f"[actor.{claimed}] and [actor.{actor.id}]; a phone is one "
                         f"person's")
+
+        # AN APPROVER IS SOMEBODY HERE. A name that isn't would leave every
+        # question with nobody to go to, which is a refusal of every change
+        # dressed up as a setting.
+        for actor in self._actors.values():
+            if actor.approver is not None and actor.approver not in self._actors:
+                raise ConfigProblem(
+                    f"{where}: [actor.{actor.id}] approver {actor.approver!r} is "
+                    f"nobody in this file")
 
     def __len__(self) -> int:
         return len(self._actors)
@@ -386,6 +405,9 @@ class ActorBook:
                 setu_manage=_setu_manage(body, name, where),
                 phone=_phone(body, name, where),
                 phones=_phones(body, name, where),
+                hours=_hours(body, name, where),
+                max_turns_per_day=_count(body, "max_turns_per_day", name, where),
+                approver=_approver(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -639,6 +661,40 @@ def _seconds(body: dict, key: str, name: str, where) -> float | None:
             f"(got {value}); to never ask this person, give them "
             f'permissions = "read_only"')
     return float(value)
+
+
+def _hours(body: dict, name: str, where) -> Hours | None:
+    value = body.get("hours")
+    if value is None:
+        return None
+    try:
+        return Hours.parse(value)
+    except ValueError as exc:
+        raise ConfigProblem(f"{where}: [actor.{name}] {exc}") from None
+
+
+def _count(body: dict, key: str, name: str, where) -> int | None:
+    """A whole number above zero, or None -- money's rule on zero."""
+    value = body.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ConfigProblem(f"{where}: [actor.{name}] {key} must be a whole "
+                            f"number above zero (got {value!r})")
+    return value
+
+
+def _approver(body: dict, name: str, where) -> str | None:
+    value = body.get("approver")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigProblem(f"{where}: [actor.{name}] approver must be a person's "
+                            f"name in this file")
+    if value == name:
+        raise ConfigProblem(f"{where}: [actor.{name}] approver is themselves; leave "
+                            f"it out and they're asked, as by default")
+    return value
 
 
 def _money(body: dict, key: str, name: str, where) -> float | None:

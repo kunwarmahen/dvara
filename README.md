@@ -142,7 +142,9 @@ a page, each checked before it's written; and a turn watched while it
 runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools` and `/schedules` answered
 from the record; and with `--prahari`, its owner's agent offers to tell
-them when something happens — covered by 983 tests. The API is not stable.
+them when something happens; and limits for a child (hours, messages a
+day, an approver), facts everyone in the house knows, and a ready-made
+morning brief — covered by 1039 tests. The API is not stable.
 
 ## The shape of it
 
@@ -266,6 +268,12 @@ permissions      = "read_only"     # served, but never asked to approve
 [actor.friend]
 permissions      = "ask"           # may be asked to approve a write...
 max_wait_per_day = 300             # ...for up to five minutes of waiting a day
+
+[actor.kid]
+permissions       = "ask"          # changes are questions...
+approver          = "owner"        # ...put to the owner, not to them
+hours             = "07:00-21:00"  # when their agents answer, schedules too
+max_turns_per_day = 40             # messages a day that reach an agent
 ```
 
 `permissions` can only ever tighten. The mode a turn runs under is the
@@ -276,10 +284,22 @@ An unknown key is an error, not a shrug:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, channel, max_usd_per_day, max_usd_per_turn,
-max_wait_per_day, permissions, phone, receipt, setu, setu_accounts,
-setu_manage
+known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
+max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
+setu_accounts, setu_manage
 ```
+
+**Limits for a child.** `hours` is when their agents answer, on this
+machine's clock; it may run past midnight (`"22:00-06:00"`), and it
+bounds a schedule of theirs too, because a schedule is the easiest way
+round a bedtime. `max_turns_per_day` counts what they sent that reached
+an agent: not a refusal, not a schedule's run, not a chat word like
+`/memory`. `approver` is who is asked when their agents want to change
+something (a spend too): the question goes to that person's channels,
+says `For kid: …`, can't be answered by the child, and is refused rather
+than held if nobody answers. Their `permissions` still decides whether
+there is a question at all, so pair it with `"ask"`
+([notes/61](notes/61-limits-for-a-child.md)).
 
 **How long they may be kept waiting.** `max_wait_per_day` is seconds a
 day the service may spend waiting on this person's answers. What is
@@ -473,6 +493,16 @@ what it keeps about them:
 /remember                      what the agent noticed, numbered, not kept yet
 /remember 1 3                  keep those (or /remember all)
 /remember not 2                not that one, never offered again (or /remember none)
+```
+
+Anyone can also tell every agent in the house something, with any agent:
+
+```
+/remember for everyone the bins go out Tuesday night
+/household                     what everyone's agents know (and, for you, what's offered)
+/household yes 1               keep what someone offered   (the owner)
+/household no 1                not that                    (the owner)
+/household forget 2            that one, gone              (the owner)
 ```
 
 **A job a restart stopped.** Every step of every turn is saved as it
@@ -1028,12 +1058,21 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
 
 * Off unless asked for: it lets every person you serve put work on a
   timer that you pay for.
+* `examples/agents/morning` is a morning brief: new mail worth reading,
+  today's calendar, positions, to-dos, the phone's battery and missed
+  calls, and last night's tests, read only (`[connections] needs =
+  ["*:read"]`). Ask it "send me my morning brief on weekdays at 7:30" and
+  it makes that schedule, on your yes. Best on `qwen3.8` or a cloud
+  model; `gemma4:12b` invents tools for what isn't connected
+  ([notes/63](notes/63-a-morning-brief.md)).
 * `examples/agents/minder` is a package that can: it checks a page now,
   offers to on a schedule, and keeps a record in a file if asked. Try it with the owner's actor and
   `--root examples/agents`.
 * Each turn starts `samay mcp --for <that person> --agent <this agent>
   --runner dvara` and stops it when the turn ends. A scheduled turn gets
-  none of it.
+  only its tools that read (`list_schedules`, `schedule_runs`), so a
+  morning brief can say how last night's tests went; nothing with nobody
+  watching makes, pauses or deletes a schedule ([notes/63](notes/63-a-morning-brief.md)).
 * The package must say `[permissions] mode = "ask"` (a `read_only`
   package refuses without asking), and a package with `[tools] allow`
   must list `mcp__samay__*`.
@@ -1142,6 +1181,10 @@ phones = ["asha-phone"]
   the schedule (*"send in Messages when the screen shows 555-0123"*) go
   through by themselves; anything else is asked in your chat and lapses
   after the schedule's wait ([notes/33](notes/33-the-phone-on-a-schedule.md)).
+  **The battery and missed calls need none of that.** A package whose
+  only phone tool is `mcp__sparsh__phone_status` (no screen, no taps, the
+  morning brief) gets the phone on every run, a schedule's too, with no
+  wait and no unlock ([notes/63](notes/63-a-morning-brief.md)).
 * **A tap by position** (a screen only a picture shows, or one the list
   reads only in part, like Google Maps' places) is asked every time,
   and the question brings the picture with the spot ringed: a photo
@@ -1211,6 +1254,20 @@ back. The list waits in `<state>/offered.json`, yours alone
 drew on says when, `(used 2026-10-23)`, and stays among the newest: Yantra
 tells the store at the end of each turn, so a fact someone relies on
 doesn't age out of what their conversations start with (Yantra's note 143).
+
+**What everyone in the house knows.** Facts that are true for everybody
+(the wifi, bin day) are the owner's to keep: `/remember for everyone …`
+from the owner keeps one, from anyone else offers it to the owner, who
+gets it with its number and answers `/household yes N`. Every turn of
+every agent is shown them whole, as Yantra's `household` prompt layer,
+including agents that keep no memories, because these are the owner's
+notes, not something a person said. They live in
+`<state>/household.json` (yours alone), at most 40 of under 300
+characters each, not in a memory store: a few facts everyone must see are
+shown, not searched for. The owner is whoever `--owner` (or
+`$DVARA_OWNER`) names; Sarathi passes it, and its Settings has a
+**Household** tab. At this computer: `dvara household [list|add|forget|yes|no]`
+([notes/62](notes/62-what-everyone-knows.md)).
 
 **An account you made yourself.** To give someone a Smritikosh account
 you made in its dashboard: sign in as them, make a key under **Settings →
@@ -1373,6 +1430,8 @@ reads that person's key from `<state>/memory.json`
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
+| `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
+| `limits.py` | a person's limits that aren't money: the hours their agents answer, a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

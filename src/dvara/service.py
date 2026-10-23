@@ -118,14 +118,15 @@ from yantra.tools.selector import select_when_many
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (attached, carrying, files, fresh, heard, learning, money, past, patience,
-                   phoneview, ready, remembering, seen, signins)
+from dvara import (attached, carrying, files, fresh, heard, household, learning, limits,
+                   money, past, patience, phoneview, ready, remembering, seen, signins)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
 from dvara.asks import Answer, AskDesk
 from dvara.errors import ConfigProblem, Refused
 from dvara.gate import Decisions, Policy
+from dvara.household import Household, HouseholdProblem
 from dvara.holds import (DEFAULT_KEEP, Hold, HoldBook, NoSuchHold,
                          NotYourHold, Waiting, waiting_text)
 from dvara.carrying import NOTHING as NOTHING_STOPPED
@@ -281,6 +282,7 @@ class Service:
                  check_every: float = signins.EVERY,
                  ntfy: str | None = None,
                  ntfy_click: str | None = None,
+                 owner: str | None = None,
                  ) -> None:
         self.roster = roster
         self.actors = actors
@@ -293,6 +295,10 @@ class Service:
         # string somewhere said "ask" would be a service that hangs the
         # day it is deployed.
         self.asks = asks
+        #: Whose word keeps a fact for everyone (household.py); None: nobody
+        #: in the chat, only ``dvara household`` at this computer.
+        self.owner = owner
+        self.household = Household(self.state)
         # The operator's overrides, in the CLI's own resolution order:
         # what the service was told  >  what the package says  >  the
         # environment's default. An Ollama owner must be able to run a
@@ -929,6 +935,12 @@ class Service:
                                               enabled=self.samay is not None))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="seen")
+        if not unattended and (household.for_everyone(text) is not None
+                               or household.is_word(text)):
+            # What everyone's agents know: the owner's to keep, anyone's to offer.
+            said = await self._household_words(who, text)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="memory")
         if not unattended and remembering.word_of(text):
             # What is kept about them: theirs to see, keep and forget.
             said = await self._memory_words(spec, who, key, text)
@@ -1145,6 +1157,19 @@ class Service:
                 f"your daily allowance is spent; it comes back at "
                 f"{money.next_reset():%H:%M UTC on %-d %b}"
             )
+        if resuming is None:
+            # The other two limits that aren't money (limits.py): the hours
+            # bound every turn of theirs, a schedule's too; the count is
+            # only of what they sent. An answer to a held question is
+            # neither, so a hold made at 20:59 can still be answered.
+            if who.hours is not None and (closed := who.hours.closed()):
+                raise Refused(closed)
+            if who.max_turns_per_day is not None and not is_unattended():
+                spent = limits.turns_spent(
+                    who.max_turns_per_day,
+                    self.runs.asked_since(who.id, money.day_start()))
+                if spent:
+                    raise Refused(spent)
 
         # The other allowance, read from the same ledger at the same
         # moment. Not a refusal of the turn when it is spent, unlike
@@ -1164,7 +1189,7 @@ class Service:
                 permissions=self.policy.gate(
                     spec.permissions_mode,
                     actor_mode=who.permissions,
-                    desk=self.asks,
+                    desk=self._desk_for(who),
                     actor=who.id, agent=run.agent, thread=run.thread,
                     reach=who.reach(),
                     decisions=decisions,
@@ -1186,6 +1211,14 @@ class Service:
             # a sentence, or a channel adapter gets a traceback.
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
+        if layer := self.household.layer():
+            # What everyone in the house may know, in every agent's turn
+            # (household.py): the owner's notes, shown whole.
+            from yantra.prompt import attach_prompt
+
+            prompt = attach_prompt(agent)
+            prompt.set("household", layer)
+            prompt.apply()
         sent = self._send_file_tool(agent, who)
         servers = await self._servers(agent, who=who, run=run, key=key, spec=spec,
                                       phone_run=phone_run, remembers=remembers)
@@ -1207,6 +1240,18 @@ class Service:
         finally:
             if servers is not None:
                 await asyncio.to_thread(servers.shutdown)
+
+    def _desk_for(self, who: Actor):
+        """Where this person's questions go: to them, or, when the owner
+        named an approver for them, to the approver (limits.py)."""
+        if who.approver is None or self.asks is None:
+            return self.asks
+        try:
+            approver = self.actors.get(who.approver)
+        except Refused:
+            return self.asks
+        return limits.ForApproval(self.asks, approver=approver.id,
+                                  reach=approver.reach(), person=who.id)
 
     def _send_file_tool(self, agent, who: Actor) -> list[Path]:
         """``send_file`` for this turn (files.py), admitted or dropped by
@@ -1244,10 +1289,14 @@ class Service:
         (``_remembering``) and the package's own (``_packaged``). None
         when there are none to start."""
         accounts = who.setu is not None and bool(spec.connections)
-        schedules = self.samay is not None and not is_unattended()
+        # a scheduled turn gets the schedules to READ (``_schedules``)
+        schedules = self.samay is not None
         watching = self.watches_for(who.id) and not is_unattended()
-        phone = (self.sparsh is not None and who.has_phone and works_phone(spec)
-                 and (not is_unattended() or phone_run is not None))
+        # A package that only reads the battery and missed calls touches no
+        # screen, so it needs no phone job to have the phone (reads_phone).
+        works = works_phone(spec)
+        phone = (self.sparsh is not None and who.has_phone and (works or reads_phone(spec))
+                 and (not is_unattended() or phone_run is not None or not works))
         remembering = (self.memory is not None and spec.memory == self.memory.name
                        and getattr(agent, "memory", None) is not None)
         packaged = bool(getattr(spec, "mcp", ()))
@@ -1436,9 +1485,12 @@ class Service:
         apply to every run. Creating one is a write, asked about on the
         person's channel with Yantra's card in words (its notes/115).
 
-        A SCHEDULED TURN GETS NONE: nobody is there to say yes. And a
-        Samay that will not start costs the turn its tools, never the
-        turn -- the owner hears about it once.
+        A SCHEDULED TURN GETS THEM TO READ, NOTHING MORE: nobody is there
+        to say yes to a new schedule, and a schedule that made schedules
+        would be one nobody approved. Reading is what a morning brief
+        needs -- how last night's kept tests went is a schedule's last
+        run (notes/63). And a Samay that will not start costs the turn its
+        tools, never the turn -- the owner hears about it once.
         """
         from yantra.mcp import MCPError
         from yantra.samay_link import Samay, SamayLinkError, load
@@ -1454,6 +1506,19 @@ class Service:
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")
+            return
+        if is_unattended():
+            for name in [n for n in agent.registry.names() if n.startswith("mcp__samay__")]:
+                if not agent.registry.get(name).read_only:
+                    agent.registry.unregister(name)
+            from yantra.prompt import attach_prompt
+
+            prompt = attach_prompt(agent)
+            prompt.set("schedules", "# The person's schedules\nThis run is one of their "
+                       "schedules, with nobody watching: list_schedules and schedule_runs "
+                       "read the others and how their last runs went. Nothing here makes, "
+                       "pauses or deletes a schedule.")
+            prompt.apply()
 
     async def _watches(self, agent, manager, *, who: Actor, run: Run) -> None:
         """Prahari's tools for this turn's person (``watches_for``).
@@ -2092,6 +2157,45 @@ class Service:
             if manager is not None:
                 await asyncio.to_thread(manager.shutdown)
 
+    async def _household_words(self, who: Actor, text: str) -> str:
+        """``/remember for everyone …`` and ``/household …`` (household.py)."""
+        owner = self.owner is not None and who.id == self.owner
+        fact = household.for_everyone(text)
+        try:
+            if fact is not None and owner:
+                kept = self.household.add(fact, who.id)
+                return f"Kept for everyone's agents: {kept.text}"
+            if fact is not None:
+                if self.owner is None:
+                    return ("Nobody here keeps what everyone knows, so there's nobody "
+                            "to offer it to.")
+                offered = self.household.offer(fact, who.id)
+                number = len(self.household.offered())
+                try:
+                    boss = self.actors.get(self.owner)
+                    await self.notices.send(boss.id, self._told_at(boss),
+                                            household.offer_notice(offered, number))
+                except Refused:
+                    pass
+                return f"Offered to {self.owner} to keep for everyone: {offered.text}"
+            words = text.split()[1:]
+            verb, rest = (words[0].lower(), " ".join(words[1:])) if words else ("", "")
+            if not verb:
+                return household.listing(self.household, owner=owner)
+            if not owner:
+                return f"Only {self.owner or 'the owner'} changes what everyone knows."
+            if verb in ("forget", "remove", "delete"):
+                gone = self.household.forget(rest)
+                return f"Forgotten for everyone: {gone.text}"
+            if verb in ("yes", "keep", "no", "not"):
+                taken = self.household.take(rest, keep=verb in ("yes", "keep"))
+                return (f"Kept for everyone's agents: {taken.text}"
+                        if verb in ("yes", "keep") else f"Not kept: {taken.text}")
+            return ("Send /household to see it, /household forget N, "
+                    "/household yes N or /household no N.")
+        except HouseholdProblem as exc:
+            return str(exc)[:1].upper() + str(exc)[1:] + "."
+
     async def _memory_words(self, spec: AgentSpec, who: Actor, key: str, text: str) -> str:
         """``/memory``, ``/memory forget ID``, ``/remember …`` (remembering.py)."""
         from yantra.memory import MemoryStoreError, short_id
@@ -2382,6 +2486,19 @@ def works_phone(spec: AgentSpec) -> bool:
     tools = ToolRegistry()
     tools.admit_only(spec.tool_allow, spec.tool_deny)
     return tools.admits("mcp__sparsh__look")
+
+
+def reads_phone(spec: AgentSpec) -> bool:
+    """Whether this package lets in ``phone_status`` -- the battery and the
+    missed calls, read without the screen. One that admits that and not
+    the screen's tools (a morning brief) gets the phone on every run, a
+    schedule's too: nothing it can call waits for the phone to be free or
+    asks for it to be unlocked, which is what a phone job is for."""
+    from yantra.tools.base import ToolRegistry
+
+    tools = ToolRegistry()
+    tools.admit_only(spec.tool_allow, spec.tool_deny)
+    return tools.admits("mcp__sparsh__phone_status")
 
 
 def _copy(usage: Usage) -> Usage:

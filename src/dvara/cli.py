@@ -99,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
                                                           DEFAULT_STATE),
                         help="where sessions, run history and each person's "
                              "folder per agent live")
+    parser.add_argument("--owner", default=None, metavar="ACTOR",
+                        help="the person whose word keeps a fact for everyone's agents "
+                             "(/remember for everyone); others' offers go to them "
+                             "(default $DVARA_OWNER; none: only `dvara household`)")
     parser.add_argument("--provider", default=None,
                         help="override every package's provider (anthropic | "
                              "openai | responses | ollama)")
@@ -301,7 +305,8 @@ def build_parser() -> argparse.ArgumentParser:
     sets = subs.add_parser("settings", help="the owner's files, for a page: show them, "
                            "or change a person, the rules, an agent or a whole file "
                            "(JSON or text on stdin; checked before it's written)")
-    sets.add_argument("what", choices=("show", "person", "rules", "agent", "text", "tool"))
+    sets.add_argument("what", choices=("show", "person", "rules", "agent", "text", "tool",
+                                       "household"))
     sets.add_argument("name", nargs="?", help="the person, the agent, or the kind of "
                       "file for text (actors, policy, agent, prompt)")
     sets.add_argument("--agent", help="for text: which agent's agent.toml or prompt")
@@ -314,6 +319,12 @@ def build_parser() -> argparse.ArgumentParser:
     sets.add_argument("--person", help="for tool: whose learned skill")
     sets.add_argument("--skill", help="for tool: the learned skill to make a tool "
                       "(its script runs once as a test; kept only if it passes)")
+
+    house = subs.add_parser("household", help="what everyone's agents know: list it, "
+                            "add to it, forget from it, or answer an offer")
+    house.add_argument("verb", nargs="?", default="list",
+                       choices=("list", "add", "forget", "yes", "no"))
+    house.add_argument("words", nargs="*", help="for add, the fact; otherwise its number")
 
     serve = subs.add_parser("serve", help="listen for channel adapters")
     serve.add_argument("--host", default="127.0.0.1",
@@ -393,6 +404,7 @@ def _service(args) -> Service:
             ntfy_click=(getattr(args, "ntfy_click", None)
                         or os.environ.get("DVARA_NTFY_CLICK") or None),
             web=getattr(args, "web", False),
+            owner=getattr(args, "owner", None) or os.environ.get("DVARA_OWNER") or None,
         )
     except ValueError as exc:
         raise ConfigProblem(str(exc)) from None
@@ -497,6 +509,29 @@ def _policy_path(args) -> Path:
     return Path(args.actors).expanduser().parent / DEFAULT_POLICY
 
 
+def _household(args) -> int:
+    """``dvara household``: what everyone's agents know (household.py),
+    changed at this computer, as the owner."""
+    from dvara import household
+
+    house = household.Household(Path(args.state).expanduser())
+    words = " ".join(args.words)
+    try:
+        if args.verb == "add":
+            print(f"kept for everyone: {house.add(words, args.owner or 'owner').text}")
+        elif args.verb == "forget":
+            print(f"forgotten: {house.forget(words).text}")
+        elif args.verb in ("yes", "no"):
+            fact = house.take(words, keep=args.verb == "yes")
+            print(f"{'kept' if args.verb == 'yes' else 'not kept'}: {fact.text}")
+        else:
+            print(household.listing(house, owner=True))
+    except household.HouseholdProblem as exc:
+        print(f"dvara household: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _settings(args) -> int:
     """``dvara settings``: the owner's files, for a page (settings.py).
     JSON out; a refusal is {"ok": false, "error": ...} and exit 2."""
@@ -529,7 +564,19 @@ def _settings(args) -> int:
         else:
             body = sys.stdin.read()
             data = json.loads(body) if args.what != "text" and body.strip() else None
-            if args.what == "person":
+            if args.what == "household":
+                from dvara import household
+
+                house = household.Household(Path(args.state).expanduser())
+                data = data or {}
+                if "add" in data:
+                    house.add(str(data["add"]), args.owner or "owner")
+                elif "forget" in data:
+                    house.forget(str(data["forget"]))
+                elif "yes" in data or "no" in data:
+                    house.take(str(data.get("yes", data.get("no"))), keep="yes" in data)
+                out = {"household": settings.household(Path(args.state).expanduser())}
+            elif args.what == "person":
                 if args.remove:
                     settings.remove_person(actors, args.name)
                     out = {"removed": args.name}
@@ -587,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
         return _page(args)
     if args.command == "settings":
         return _settings(args)
+    if args.command == "household":
+        return _household(args)
     claim = None
     try:
         if args.command in CLAIMS:

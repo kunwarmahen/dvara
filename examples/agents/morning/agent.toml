@@ -1,0 +1,46 @@
+# A morning brief: what is worth knowing before the day starts, from
+# everything this house has connected, in one message. It reads and
+# never changes anything, so it can run with nobody there.
+#
+# It does nothing until a person says "send me my morning brief on
+# weekdays at 7:30": it makes that one schedule (asking first), and each
+# weekday Samay starts it and Dvara sends what it wrote to their chat.
+# "Brief me now" writes one straight away.
+[agent]
+name        = "morning"
+description = "Your morning brief: new mail worth reading, today's calendar, your positions, your to-dos, the phone's battery and missed calls, and how last night's tests went."
+version     = "0.1.0"
+prompt      = "prompt.md"
+
+[tools]
+# The schedule tools, to set the brief up and to read how last night's
+# tests went (a schedule's last run). Of Samay's tools only create, pause,
+# resume and delete change anything, and those ask.
+#
+# phone_status is the phone's battery and its new missed calls, read with
+# no tap and no screen: the one Sparsh tool this agent gets, so a
+# scheduled brief has the phone without waiting for it to be free or
+# asking for it to be unlocked (Dvara's reads_phone). Leave it out for a
+# person with no phone; it is simply not there for them.
+allow = ["mcp__samay__*", "mcp__sparsh__phone_status"]
+
+[connections]
+# Everything the person connects, now and later, READ ONLY: Gmail,
+# Google Calendar, Robinhood, Notion -- whichever they have. A brief that
+# could send a mail or place a trade is a brief that one bad morning
+# could do either; this one can't.
+needs = ["*:read"]
+
+[env]
+# Today's date and time, from this machine: "today's calendar" and "new
+# since yesterday" mean nothing to a model that wasn't told the day.
+context = "local"
+
+[permissions]
+# "ask" so making the schedule is a question the person answers with a
+# button. Everything else it does is a read, and runs unasked.
+mode = "ask"
+
+[budget]
+# A handful of reads and one message. On a local model this costs nothing.
+max_usd_per_turn = 0.15

@@ -35,7 +35,8 @@ FAKE = """\
     with open(LOG, "a") as out:
         out.write(json.dumps(args) + "\\n")
     def send(m): sys.stdout.write(json.dumps(m) + "\\n"); sys.stdout.flush()
-    KINDS = {{"look": "read", "describe_hold": "read", "tap": "act", "confirm": "confirm"}}
+    KINDS = {{"look": "read", "describe_hold": "read", "tap": "act", "confirm": "confirm",
+             "phone_status": "read"}}
     def tool(name):
         hint = {{"read": {{"readOnlyHint": True}}, "act": {{"readOnlyHint": False}},
                  "confirm": {{"readOnlyHint": False, "destructiveHint": True}}}}[KINDS[name]]
@@ -129,7 +130,8 @@ class TestTheirPhone:
         service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=phone_book)
         asyncio.run(service.deliver(actor="owner", agent="greeter", thread="t", text="hi"))
         assert phone_tools(service) == {"mcp__sparsh__look", "mcp__sparsh__tap",
-                                        "mcp__sparsh__describe_hold", "mcp__sparsh__confirm"}
+                                        "mcp__sparsh__describe_hold", "mcp__sparsh__confirm",
+                                        "mcp__sparsh__phone_status"}
         assert "BY NUMBER" in service.scripted.requests[0]["system"]
 
     def test_a_held_step_is_asked_on_their_channel_in_sparshs_words(
@@ -275,6 +277,22 @@ class TestAScheduleWithThePhone:
         service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
         scheduled(service)
         assert phone_tools(service) == set() and started(sparsh[1]) == 0
+
+    def test_a_brief_that_only_reads_the_battery_has_it_on_any_schedule(
+            self, make_service, sparsh, agents_root):
+        """The morning brief: phone_status needs no screen, so no phone job,
+        no waiting for the phone to be free, no asking for it unlocked."""
+        write_package(agents_root, "morning", body=(
+            '[agent]\nname = "morning"\nprompt = "prompt.md"\n'
+            '[tools]\nallow = ["mcp__sparsh__phone_status"]\n'))
+        service = make_service([says("ok")], sparsh=str(sparsh[0]), actors=ON_TELEGRAM)
+        reply = asyncio.run(service.deliver(actor="owner", agent="morning",
+                                            thread="samay-s1-1", text="brief",
+                                            unattended=True))
+        assert reply.ok and phone_tools(service) == {"mcp__sparsh__phone_status"}
+        assert ["wake"] not in logged(sparsh[1])
+        system = service.scripted.requests[0]["system"]
+        assert "phone_status" in system and "BY NUMBER" not in system
 
     def test_someone_who_isnt_the_phones_person_is_refused(self, make_service, sparsh,
                                                            phone_book):

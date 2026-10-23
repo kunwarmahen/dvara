@@ -1768,6 +1768,112 @@ which their agent gives them when asked ("where does my phone send
 to?"), so their notifications reach only their watches. The steps are
 in Prahari's README.
 
+## 26 · Limits for a child
+
+Money and waiting had limits already (sections 5 and 7). For a child
+you want three more, none of them in dollars:
+
+```toml
+[actor.kid]
+permissions       = "ask"           # changes are questions...
+approver          = "owner"         # ...put to you, not to them
+hours             = "07:00-21:00"   # when their agents answer
+max_turns_per_day = 40              # messages a day
+```
+
+**Hours** are on this computer's clock and may run past midnight
+(`"22:00-06:00"`). They bound a schedule of theirs too: a schedule is the
+easiest way round a bedtime. Outside them:
+
+```
+I'm not answering now -- your hours here are 07:00-21:00. Ask again after 07:00.
+```
+
+**Messages a day** count what they sent that reached an agent. A
+refusal, a schedule's run and a chat word like `/memory` don't count, so
+a child at the limit can still come back under it tomorrow:
+
+```
+That's all 3 messages for today. They come back at midnight UTC; ask
+whoever looks after this for more if it can't wait.
+```
+
+**An approver** gets their questions. When the kid's agent wants to write
+a file (or spend, or change something after reading an email), the
+question comes to *your* Telegram, saying whose agent is asking:
+`For kid: NEW FILE homework.txt`. The kid can't answer it, and if
+nobody does, it's refused rather than held. Their `permissions` still
+decides whether there's a question at all, so set it to `"ask"`
+([notes/61](notes/61-limits-for-a-child.md)).
+
+## 27 · What everyone in the house knows
+
+Each person's memories are theirs (section 20). Some facts are true for
+everyone: the wifi, bin day, where the spare key is. Start Dvara with
+`--owner YOUR_ID` (Sarathi does), and from your own chat, with any agent:
+
+```
+/remember for everyone The wifi is called Banyan and the password is on the fridge.
+Kept for everyone's agents: The wifi is called Banyan and the password is on the fridge.
+```
+
+When someone else says it, it's an offer. You get it with its number,
+and keep it or not:
+
+```
+kid offers this for everyone's agents to know:
+"bins go out Tuesday night"
+/household yes 1 to keep it, /household no 1 to not.
+```
+
+`/household` lists them (and, for you, the offers); `/household forget
+N` takes one away. Every agent is shown them whole in every turn, even
+one that keeps no memories. Then the kid, in a fresh chat with the
+greeter, on `gemma4:12b`:
+
+```
+What is our wifi called, and which night do the bins go out?
+The wifi is called Banyan and the bins go out Tuesday night.
+```
+
+They're kept in `<state>/household.json` (yours alone), at most 40, each
+under 300 characters. At this computer it's `dvara household add …`; on
+Sarathi's home page, Settings → **Household**
+([notes/62](notes/62-what-everyone-knows.md)).
+
+## 28 · A morning brief
+
+`examples/agents/morning` reads everything you've connected, read only,
+and writes one short message: mail worth reading, today's calendar,
+your positions, your to-dos, the phone's battery and missed calls, and
+how last night's tests went. Copy it into your agents folder (Sarathi:
+Settings → Agents → new agent from the `morning` example), start Dvara
+with `--samay`, and tell it:
+
+```
+Send me my morning brief on weekdays at 7:30.
+```
+
+It reads the schedule back and asks; say yes and the card in your chat
+makes it. Each weekday Samay runs it as you, and the brief arrives in
+this chat. "Brief me now" writes one straight away.
+
+Two things make it work on a schedule. The phone part is Sparsh's
+`phone_status`, read with no tap, so the run doesn't wait for the
+phone or ask you to unlock it. And a scheduled run may *read* Samay
+(never make a schedule), so the brief can see last night's tests. On the
+emulator with a missed call and the battery at 23%, on
+`qwen3.8-64k:latest`:
+
+```
+**Phone**
+- Battery at 23% and not charging overnight — plug it in.
+- 1 missed call from 5550100.
+```
+
+Use `qwen3.8` or a cloud model for it: `gemma4:12b` makes up tools for
+the parts you haven't connected ([notes/63](notes/63-a-morning-brief.md)).
+
 ---
 
 # Where to read next
@@ -1822,6 +1928,9 @@ Each topic, and the note that argues it:
 | `notes/58-outside-text-asks.md` | after an email, a page or a server's answer, a change asks the person, even under a rule or a grant |
 | `notes/59-a-job-a-restart-stopped.md` | every step saved; a job a restart stopped told to its person once, and `/carry` carries it on from its last step |
 | `notes/60-a-run-step-by-step.md` | `/steps` and the page's **Steps**: a run's own turn, step by step; anybody else's as shape only |
+| `notes/61-limits-for-a-child.md` | hours (schedules too), messages a day, and an approver the questions go to |
+| `notes/62-what-everyone-knows.md` | the owner's facts for every agent in the house, shown whole; anyone may offer one |
+| `notes/63-a-morning-brief.md` | a read-only brief from every account, the phone's battery with no phone job, and schedules read on a schedule |
 
 ---
 
@@ -1894,5 +2003,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 966 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 1039 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*

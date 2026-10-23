@@ -4,8 +4,8 @@ The bias these tests encode: ONE PERSON'S SCHEDULES, MADE ONLY WITH
 THAT PERSON'S YES. Each turn's Samay server is started for that turn's
 actor and nobody else, on this road, and stopped when the turn ends.
 Making a schedule is a question on the desk -- the card in words, not
-JSON -- and a scheduled turn, which nobody is watching, gets no Samay at
-all. Schedules stay off unless the owner turned them on.
+JSON -- and a scheduled turn, which nobody is watching, gets Samay to
+read and nothing that makes a schedule. Schedules stay off unless the owner turned them on.
 
 Samay here is a fake program on disk speaking the real contract:
 ``status --json`` and an MCP server, which logs every start and every
@@ -181,12 +181,17 @@ class TestTheExample:
 
 
 class TestWhoGetsNone:
-    def test_a_scheduled_turn_gets_no_samay(self, make_service, samay):
+    def test_a_scheduled_turn_reads_schedules_and_makes_none(self, make_service, samay):
+        """A morning brief reads how last night's tests went (a schedule's
+        last run); nothing with nobody watching makes a schedule."""
         service = make_service([says("ok")], samay=str(samay[0]))
         asyncio.run(service.deliver(actor="owner", agent="greeter", thread="t",
                                     text="go", unattended=True))
-        assert not any("mcp" in a for a in logged(samay[1]))
-        assert "mcp__samay__create_schedule" not in tools_sent(service)
+        offered = tools_sent(service)
+        assert "mcp__samay__list_schedules" in offered
+        assert "mcp__samay__create_schedule" not in offered
+        system = service.scripted.requests[0]["system"]
+        assert "Nothing here makes" in system and "preview_schedule" not in system
 
     def test_off_unless_the_owner_turned_it_on(self, make_service, samay):
         service = make_service([says("ok")])

@@ -368,6 +368,18 @@ class RunStore:
             ).fetchone()
         return int(row[0]), int(row[1])
 
+    def asked_since(self, actor: str, since: datetime) -> int:
+        """Turns this actor started since ``since`` that reached an agent:
+        not refused, not a look back, not a schedule's (limits.py)."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT COUNT(*) FROM runs WHERE actor = ? AND started_at >= ? "
+                "AND unattended = 0 AND COALESCE(stop_reason, '') NOT IN "
+                "('refused', 'looked_back')",
+                (actor, _stamp(since)),
+            ).fetchone()
+        return int(row[0])
+
     def waited_since(self, actor: str, since: datetime) -> float:
         """Seconds this actor has been kept waiting on questions since
         ``since`` (patience.py) -- the same query as ``spent_since``, on

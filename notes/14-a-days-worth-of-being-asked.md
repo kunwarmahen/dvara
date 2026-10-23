@@ -123,6 +123,9 @@ everything once the allowance is gone is a defensible rule, and its note
   left only.
 * ~~**`dvara runs` does not print `waited_seconds`.**~~ Shipped in
   [note 15](15-where-the-waiting-shows.md): `[waited 10s]` on the turn's line.
+* ~~**The limits a child needs that aren't money or waiting.**~~ Hours,
+  messages a day, and an approver their questions go to
+  ([note 61](61-limits-for-a-child.md)).
 
 ## Receipt
 
