@@ -78,5 +78,10 @@ tests need no Ollama.
   model.
 * ~~**Answers spoken back.**~~ Read aloud on this machine and sent after
   the words, by each person's choice ([notes/64](64-an-answer-read-aloud.md)).
+* **Hindi heard well.** A Piper-made Hindi question was misheard by both
+  `gemma4:e4b` and `gemma4:12b`, its second sentence lost, while the
+  same models heard Piper's Hindi answers word for word
+  ([notes/65](65-whose-voice-and-which-language.md)). A real person's
+  Hindi voice note is still to be tried.
 * **Recording on a phone's browser over plain http.** Browsers forbid
   it; Telegram, or https on the house address, is the way.

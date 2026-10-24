@@ -91,6 +91,41 @@ CPU (`num_gpu: 0`, 182 s), heard the Hindi recording back as *"सुप्र�
 same page answered as above, and `voice.json` kept
 `{"mahen": {"voice": "hi_IN-pratham-medium"}}`.
 
+With the GPU free again, real turns on the same page road,
+`qwen3.8-64k:latest` answering, the person on `always` with the Hindi
+voice as their own (`/voice use 2`):
+
+```
+> In one short English sentence: what day do bins usually go out?   [5.0s]
+{"text": "I don't know your local bin-collection day and I have no way to look it up, ...", "speak": true}
+  read aloud: 334380 bytes in 1.0s                 -> voice-cache/mahen/8-en_US-lessac-medium.wav
+
+> एक छोटे वाक्य में बताओ: बारिश में छाता क्यों चाहिए?   [5.1s]
+{"text": "बारिश में छाता इसलिए चाहिए ताकि पानी से भीगना और ठंड-खांसी से बचा जा सके।", "speak": true}
+  read aloud: 246316 bytes in 1.2s                 -> 10-hi_IN-pratham-medium.wav
+
+scheduled turn (POST /message, unattended): पूरे परिवार को सुप्रभात, सूरज की किरणें आपके दिन को रोशन करें।
+notify: {'sent': ['web'], ...}
+{"who": "notice", "speak": true}
+  read aloud: 194604 bytes in 1.1s                 -> 11-hi_IN-pratham-medium.wav
+```
+
+Their own voice is Hindi, and the English answer was still read in the
+English voice; the Hindi answer and the scheduled Hindi greeting in the
+Hindi voice. `gemma4:12b` heard all three recordings back word for word
+(*"बारिश में छाता, इसलिए चाहिए ताकि पानी से भीगना और ठंड खांसी से बचा जा
+सके।"*, the greeting exactly, and the English sentence exactly).
+
+One thing it showed that isn't this note's: a question made with the
+Hindi voice and sent as a voice note (*"कूड़ा किस दिन जाता है? हिंदी में
+एक छोटे वाक्य में जवाब दो।"*) was heard as *"कोलाकेस दिन जाता है।"* by
+both `gemma4:e4b` (heard.py's choice, the smallest) and `gemma4:12b`,
+its second sentence lost. The greeter answered that in English, so the
+English voice read it, as it should. Hearing a synthetic Hindi question
+is heard.py's weak spot ([notes/47](47-a-voice-note.md)); a person's
+voice is likelier to do better, and `$DVARA_HEARING=gemma4:12b` is the
+stronger of the two.
+
 ## What the tests hold
 
 `tests/test_spoken.py`, with a folder of stand-in voices so the voices
