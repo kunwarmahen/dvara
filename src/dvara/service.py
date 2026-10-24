@@ -1194,7 +1194,8 @@ class Service:
             # bound every turn of theirs, a schedule's too; the count is
             # only of what they sent. An answer to a held question is
             # neither, so a hold made at 20:59 can still be answered.
-            if who.hours is not None and (closed := who.hours.closed()):
+            if who.hours is not None and (closed := who.hours.closed(
+                    limits.now_for(who.zone))):
                 raise Refused(closed)
             if who.max_turns_per_day is not None and not is_unattended():
                 spent = limits.turns_spent(
@@ -1243,6 +1244,10 @@ class Service:
             # a sentence, or a channel adapter gets a traceback.
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
+        if who.zone and getattr(agent, "env_context", None) is not None:
+            # Their clock, not this machine's: the time told with each
+            # message, and the start of the session (actors.py's zone).
+            agent.env_context.set_zone(who.zone)
         if layer := self.household.layer():
             # What everyone in the house may know, in every agent's turn
             # (household.py): the owner's notes, shown whole.
@@ -1534,7 +1539,9 @@ class Service:
                          person=who.id, agent=run.agent, runner="dvara",
                          seen_at=SEEN_HERE, clock_off=CLOCK_OFF,
                          # a turn with the phone makes schedules that work it
-                         phone=self.sparsh is not None and who.has_phone)
+                         phone=self.sparsh is not None and who.has_phone,
+                         # "at 7" is 7 on their clock (actors.py's zone)
+                         zone=who.zone or "")
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, SamayLinkError) as exc:
             self._note(f"dvara: schedules are off for this turn -- samay: {exc}")

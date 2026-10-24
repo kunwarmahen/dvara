@@ -121,9 +121,10 @@ refused | I'm not answering now -- your hours here are 03:00-04:00. Ask again af
 
 ## What was deliberately not built
 
-* **A per-person time zone.** One house, one clock: the machine's. A
-  child abroad on holiday is a reason to change the hours, not to
-  model the planet.
+* ~~**A per-person time zone.**~~ Built after all: `zone = "Europe/London"`
+  puts a person's hours, the time their agent is told and their
+  schedules on their clock ([note 66](66-their-own-clock.md)). Was: one
+  house, one clock; a child abroad is a reason to change the hours.
 * **Per-person site lists.** A site's tools come from the package's
   `[connections]`. Narrowing those per person would mean two places
   deciding one thing, and the agent list already does the job.

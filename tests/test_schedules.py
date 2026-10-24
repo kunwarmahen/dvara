@@ -31,8 +31,11 @@ FAKE = """\
     import json, sys
     LOG = {log!r}
     args = sys.argv[1:]
+    import os
     with open(LOG, "a") as out:
         out.write(json.dumps(args) + "\\n")
+        if "mcp" in args:
+            out.write(json.dumps(["zone", os.environ.get("SAMAY_TZ", "")]) + "\\n")
     def send(m): sys.stdout.write(json.dumps(m) + "\\n"); sys.stdout.flush()
     def tool(name, ro):
         return {{"name": name, "description": name, "inputSchema": {{"type": "object"}},

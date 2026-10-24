@@ -279,6 +279,9 @@ hours             = "07:00-21:00"  # when their agents answer, schedules too
 max_turns_per_day = 40             # messages a day that reach an agent
 speak             = "always"       # every answer read aloud too (default: when they spoke)
 voice             = "hi_IN-pratham-medium"   # their own voice (default: the house's)
+
+[actor.raj]
+zone              = "Europe/London" # their clock: the time told, schedules, hours
 ```
 
 `permissions` can only ever tighten. The mode a turn runs under is the
@@ -291,11 +294,11 @@ An unknown key is an error, not a shrug:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak, voice
+setu_accounts, setu_manage, speak, voice, zone
 ```
 
-**Limits for a child.** `hours` is when their agents answer, on this
-machine's clock; it may run past midnight (`"22:00-06:00"`), and it
+**Limits for a child.** `hours` is when their agents answer, on their
+clock (`zone`, below; else this machine's); it may run past midnight (`"22:00-06:00"`), and it
 bounds a schedule of theirs too, because a schedule is the easiest way
 round a bedtime. `max_turns_per_day` counts what they sent that reached
 an agent: not a refusal, not a schedule's run, not a chat word like
@@ -305,6 +308,15 @@ says `For kid: …`, can't be answered by the child, and is refused rather
 than held if nobody answers. Their `permissions` still decides whether
 there is a question at all, so pair it with `"ask"`
 ([notes/61](notes/61-limits-for-a-child.md)).
+
+**Someone who isn't where this machine is.** `zone` is their own time
+zone, by its IANA name (`Europe/London`, `Asia/Kolkata`). Their agent is
+told the time on their clock with each message (when its package has
+`[env] context`), their schedules are made on it (their Samay server
+gets `SAMAY_TZ`, so "every day at 7" is their 7), and their `hours`
+open and close on it. A name that isn't a zone (`IST`, `+05:30`, a typo)
+stops the file loading. The day for money and messages stays UTC's
+([notes/66](notes/66-their-own-clock.md)).
 
 **How long they may be kept waiting.** `max_wait_per_day` is seconds a
 day the service may spend waiting on this person's answers. What is
@@ -1467,7 +1479,7 @@ reads that person's key from `<state>/memory.json`
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
 | `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches, the folder's lock and the page's answers read aloud (`voice-cache`) left out, nothing opened |
 | `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
-| `limits.py` | a person's limits that aren't money: the hours their agents answer, a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md)) |
+| `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |

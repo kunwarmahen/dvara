@@ -67,6 +67,13 @@ receipt          = "remaining"   # "$0.08 left today" under each answer
 # approver          = "owner"
 # hours             = "07:00-21:00"
 # max_turns_per_day = 40
+#
+# Somebody who isn't where this machine is: their own clock, by its IANA
+# name. The time their agent is told, when their schedules run and their
+# hours are all on it (notes/66). Left out: this machine's.
+#
+# [actor.raj]
+# zone = "Europe/London"
 
 # `permissions` is a rung on the ladder in gate.py and it can only ever
 # TIGHTEN: the mode a turn runs under is the minimum of the package's,

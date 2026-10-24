@@ -131,7 +131,7 @@ ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage",
                         "phone", "phones", "hours", "max_turns_per_day",
-                        "approver", "speak", "voice"})
+                        "approver", "speak", "voice", "zone"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -233,6 +233,10 @@ class Actor:
     #: Whose voice reads to them, by name (``hi_IN-pratham-medium``);
     #: None for the house's. Their own /voice use wins (spoken.py).
     voice: str | None = None
+    #: Their own time zone (``Europe/London``), for someone who isn't where
+    #: this machine is: the time their agents are told, when their
+    #: schedules run, and their hours. None is this machine's (limits.py).
+    zone: str | None = None
 
     @property
     def has_phone(self) -> bool:
@@ -416,6 +420,7 @@ class ActorBook:
                 approver=_approver(body, name, where),
                 speak=_speak(body, name, where),
                 voice=_voice_name(body, name, where),
+                zone=_zone(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -729,6 +734,26 @@ def _voice_name(body: dict, name: str, where) -> str | None:
     if not isinstance(value, str) or not NAME.match(value):
         raise ConfigProblem(f"{where}: [actor.{name}] voice must be a voice's name, "
                             f'like "hi_IN-pratham-medium" (got {value!r})')
+    return value
+
+
+def _zone(body: dict, name: str, where) -> str | None:
+    """A time zone by its IANA name. Checked against this machine's zone
+    list now: a misspelled zone that quietly meant this machine's clock is
+    a bedtime two hours out."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    value = body.get("zone")
+    if value is None:
+        return None
+    try:
+        if not isinstance(value, str) or "/" not in value and value != "UTC":
+            raise ValueError
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ConfigProblem(f"{where}: [actor.{name}] zone must be a time zone's name, "
+                            f'like "Europe/London" or "Asia/Kolkata" (got {value!r}); '
+                            f"leave it out for this machine's") from None
     return value
 
 

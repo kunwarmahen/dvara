@@ -154,7 +154,7 @@ are errors too:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak, voice
+setu_accounts, setu_manage, speak, voice, zone
 ```
 
 A misspelled ceiling that quietly means "no ceiling" is exactly the
@@ -1783,7 +1783,8 @@ hours             = "07:00-21:00"   # when their agents answer
 max_turns_per_day = 40              # messages a day
 ```
 
-**Hours** are on this computer's clock and may run past midnight
+**Hours** are on their clock (this computer's, unless they have a
+`zone`, below) and may run past midnight
 (`"22:00-06:00"`). They bound a schedule of theirs too: a schedule is the
 easiest way round a bedtime. Outside them:
 
@@ -1807,6 +1808,29 @@ question comes to *your* Telegram, saying whose agent is asking:
 nobody does, it's refused rather than held. Their `permissions` still
 decides whether there's a question at all, so set it to `"ask"`
 ([notes/61](notes/61-limits-for-a-child.md)).
+
+**Someone far away.** A child at university, a parent on holiday:
+give them their own clock.
+
+```toml
+[actor.raj]
+zone = "Europe/London"
+```
+
+Their agent is told the time where they are, their "every day at 7" runs
+at 7 their time (the card ends `(Europe/London)`), and their hours open
+and close on it. In this tutorial's run, with `zone = "Asia/Kolkata"` and
+this computer on New York's Saturday evening:
+
+```
+$ dvara say --actor away --agent minder "What time is it for me right now?"
+Sunday, 3:52 AM
+```
+
+A name that isn't a zone (`IST`, a typo) stops the file loading, rather
+than quietly meaning this computer's clock. On Sarathi's home page it's
+**Their time zone** under Settings → People
+([notes/66](notes/66-their-own-clock.md)).
 
 ## 27 · What everyone in the house knows
 
@@ -2001,6 +2025,7 @@ Each topic, and the note that argues it:
 | `notes/63-a-morning-brief.md` | a read-only brief from every account, the phone's battery with no phone job, and schedules read on a schedule |
 | `notes/64-an-answer-read-aloud.md` | an answer read aloud by Piper on this machine, after the words; off, when-spoken or always, per person |
 | `notes/65-whose-voice-and-which-language.md` | each person's own voice, the answer's language picking one that speaks it, and notices read aloud under always |
+| `notes/66-their-own-clock.md` | a person's own time zone: the time their agent is told, their schedules and their hours on their clock |
 
 ---
 

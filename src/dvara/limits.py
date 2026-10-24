@@ -12,7 +12,8 @@ number of dollars:
 HOURS BOUND EVERYTHING DONE FOR THEM, SCHEDULES TOO. A schedule is the
 easiest way round a bedtime there is: "every night at 2" made at 8 pm.
 So the hours are checked at the start of every turn that is theirs, typed
-or scheduled, on this machine's own clock (the local time zone, which
+or scheduled, on their clock: their own ``zone`` when the owner gave them
+one (``now_for``), else this machine's (the local time zone, which
 Sarathi sets for its containers). A window may run past midnight
 ("22:00-06:00", a night worker's), which is the one subtle line here.
 
@@ -80,6 +81,14 @@ class Hours:
             return None
         return (f"I'm not answering now -- your hours here are {self}. "
                 f"Ask again after {_clock(self.start)}.")
+
+
+def now_for(zone: str | None) -> datetime:
+    """Now on a person's clock: their own zone, else this machine's."""
+    if zone:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(zone))
+    return datetime.now().astimezone()
 
 
 def _clock(minutes: int) -> str:
