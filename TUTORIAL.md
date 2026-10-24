@@ -1318,6 +1318,28 @@ own runs come whole, with **File for a bug report**. Anybody else's show
 only which tools ran and when, because what their tools read is theirs
 ([notes/60](notes/60-a-run-step-by-step.md)).
 
+### What's wrong with mine
+
+```bash
+dvara say --actor owner --agent greeter "/doctor"
+```
+
+The answer is your own check, red first: an account whose sign-in
+ended (with `/connect gmail as personal` under it), a schedule of yours
+that failed in the last day, a watch that paused, a phone of yours not
+connected, an allowance nearly spent. With nothing wrong:
+
+```
+Your check: Nothing of yours is wrong.
+🟢 2 accounts, none stopped
+🟢 1 schedule, none failed in the last day
+```
+
+Anyone in the house can send it, and sees only their own things. Yours
+ends with where the rest of the house is: Settings → Check on the home
+page, or `sarathi doctor`
+([notes/67](notes/67-a-check-of-your-own.md)).
+
 ### Old conversations, found again
 
 Every conversation is kept as it goes, on every channel, in a file of
@@ -2026,6 +2048,7 @@ Each topic, and the note that argues it:
 | `notes/64-an-answer-read-aloud.md` | an answer read aloud by Piper on this machine, after the words; off, when-spoken or always, per person |
 | `notes/65-whose-voice-and-which-language.md` | each person's own voice, the answer's language picking one that speaks it, and notices read aloud under always |
 | `notes/66-their-own-clock.md` | a person's own time zone: the time their agent is told, their schedules and their hours on their clock |
+| `notes/67-a-check-of-your-own.md` | `/doctor`: a person's own check -- accounts, schedules, watches, phones, limits -- with fixes they can use |
 
 ---
 

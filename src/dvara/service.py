@@ -118,7 +118,7 @@ from yantra.tools.selector import select_when_many
 from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
-from dvara import (attached, carrying, files, fresh, heard, household, learning, limits,
+from dvara import (attached, carrying, checkup, files, fresh, heard, household, learning, limits,
                    money, past, patience, phoneview, ready, remembering, seen, signins, spoken)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
@@ -980,6 +980,10 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
+        if not unattended and checkup.is_word(text):
+            # what's wrong with what is theirs, in plain words: not a turn
+            return Reply(text=await self._checkup(who), run_id=None, agent=agent,
+                         actor=actor, stop_reason="doctor")
         if not unattended and text.strip().lower().split()[:1] == ["/steps"]:
             # what their last turn (or turn N) did, step by step: not a turn
             return Reply(text=self._steps_words(key, text), run_id=None, agent=agent,
@@ -1448,6 +1452,21 @@ class Service:
             actor=who.id, text=text, home=self.setu_home(who), own=who.manages_setu,
             narrowed=who.setu_accounts, needs=needs_allow(spec.connections),
             may_lock=who.setu == OWN_SETU)
+
+    async def _checkup(self, who: Actor) -> str:
+        """``/doctor``: this person's own lines (checkup.py) -- their
+        accounts, schedules, watches, phones and limits -- red first."""
+        day = money.day_start()
+        lines = await checkup.examine(
+            who, programs=checkup.Programs(
+                setu=self.accounts.setu, samay=self.samay,
+                prahari=self.prahari if (not self.prahari_for
+                                         or who.id in self.prahari_for) else None,
+                sparsh=self.sparsh),
+            setu_home=self.setu_home(who), setu_key=self.accounts.keys.key_for(who.id),
+            spent=self.runs.spent_since(who.id, day),
+            sent=self.runs.asked_since(who.id, day), owner=self.owner)
+        return checkup.said(lines, is_owner=self.owner is not None and who.id == self.owner)
 
     def setu_home(self, who: Actor) -> Path | None:
         """Where this person's sign-ins live, made (yours alone) when it

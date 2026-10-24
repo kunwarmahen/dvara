@@ -495,6 +495,7 @@ And anyone can start their conversation with an agent over:
 /tests delete 1                take one back (the conversation stays)
 /carry                         carry on a job a restart stopped, from its last step
 /steps                         what your last turn did, step by step (/steps 2: turn 2)
+/doctor                        what's wrong with what's yours, and the fix
 ```
 
 A chat is one conversation for as long as it lasts, and a long one can
@@ -572,6 +573,16 @@ yes), and `/steps 2` with the second. The owner's page has **Steps** on
 every run. The owner sees anybody else's run as its shape only, without
 what the tools were given and read
 ([notes/60](notes/60-a-run-step-by-step.md)).
+
+**What's wrong with mine.** `/doctor` answers in red, amber and green
+about what is the person's own, each line from the program that knows:
+their accounts (a sign-in the site ended, a Google one in its last
+days, a locked folder), their schedules' runs of the last day, their
+watches, their phones, and today's allowance, messages and hours. Each
+red or amber line says the fix in words they can use (`/connect gmail
+as personal`, or whom to ask). Nobody else's line is ever in it; the
+owner's ends with where the whole house is, Settings → Check or
+`sarathi doctor` ([notes/67](notes/67-a-check-of-your-own.md)).
 
 `/new` answers at once and looks back over the conversation behind the
 answer: what it noticed comes as a message of its own, numbered, and
@@ -1445,6 +1456,7 @@ reads that person's key from `<state>/memory.json`
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
 | `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat ([notes/60](notes/60-a-run-step-by-step.md)) |
+| `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
