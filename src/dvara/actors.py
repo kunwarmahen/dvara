@@ -131,7 +131,7 @@ ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage",
                         "phone", "phones", "hours", "max_turns_per_day",
-                        "approver"})
+                        "approver", "speak"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -227,6 +227,9 @@ class Actor:
     #: Who is asked when their agents want to change something: another
     #: actor's id (limits.py). None asks them, as it always did.
     approver: str | None = None
+    #: When their answers are read aloud too (spoken.py): off,
+    #: when-spoken or always. None is spoken.DEFAULT; their own /voice wins.
+    speak: str | None = None
 
     @property
     def has_phone(self) -> bool:
@@ -408,6 +411,7 @@ class ActorBook:
                 hours=_hours(body, name, where),
                 max_turns_per_day=_count(body, "max_turns_per_day", name, where),
                 approver=_approver(body, name, where),
+                speak=_speak(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -694,6 +698,19 @@ def _approver(body: dict, name: str, where) -> str | None:
     if value == name:
         raise ConfigProblem(f"{where}: [actor.{name}] approver is themselves; leave "
                             f"it out and they're asked, as by default")
+    return value
+
+
+def _speak(body: dict, name: str, where) -> str | None:
+    from dvara.spoken import CHOICES, DEFAULT
+
+    value = body.get("speak")
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in CHOICES:
+        raise ConfigProblem(f"{where}: [actor.{name}] speak must be one of "
+                            f"{', '.join(CHOICES)} (got {value!r}); leave it out "
+                            f"for {DEFAULT}")
     return value
 
 

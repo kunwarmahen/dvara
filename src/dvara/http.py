@@ -1,6 +1,6 @@
 """The HTTP surface -- a transport, and honest about being only that.
 
-Ten endpoints for any caller, five more for a page's chat (web.py),
+Ten endpoints for any caller, a dozen more for a page's chat (web.py),
 no session state, no cleverness. Everything that decides
 anything lives in ``service.py``; this module moves JSON.
 
@@ -657,6 +657,22 @@ def create_app(service: Service, *, token: str,
         if path is None:
             raise HTTPException(status_code=404, detail="no such file any more")
         return FileResponse(path, filename=path.name)
+
+    @app.get("/web/spoken")
+    async def web_spoken(actor: str = "", line: int = 0,
+                         authorization: str | None = Header(default=None)) -> Any:
+        """An answer's line read aloud, as WAV (spoken.py)."""
+        check(authorization)
+        from dvara.spoken import Unspoken
+
+        try:
+            path = await web_for(actor).spoken(actor, line)
+        except Unspoken as exc:
+            raise HTTPException(status_code=503,
+                                detail=f"answers can't be read aloud here: {exc}") from None
+        if path is None:
+            raise HTTPException(status_code=404, detail="no answer on that line")
+        return FileResponse(path, media_type="audio/wav")
 
     @app.get("/asks")
     async def asks(actor: str | None = None, channel: str | None = None,

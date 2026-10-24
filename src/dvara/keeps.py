@@ -16,7 +16,8 @@ SQLite files among them are copied with SQLite's own backup.
 
 WHAT IS LEFT OUT: the browser caches in the people's Setu folders (no
 sign-in in them, and most of the bytes), the locks a running Chrome
-leaves, and the lock a running Dvara holds on its folder.
+leaves, the lock a running Dvara holds on its folder, and the answers
+read aloud for the page (``voice-cache``, made again when asked for).
 
 A PERSON'S LOCKED SETU FOLDER STAYS LOCKED: carried as it is, sealed,
 opened again by their own passphrase after a restore.
@@ -30,10 +31,10 @@ from typing import Any
 FORMAT = "dvara.keeps.v1"
 
 #: Chrome's folders and files with no sign-in in them (Setu's own list),
-#: and the lock a running dvara holds.
+#: the lock a running dvara holds, and the page's answers read aloud.
 LEAVE_OUT = ["BrowserMetrics", "Cache", "CacheStorage", "Code Cache", "Crashpad",
              "DawnCache", "GPUCache", "GrShaderCache", "ScriptCache", "ShaderCache",
-             "Singleton*", "vault.lock", "dvara.lock"]
+             "Singleton*", "vault.lock", "dvara.lock", "voice-cache"]
 
 
 def report(root: Path, actors: Path, state: Path, policy: Path) -> dict[str, Any]:

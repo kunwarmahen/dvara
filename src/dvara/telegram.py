@@ -133,6 +133,10 @@ channel adapter usually goes wrong.
   message it sent (``asks.py``); the desk calls it however the question
   ended -- a press here, a "y" at the keyboard, a POST, the deadline, or
   a turn that went away -- and the words under the question say which.
+* **A voice note back follows the words, never replaces them**
+  (spoken.py). When the person's choice says so, the answer is read
+  aloud on this machine and sent as a voice note after its text; a
+  machine with no voice sends the text alone and tells the owner why.
 """
 
 from __future__ import annotations
@@ -140,12 +144,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
+import tempfile
 from fnmatch import fnmatch
+from pathlib import Path
 from typing import Any
 
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
+from dvara import spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.service import works_phone
@@ -632,6 +639,8 @@ class TelegramBot:
                      else {})
             await self._send(chat, chunk, **extra)
             self.outbox.sent(row, count)
+        if reply.speak and reply.text.strip():
+            await self._speak(chat, reply.text)
         # What the agent sent with send_file, after the words that
         # explain it. Not owed: a crash here loses the file, and the
         # answer already said it was sent -- the person can ask again.
@@ -1116,6 +1125,30 @@ class TelegramBot:
             finally:
                 self._pacer.sent(chat)
 
+    async def _speak(self, chat: int, text: str) -> None:
+        """The answer read aloud, after its words (spoken.py). Not owed,
+        as a file isn't: the words were the answer, and they went."""
+        with tempfile.TemporaryDirectory(prefix="dvara-voice-") as tmp:
+            try:
+                with contextlib.suppress(TelegramError, httpx.HTTPError):
+                    await self._api("sendChatAction", chat_id=chat, action="record_voice")
+                note = await spoken.speak(text, Path(tmp) / "answer.ogg", telegram=True)
+                await self._send_voice(chat, note)
+            except spoken.Unspoken as exc:
+                self._note(f"telegram: an answer wasn't read aloud -- {exc}")
+            except (TelegramError, httpx.HTTPError, OSError) as exc:
+                self._note(f"telegram: sending the voice note failed: {exc}")
+
+    async def _send_voice(self, chat: int, path):
+        """One voice note (OGG Opus) into one chat, paced like a message."""
+        async with self._pacer.lock(chat):
+            await self._pacer.wait(chat)
+            try:
+                return await self._api("sendVoice", upload=(
+                    "voice", (path.name, path.read_bytes())), chat_id=chat)
+            finally:
+                self._pacer.sent(chat)
+
     async def _send_photo(self, chat: int, png: bytes, *, caption: str):
         """One picture into one chat, paced like a message."""
         async with self._pacer.lock(chat):
@@ -1224,7 +1257,8 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
                   ("learn", "Keep what I just did as a skill; /learn start to teach me")]
     # every agent is told what everyone in the house knows (household.py)
     words += [("household", "What everyone's agents know; /remember for everyone …"),
-              ("tools", "What I can use for you")]
+              ("tools", "What I can use for you"),
+              ("voice", "Answers read aloud: /voice off, when-spoken or always")]
     if phone:
         words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
     if schedules:

@@ -53,6 +53,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from dvara import spoken
 from dvara.accounts import tap_label, taps
 from dvara.attached import Attachment, safe_name
 from dvara.errors import Refused
@@ -70,6 +71,8 @@ THREAD = f"{KIND}:chat"
 KEEP_PER_PERSON = 2000
 #: Lines one look hands over, at most.
 PAGE = 200
+#: Answers read aloud for the page, under the state folder (spoken.py).
+VOICE_CACHE = "voice-cache"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lines (
@@ -103,7 +106,7 @@ class Line:
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
         for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent",
-                     "transcript", "heard"):
+                     "transcript", "heard", "speak"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         return out
@@ -213,7 +216,10 @@ class WebChannel:
                           for hold in self.service.holds.pending(actor)],
                 # A lesson open with an agent (learning.py): what it's for
                 # and how far it got, for the page's lesson bar.
-                "lessons": self._lessons(actor, agents)}
+                "lessons": self._lessons(actor, agents),
+                # whether an answer can be read aloud here (spoken.py): the
+                # page's play button, and why not when it can't
+                "voice": spoken.can_speak() is None}
 
     def _lessons(self, actor: str, agents: list[str]) -> list[dict]:
         learning = getattr(self.service, "learning", None)
@@ -292,6 +298,8 @@ class WebChannel:
             "stop_reason": reply.stop_reason if not reply.ok else None,
             "transcript": list(reply.transcript),
             "heard": reply.heard,
+            # read aloud by itself when it arrives (spoken.py)
+            "speak": reply.speak,
             # sign-in words it told them to send, as buttons (accounts.taps)
             "taps": None if reply.held else [{"word": w, "label": tap_label(w)}
                                              for w in taps(reply.text)]})
@@ -305,6 +313,19 @@ class WebChannel:
             return None
         path = Path(files[n])
         return path if path.is_file() else None
+
+    async def spoken(self, actor: str, line_id: int) -> Path | None:
+        """An answer's line read aloud, made the first time it's asked
+        for and kept beside the service's state (WAV: every browser plays
+        it; made again if it's gone, so a backup leaves it out). None for
+        a line that isn't an agent's answer."""
+        line = self.book.get(actor, line_id)
+        if line is None or line.who not in ("agent", "notice") or not line.text.strip():
+            return None
+        made = Path(self.service.state) / VOICE_CACHE / actor / f"{line_id}.wav"
+        if made.is_file():
+            return made
+        return await spoken.speak(line.text, made)
 
     async def aclose(self) -> None:
         for job in list(self._jobs):

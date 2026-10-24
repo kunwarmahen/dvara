@@ -152,8 +152,9 @@ are errors too:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, channel, max_usd_per_day, max_usd_per_turn, permissions,
-receipt
+known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
+max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
+setu_accounts, setu_manage, speak
 ```
 
 A misspelled ceiling that quietly means "no ceiling" is exactly the
@@ -1875,6 +1876,40 @@ emulator with a missed call and the battery at 23%, on
 Use `qwen3.8` or a cloud model for it: `gemma4:12b` makes up tools for
 the parts you haven't connected ([notes/63](notes/63-a-morning-brief.md)).
 
+## 29 · Answers read aloud
+
+Send a voice note (Telegram's microphone, or 🎤 on the page) and the
+answer comes back twice: the words first, as always, then the same
+answer as a voice note. It's made on this computer by Piper, a small
+voice model, so nothing leaves the house to be spoken. Install it once:
+
+```
+pipx install piper-tts
+mkdir -p ~/.local/share/piper/voices && cd ~/.local/share/piper/voices
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+```
+
+(Sarathi's image has both already.) Then, in the chat:
+
+```
+/voice
+#   I read an answer aloud when you send me a voice note. Send /voice off,
+#   /voice when-spoken or /voice always to change it.
+/voice always
+#   From now on, I read every answer aloud.
+```
+
+`always` reads every answer, typed or spoken; `off` never. Without Piper,
+`/voice` says so, and the answers stay words. You can set a person's
+default in the actors file with `speak = "always"` (or `"off"`); their
+own `/voice` wins.
+
+Code, links and tables aren't read out ("some code, in the message"),
+and a long answer stops at a sentence with "The rest is in the message."
+On the page every answer has **▶ Listen**, and one you asked to hear
+plays by itself when it arrives ([notes/64](notes/64-an-answer-read-aloud.md)).
+
 ---
 
 # Where to read next
@@ -1932,6 +1967,7 @@ Each topic, and the note that argues it:
 | `notes/61-limits-for-a-child.md` | hours (schedules too), messages a day, and an approver the questions go to |
 | `notes/62-what-everyone-knows.md` | the owner's facts for every agent in the house, shown whole; anyone may offer one |
 | `notes/63-a-morning-brief.md` | a read-only brief from every account, the phone's battery with no phone job, and schedules read on a schedule |
+| `notes/64-an-answer-read-aloud.md` | an answer read aloud by Piper on this machine, after the words; off, when-spoken or always, per person |
 
 ---
 

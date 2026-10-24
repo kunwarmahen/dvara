@@ -119,7 +119,7 @@ from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
 from dvara import (attached, carrying, files, fresh, heard, household, learning, limits,
-                   money, past, patience, phoneview, ready, remembering, seen, signins)
+                   money, past, patience, phoneview, ready, remembering, seen, signins, spoken)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -254,6 +254,9 @@ class Reply:
     #: What a voice note sent with the message was heard as (heard.py),
     #: for the channel to show beside the answer.
     heard: str | None = None
+    #: Whether the channel reads this answer aloud too (spoken.py): by
+    #: the person's choice, and whether they spoke to it.
+    speak: bool = False
 
     @property
     def ok(self) -> bool:
@@ -365,6 +368,8 @@ class Service:
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
         #: What a look back noticed, waiting for the person's /remember.
         self.offered = remembering.Offered(self.state)
+        #: Each person's own /voice choice (spoken.py).
+        self.voices = spoken.Choices(self.state)
         #: Skills offered after an answer and kept on the person's word
         #: (learning.py); the tools each turn was given, and schedules,
         #: for ``/tools`` and ``/schedules`` (seen.py).
@@ -941,6 +946,11 @@ class Service:
             said = await self._household_words(who, text)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="memory")
+        if not unattended and spoken.is_word(text):
+            # Whether their answers are read aloud: theirs to choose.
+            said = spoken.voice_words(self.voices, who.id, who.speak, text)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="voice")
         if not unattended and remembering.word_of(text):
             # What is kept about them: theirs to see, keep and forget.
             said = await self._memory_words(spec, who, key, text)
@@ -1009,7 +1019,9 @@ class Service:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run, watch=watch, kept=kept,
                                              carrying=carrying_on)
-                    return replace(reply, heard=heard_as) if heard_as else reply
+                    speak = spoken.wanted(self.voices.choice(who.id, who.speak),
+                                          spoke=any(k.voice for k in kept))
+                    return replace(reply, heard=heard_as, speak=speak)
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
@@ -1103,9 +1115,12 @@ class Service:
                       message="", started_at=started, cost_usd=0.0,
                       came_by="cli" if door == "terminal" else door)
             try:
-                return await self._turn(spec=spec, who=who, key=hold.key,
-                                        run=run, resuming=hold,
-                                        answers=answers, door=door, watch=watch)
+                reply = await self._turn(spec=spec, who=who, key=hold.key,
+                                         run=run, resuming=hold,
+                                         answers=answers, door=door, watch=watch)
+                # a yes is a tap, not a voice note: read aloud only for "always"
+                return replace(reply, speak=spoken.wanted(
+                    self.voices.choice(who.id, who.speak), spoke=False))
             except (NoSuchHold, NotYourHold):
                 raise
             except Refused as exc:

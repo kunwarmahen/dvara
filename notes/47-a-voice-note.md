@@ -76,6 +76,7 @@ tests need no Ollama.
 * **A cloud model that hears.** None of the cloud roads Yantra speaks
   takes audio today; a cloud-only house has no hearing without a local
   model.
-* **Answers spoken back.** The answer is words, as always.
+* ~~**Answers spoken back.**~~ Read aloud on this machine and sent after
+  the words, by each person's choice ([notes/64](64-an-answer-read-aloud.md)).
 * **Recording on a phone's browser over plain http.** Browsers forbid
   it; Telegram, or https on the house address, is the way.

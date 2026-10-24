@@ -144,7 +144,9 @@ the person keeps for themselves, and `/tools` and `/schedules` answered
 from the record; and with `--prahari`, its owner's agent offers to tell
 them when something happens; and limits for a child (hours, messages a
 day, an approver), facts everyone in the house knows, and a ready-made
-morning brief, and `dvara keeps` for a backup of the house — covered by 1044 tests. The API is not stable.
+morning brief, and `dvara keeps` for a backup of the house; and answers
+read aloud on this machine, after the words, for whoever wants to hear
+them — covered by 1061 tests. The API is not stable.
 
 ## The shape of it
 
@@ -274,6 +276,7 @@ permissions       = "ask"          # changes are questions...
 approver          = "owner"        # ...put to the owner, not to them
 hours             = "07:00-21:00"  # when their agents answer, schedules too
 max_turns_per_day = 40             # messages a day that reach an agent
+speak             = "always"       # every answer read aloud too (default: when they spoke)
 ```
 
 `permissions` can only ever tighten. The mode a turn runs under is the
@@ -286,7 +289,7 @@ An unknown key is an error, not a shrug:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage
+setu_accounts, setu_manage, speak
 ```
 
 **Limits for a child.** `hours` is when their agents answer, on this
@@ -447,7 +450,11 @@ model when it can see one (a cloud model, or a local one Ollama lists
 with "vision"); otherwise the agent says it can't look
 ([notes/44](notes/44-what-they-send.md)). A voice note is heard into
 words first by a local model that can hear, and the answer starts with
-*I heard: "…"* ([notes/47](notes/47-a-voice-note.md)).
+*I heard: "…"* ([notes/47](notes/47-a-voice-note.md)). And the answer
+comes back spoken too: read aloud on this machine by Piper and sent as a
+voice note after the words, when they spoke (the default), always, or
+never, as each person chooses with `/voice`; the page has ▶ Listen on
+every answer ([notes/64](notes/64-an-answer-read-aloud.md)).
 
 And anyone can start their conversation with an agent over:
 
@@ -503,6 +510,16 @@ Anyone can also tell every agent in the house something, with any agent:
 /household yes 1               keep what someone offered   (the owner)
 /household no 1                not that                    (the owner)
 /household forget 2            that one, gone              (the owner)
+```
+
+And whether answers are read aloud to them, their own choice over the
+owner's `speak` ([notes/64](notes/64-an-answer-read-aloud.md)):
+
+```
+/voice                         what holds, and whether this machine can speak
+/voice always                  every answer, as a voice note after the words
+/voice when-spoken             only when they sent a voice note (the default)
+/voice off                     never
 ```
 
 **A job a restart stopped.** Every step of every turn is saved as it
@@ -934,6 +951,7 @@ POST /web/message  {actor, agent, text}          -> {line}
 POST /web/asks/{id}  {actor, approve}            -> {answered, approved}
 POST /web/holds/{id} {actor, answers}            -> {started}
 GET  /web/file?actor=&line=&n=                   -> a file a line carried
+GET  /web/spoken?actor=&line=                    -> that answer read aloud (WAV), made once
 GET  /web/push?actor=                            -> {topic}  (their ntfy topic, or null)
 POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts page)
 ```
@@ -1392,6 +1410,7 @@ reads that person's key from `<state>/memory.json`
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)); Google's page in the streamed window when one is set ([notes/52](notes/52-googles-page-in-the-window.md)), and a server's own sign-in page too ([notes/48](notes/48-a-server-of-their-own.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
+| `spoken.py` | an answer read aloud by Piper on this machine (`$DVARA_VOICE`, or the first voice found), sent after the words: a Telegram voice note (OGG Opus by ffmpeg), the page's ▶ Listen (WAV, made once); code, links and tables left out, long answers cut at a sentence; `speak` per person (off, when-spoken, always) and their own `/voice` ([notes/64](notes/64-an-answer-read-aloud.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
@@ -1430,7 +1449,7 @@ reads that person's key from `<state>/memory.json`
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
-| `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches and the folder's lock left out, nothing opened |
+| `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches, the folder's lock and the page's answers read aloud (`voice-cache`) left out, nothing opened |
 | `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
 | `limits.py` | a person's limits that aren't money: the hours their agents answer, a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
