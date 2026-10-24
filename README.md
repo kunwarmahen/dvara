@@ -146,7 +146,8 @@ them when something happens; and limits for a child (hours, messages a
 day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
 read aloud on this machine, after the words, for whoever wants to hear
-them — covered by 1061 tests. The API is not stable.
+them, in their own voice or one for the answer's language — covered by
+1074 tests. The API is not stable.
 
 ## The shape of it
 
@@ -277,6 +278,7 @@ approver          = "owner"        # ...put to the owner, not to them
 hours             = "07:00-21:00"  # when their agents answer, schedules too
 max_turns_per_day = 40             # messages a day that reach an agent
 speak             = "always"       # every answer read aloud too (default: when they spoke)
+voice             = "hi_IN-pratham-medium"   # their own voice (default: the house's)
 ```
 
 `permissions` can only ever tighten. The mode a turn runs under is the
@@ -289,7 +291,7 @@ An unknown key is an error, not a shrug:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak
+setu_accounts, setu_manage, speak, voice
 ```
 
 **Limits for a child.** `hours` is when their agents answer, on this
@@ -454,7 +456,11 @@ words first by a local model that can hear, and the answer starts with
 comes back spoken too: read aloud on this machine by Piper and sent as a
 voice note after the words, when they spoke (the default), always, or
 never, as each person chooses with `/voice`; the page has ▶ Listen on
-every answer ([notes/64](notes/64-an-answer-read-aloud.md)).
+every answer ([notes/64](notes/64-an-answer-read-aloud.md)). Each person
+may have a voice of their own, an answer in Hindi (or any language with
+a voice here) is read in a voice for it, and under "always" a
+schedule's answer is read aloud too
+([notes/65](notes/65-whose-voice-and-which-language.md)).
 
 And anyone can start their conversation with an agent over:
 
@@ -512,15 +518,25 @@ Anyone can also tell every agent in the house something, with any agent:
 /household forget 2            that one, gone              (the owner)
 ```
 
-And whether answers are read aloud to them, their own choice over the
-owner's `speak` ([notes/64](notes/64-an-answer-read-aloud.md)):
+And whether answers are read aloud to them, and in whose voice, their
+own choice over the owner's `speak` and `voice`
+([notes/64](notes/64-an-answer-read-aloud.md),
+[notes/65](notes/65-whose-voice-and-which-language.md)):
 
 ```
-/voice                         what holds, and whether this machine can speak
-/voice always                  every answer, as a voice note after the words
+/voice                         what holds, the voices here, and whether this machine can speak
+/voice always                  every answer and every notice, as a voice note after the words
 /voice when-spoken             only when they sent a voice note (the default)
 /voice off                     never
+/voice use 2                   that voice for them (or by name; /voice use default goes back)
 ```
+
+The voices are every Piper voice found in `$PIPER_VOICES`,
+`~/.local/share/piper/voices` and `/usr/share/piper/voices`.
+`$DVARA_VOICE` names the house's own (else the first English one), or is
+`off`. An answer in a language their voice doesn't speak is read in one
+that does; with none here for it, it isn't read, and your log names the
+voice to add.
 
 **A job a restart stopped.** Every step of every turn is saved as it
 happens. When Dvara comes back after `sarathi down && up` or a crash,
@@ -1410,7 +1426,7 @@ reads that person's key from `<state>/memory.json`
 | `accounts.py` | `/connect`, `/accounts`, `/disconnect` and the address pasted back, answered before any turn and never seen by an agent ([notes/20](notes/20-signing-in-from-the-chat.md)); a shared folder only with `setu_manage`, and never its `/lock` ([notes/27](notes/27-your-folder-from-your-phone.md)); `/accounts page`, a one-time link to their own folder's Setu page ([notes/31](notes/31-their-own-page.md)); `/connect server`, an MCP server of their own, its token only on that page ([notes/48](notes/48-a-server-of-their-own.md)); Google's page in the streamed window when one is set ([notes/52](notes/52-googles-page-in-the-window.md)), and a server's own sign-in page too ([notes/48](notes/48-a-server-of-their-own.md)) |
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
-| `spoken.py` | an answer read aloud by Piper on this machine (`$DVARA_VOICE`, or the first voice found), sent after the words: a Telegram voice note (OGG Opus by ffmpeg), the page's ▶ Listen (WAV, made once); code, links and tables left out, long answers cut at a sentence; `speak` per person (off, when-spoken, always) and their own `/voice` ([notes/64](notes/64-an-answer-read-aloud.md)) |
+| `spoken.py` | an answer read aloud by Piper on this machine, sent after the words: a Telegram voice note (OGG Opus by ffmpeg), the page's ▶ Listen (WAV, made once per voice); code, links and tables left out, long answers cut at a sentence; `speak` per person (off, when-spoken, always: notices too) and their own `/voice`; every voice here, each person's own (`voice =`, `/voice use`), the answer's language told by script or small words and read in a voice for it, never in one that can't ([notes/64](notes/64-an-answer-read-aloud.md), [notes/65](notes/65-whose-voice-and-which-language.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
@@ -1443,7 +1459,7 @@ reads that person's key from `<state>/memory.json`
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's, Prahari's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |
 | `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay ([notes/42](notes/42-seeing-the-work.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)) |
-| `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)) |
+| `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)); read aloud too for someone who chose "always", in their voice ([notes/65](notes/65-whose-voice-and-which-language.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |

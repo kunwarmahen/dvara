@@ -196,7 +196,9 @@ class WebChannel:
         offered rides on it (``offer``), for the page's buttons."""
         self.book.add(address, "notice", text,
                       extra={"files": [str(file)] if file else [],
-                             "offer": (extra or {}).get("offer")})
+                             "offer": (extra or {}).get("offer"),
+                             # "always": it plays by itself on the page too
+                             "speak": (extra or {}).get("speak")})
 
     # -- the person, on the page ---------------------------------------------
 
@@ -322,10 +324,17 @@ class WebChannel:
         line = self.book.get(actor, line_id)
         if line is None or line.who not in ("agent", "notice") or not line.text.strip():
             return None
-        made = Path(self.service.state) / VOICE_CACHE / actor / f"{line_id}.wav"
+        who = self.service.actors.get(actor)
+        # in their voice, or one for the answer's language; named in the
+        # file, so a voice changed since is made again
+        voice = await asyncio.to_thread(
+            spoken.pick, spoken.aloud(line.text),
+            self.service.voices.voice(actor, who.voice))
+        made = (Path(self.service.state) / VOICE_CACHE / actor
+                / f"{line_id}-{voice.name}.wav")
         if made.is_file():
             return made
-        return await spoken.speak(line.text, made)
+        return await asyncio.to_thread(spoken.make, line.text, made, voice=voice)
 
     async def aclose(self) -> None:
         for job in list(self._jobs):

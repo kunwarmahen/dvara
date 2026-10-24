@@ -154,7 +154,7 @@ are errors too:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak
+setu_accounts, setu_manage, speak, voice
 ```
 
 A misspelled ceiling that quietly means "no ceiling" is exactly the
@@ -1894,16 +1894,48 @@ curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/les
 
 ```
 /voice
-#   I read an answer aloud when you send me a voice note. Send /voice off,
-#   /voice when-spoken or /voice always to change it.
+#   I read an answer aloud when you send me a voice note, in
+#   en_US-lessac-medium (English). Voices here: 1. en_US-lessac-medium
+#   (English). Send /voice off, /voice when-spoken or /voice always to
+#   change when, and /voice use N for another voice.
 /voice always
-#   From now on, I read every answer aloud.
+#   From now on, I read every answer aloud, and what I send you unasked.
 ```
 
-`always` reads every answer, typed or spoken; `off` never. Without Piper,
-`/voice` says so, and the answers stay words. You can set a person's
-default in the actors file with `speak = "always"` (or `"off"`); their
-own `/voice` wins.
+`always` reads every answer, typed or spoken, and what's sent to you
+unasked: a schedule's answer, the morning brief. `off` never. Without
+Piper, `/voice` says so, and the answers stay words. You can set a
+person's default in the actors file with `speak = "always"` (or
+`"off"`); their own `/voice` wins.
+
+**Another language, another voice.** Put a second voice beside the
+first, a Hindi one say:
+
+```
+cd ~/.local/share/piper/voices
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json
+```
+
+(Sarathi: `sarathi dvara --voices en_US-lessac-medium,hi_IN-pratham-medium`
+does this.) Now an answer written in Hindi is read in the Hindi voice,
+and an English one in the English voice, whoever asked. To hear
+everything in one voice of your own:
+
+```
+/voice
+#   I read every answer aloud, and what I send you unasked, in
+#   en_US-lessac-medium (English). Voices here: 1. en_US-lessac-medium
+#   (English); 2. hi_IN-pratham-medium (Hindi). ...
+/voice use 2
+#   From now on, I read to you in hi_IN-pratham-medium (Hindi). An answer
+#   in another language is read in a voice for it, when there's one here.
+```
+
+`voice = "hi_IN-pratham-medium"` in the actors file sets it for someone.
+An answer in a language with no voice here isn't read at all (an English
+voice can't say Hindi words); the log says which voice to add
+([notes/65](notes/65-whose-voice-and-which-language.md)).
 
 Code, links and tables aren't read out ("some code, in the message"),
 and a long answer stops at a sentence with "The rest is in the message."
@@ -1968,6 +2000,7 @@ Each topic, and the note that argues it:
 | `notes/62-what-everyone-knows.md` | the owner's facts for every agent in the house, shown whole; anyone may offer one |
 | `notes/63-a-morning-brief.md` | a read-only brief from every account, the phone's battery with no phone job, and schedules read on a schedule |
 | `notes/64-an-answer-read-aloud.md` | an answer read aloud by Piper on this machine, after the words; off, when-spoken or always, per person |
+| `notes/65-whose-voice-and-which-language.md` | each person's own voice, the answer's language picking one that speaks it, and notices read aloud under always |
 
 ---
 

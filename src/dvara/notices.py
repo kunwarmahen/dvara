@@ -25,6 +25,10 @@ an adapter in another process -- finds its notices waiting at ``GET
 sender that raises falls back to the same queue rather than losing the
 text.
 
+A NOTICE MAY BE READ ALOUD: for a person who chose "always" (spoken.py),
+``extra`` says so (``speak``, and whose ``voice``), and a channel that
+can speak sends a voice note after the words; one that can't ignores it.
+
 A NOTICE MAY CARRY A FILE: what a scheduled run's ``send_file`` sends
 (files.py). A sender is then called with ``file=`` the path, and a
 collected notice names the path, the way a reply over HTTP does.
@@ -91,6 +95,10 @@ class NoticeDesk:
     def __init__(self) -> None:
         self._routes: dict[str, Sender] = {}
         self._kept: dict[str, deque[Notice]] = {}
+        #: Whether a person's notices are read aloud too, and in whose
+        #: voice (``{"speak": True, "voice": NAME}``), or None; the
+        #: service answers it from their choice (spoken.py).
+        self.aloud: Callable[[str], dict | None] | None = None
 
     def route(self, kind: str, sender: Sender) -> None:
         """Send notices for ``kind`` through ``sender``; re-registering
@@ -101,6 +109,9 @@ class NoticeDesk:
                    text: str, file: Path | None = None,
                    extra: dict | None = None) -> Sent:
         result = Sent()
+        heard = self.aloud(actor) if self.aloud is not None else None
+        if heard:
+            extra = {**(extra or {}), **heard}
         for kind, address in reach:
             notice = Notice(id=secrets.token_hex(4), actor=actor, kind=kind,
                             to=address, text=text, at=datetime.now(UTC),

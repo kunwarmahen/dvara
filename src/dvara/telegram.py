@@ -640,7 +640,7 @@ class TelegramBot:
             await self._send(chat, chunk, **extra)
             self.outbox.sent(row, count)
         if reply.speak and reply.text.strip():
-            await self._speak(chat, reply.text)
+            await self._speak(chat, reply.text, voice=reply.voice)
         # What the agent sent with send_file, after the words that
         # explain it. Not owed: a crash here loses the file, and the
         # answer already said it was sent -- the person can ask again.
@@ -837,17 +837,21 @@ class TelegramBot:
         notice carrying a file (a scheduled run's ``send_file``) is the
         file, with the text as its caption. A skill offered (learning.py)
         gets Keep and Not now under its last part; the words still say
-        what to type."""
+        what to type. Someone who chose to hear every answer hears this
+        too, after it (spoken.py)."""
         chat = int(address)
+        extra = extra or {}
         if file is not None:
             await self._send_file(chat, file, caption=elide(text, CAPTION_LIMIT))
-            return
-        offer = (extra or {}).get("offer")
-        parts = split_message(text)
-        for count, part in enumerate(parts, start=1):
-            more = ({"reply_markup": _offer_buttons(offer)}
-                    if offer and count == len(parts) else {})
-            await self._send(chat, part, **more)
+        else:
+            offer = extra.get("offer")
+            parts = split_message(text)
+            for count, part in enumerate(parts, start=1):
+                more = ({"reply_markup": _offer_buttons(offer)}
+                        if offer and count == len(parts) else {})
+                await self._send(chat, part, **more)
+        if extra.get("speak") and text.strip():     # "always": a notice too
+            await self._speak(chat, text, voice=extra.get("voice"))
 
     async def _deliver_ask(self, ask: Ask) -> Withdraw:
         """Put one "may I?" in front of the person it was addressed to.
@@ -1125,14 +1129,16 @@ class TelegramBot:
             finally:
                 self._pacer.sent(chat)
 
-    async def _speak(self, chat: int, text: str) -> None:
-        """The answer read aloud, after its words (spoken.py). Not owed,
-        as a file isn't: the words were the answer, and they went."""
+    async def _speak(self, chat: int, text: str, *, voice: str | None = None) -> None:
+        """The answer read aloud, after its words, in their voice or one
+        for its language (spoken.py). Not owed, as a file isn't: the words
+        were the answer, and they went."""
         with tempfile.TemporaryDirectory(prefix="dvara-voice-") as tmp:
             try:
                 with contextlib.suppress(TelegramError, httpx.HTTPError):
                     await self._api("sendChatAction", chat_id=chat, action="record_voice")
-                note = await spoken.speak(text, Path(tmp) / "answer.ogg", telegram=True)
+                note = await spoken.speak(text, Path(tmp) / "answer.ogg", telegram=True,
+                                          voice=voice)
                 await self._send_voice(chat, note)
             except spoken.Unspoken as exc:
                 self._note(f"telegram: an answer wasn't read aloud -- {exc}")
@@ -1258,7 +1264,7 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
     # every agent is told what everyone in the house knows (household.py)
     words += [("household", "What everyone's agents know; /remember for everyone …"),
               ("tools", "What I can use for you"),
-              ("voice", "Answers read aloud: /voice off, when-spoken or always")]
+              ("voice", "Answers read aloud: when, and in whose voice")]
     if phone:
         words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
     if schedules:

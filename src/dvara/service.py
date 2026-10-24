@@ -257,6 +257,8 @@ class Reply:
     #: Whether the channel reads this answer aloud too (spoken.py): by
     #: the person's choice, and whether they spoke to it.
     speak: bool = False
+    #: Whose voice by name, for that (their own, or None for the house's).
+    voice: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -379,6 +381,8 @@ class Service:
         self.signins_told = signins.Told(self.state)
         #: Telling a person something nobody asked about (notices.py).
         self.notices = NoticeDesk()
+        # read aloud too for someone who chose "always" (spoken.py)
+        self.notices.aloud = self._notice_aloud
         #: The web channel (web.py), when the owner turned it on: a page's
         #: chat, and every notice kept for the page as a line.
         self.web = None
@@ -459,6 +463,17 @@ class Service:
         self.past.close()
 
     # ---- the owner's files, read again -------------------------------------
+
+    def _notice_aloud(self, actor: str) -> dict | None:
+        """What a notice for ``actor`` carries to be read aloud: only under
+        "always" -- nobody spoke to start it (spoken.py)."""
+        try:
+            who = self.actors.get(actor)
+        except Refused:
+            return None
+        if not spoken.wanted(self.voices.choice(who.id, who.speak), spoke=False):
+            return None
+        return {"speak": True, "voice": self.voices.voice(who.id, who.voice)}
 
     def _note(self, line: str) -> None:
         """One line for the owner, once per distinct problem.
@@ -948,7 +963,7 @@ class Service:
                          stop_reason="memory")
         if not unattended and spoken.is_word(text):
             # Whether their answers are read aloud: theirs to choose.
-            said = spoken.voice_words(self.voices, who.id, who.speak, text)
+            said = spoken.voice_words(self.voices, who.id, who.speak, text, voice=who.voice)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="voice")
         if not unattended and remembering.word_of(text):
@@ -1021,7 +1036,8 @@ class Service:
                                              carrying=carrying_on)
                     speak = spoken.wanted(self.voices.choice(who.id, who.speak),
                                           spoke=any(k.voice for k in kept))
-                    return replace(reply, heard=heard_as, speak=speak)
+                    return replace(reply, heard=heard_as, speak=speak,
+                                   voice=self.voices.voice(who.id, who.voice))
                 with unattended_scope() as record:
                     reply = await self._turn(spec=spec, who=who, key=key,
                                              run=run,
@@ -1120,7 +1136,8 @@ class Service:
                                          answers=answers, door=door, watch=watch)
                 # a yes is a tap, not a voice note: read aloud only for "always"
                 return replace(reply, speak=spoken.wanted(
-                    self.voices.choice(who.id, who.speak), spoke=False))
+                    self.voices.choice(who.id, who.speak), spoke=False),
+                    voice=self.voices.voice(who.id, who.voice))
             except (NoSuchHold, NotYourHold):
                 raise
             except Refused as exc:

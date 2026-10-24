@@ -15,10 +15,13 @@ is sent anywhere to be spoken. That is the promise `heard.py` makes for
 hearing, kept for the other direction: a house on Ollama with no cloud
 key has both.
 
-Which voice: `$DVARA_VOICE` names a voice file, or `off`. Otherwise the
-first one found in `$PIPER_VOICES`, `~/.local/share/piper/voices` or
-`/usr/share/piper/voices` (where Sarathi's image puts one). Piper is the
-`piper` command, or the `piper` module in Dvara's own Python.
+Which voice: every one found in `$PIPER_VOICES`,
+`~/.local/share/piper/voices` or `/usr/share/piper/voices` (where
+Sarathi's image puts them); `$DVARA_VOICE` names the house's own, or is
+`off`. Each person may have their own, and an answer in another language
+is read in a voice for it ([notes/65](65-whose-voice-and-which-language.md)).
+Piper is the `piper` command, or the `piper` module in Dvara's own
+Python.
 
 ## The words first, the voice after
 
@@ -57,7 +60,7 @@ message."
 ```
 off           never
 when-spoken   when they sent a voice note (the default)
-always        every answer
+always        every answer, and what's sent unasked (notes/65)
 ```
 
 The owner sets one per person in the actors file (`speak =`, or
@@ -78,7 +81,7 @@ Every answer gets **▶ Listen** when this machine can speak (`GET /web`
 says `voice: true`). The voice is made the first time it is asked for,
 `GET /web/spoken?actor=&line=`, as WAV (every browser plays it, Safari
 included), and kept beside the state under
-`voice-cache/<person>/<line>.wav`, so a second press doesn't make it
+`voice-cache/<person>/<line>-<voice>.wav`, so a second press doesn't make it
 again (a backup leaves it out: it is made again when asked for). An answer whose line says
 `speak` (they sent a voice note, or chose always) plays by itself when it
 arrives, never one already there when the page was opened. Pressing ▶ on
@@ -133,11 +136,10 @@ installed, and checks a WAV and an OGG come out.
 
 ## What is not here yet
 
-* **Notices read aloud.** A schedule's answer (a morning brief, say)
-  arrives as words; `always` reads only answers to a message.
-* **A voice per person, or per language.** One voice for the house. A
-  person who writes in Hindi is read in the English voice; Piper has
-  Hindi voices, and choosing one by the answer's language is the next
-  step.
+* ~~**Notices read aloud.**~~ Under `always`, a schedule's answer and
+  every other notice are read aloud too ([notes/65](65-whose-voice-and-which-language.md)).
+* ~~**A voice per person, or per language.**~~ Each person may have
+  their own, and an answer in another language is read in a voice for
+  it ([notes/65](65-whose-voice-and-which-language.md)).
 * **A cloud voice.** Nothing here sends text out to be spoken, by
   choice.

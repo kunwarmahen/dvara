@@ -11,6 +11,7 @@ real thing, which is skipped where Piper or a voice isn't installed.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
 import pytest
@@ -31,19 +32,53 @@ class Patient(FakeTelegram):
         return super()._handle(request)
 
 
-@pytest.fixture
-def voiced(monkeypatch):
-    """A machine that can speak, where speaking writes a small file."""
-    made: list[tuple[str, bool]] = []
+def a_voice(folder, name, family, language):
+    """A voice file and its card, as Piper's catalogue ships them."""
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{name}.onnx").write_bytes(b"not really a model")
+    (folder / f"{name}.onnx.json").write_text(json.dumps(
+        {"language": {"code": name.split("-")[0], "family": family,
+                      "name_english": language}}))
 
-    def make(text, out, *, telegram=False):
+
+@pytest.fixture
+def shelf(tmp_path, monkeypatch):
+    """Only the voices a test puts here: English and Hindi to begin with,
+    never what this machine happens to have installed."""
+    folder = tmp_path / "voices"
+    a_voice(folder, "en_US-lessac-medium", "en", "English")
+    a_voice(folder, "hi_IN-pratham-medium", "hi", "Hindi")
+    monkeypatch.setattr(spoken, "VOICES", ())
+    monkeypatch.setenv("PIPER_VOICES", str(folder))
+    monkeypatch.delenv(spoken.ENV, raising=False)
+    return folder
+
+
+class Made(list):
+    """What was read aloud, (text, for Telegram), and in which voices."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.voices: list[str] = []
+
+
+@pytest.fixture
+def voiced(monkeypatch, shelf):
+    """A machine that can speak, where speaking writes a small file and
+    keeps which voice it would have used."""
+    made = Made()
+
+    def make(text, out, *, telegram=False, voice=None):
         made.append((text, telegram))
+        chosen = voice if isinstance(voice, spoken.Voice) else spoken.pick(
+            spoken.aloud(text), voice)
+        made.voices.append(chosen.name)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(b"OggS voice" if telegram else b"RIFF voice")
         return out
 
     monkeypatch.setattr(spoken, "make", make)
-    monkeypatch.setattr(spoken, "can_speak", lambda: None)
+    monkeypatch.setattr(spoken, "piper", lambda: ["piper"])
     return made
 
 
@@ -245,3 +280,134 @@ def test_a_backup_leaves_the_voices_made_for_the_page_out(tmp_path):
     state = next(k for k in keeps.report(tmp_path, tmp_path / "a.toml", tmp_path,
                                          tmp_path / "p.toml")["keeps"] if k["id"] == "state")
     assert VOICE_CACHE in state["leave_out"]
+
+
+# ---- whose voice, and the answer's language -------------------------------------
+
+def test_the_answers_language_is_told_by_its_script_or_its_small_words():
+    assert spoken.languages_of("कूड़ा मंगलवार को जाता है।")[0] == "hi"
+    assert spoken.languages_of("The bins go out on Tuesday, and that is it.") == ("en",)
+    assert spoken.languages_of("Der Müll wird am Dienstag abgeholt, das ist gut.") == ("de",)
+    assert spoken.languages_of("Привет, как дела?")[0] == "ru"
+    # an English name inside a Hindi answer doesn't make it English
+    assert spoken.languages_of("आपका Wi-Fi पासवर्ड फ्रिज पर लिखा है।")[0] == "hi"
+    assert spoken.languages_of("OK.") is None and spoken.languages_of("Tuesday") is None
+
+
+def test_the_house_voice_is_english_and_each_voice_knows_its_language(shelf):
+    every = spoken.voices()
+    assert [v.name for v in every] == ["en_US-lessac-medium", "hi_IN-pratham-medium"]
+    assert every[1].said() == "hi_IN-pratham-medium (Hindi)"
+
+
+def test_dvara_voice_names_the_houses_own(shelf, monkeypatch):
+    monkeypatch.setenv(spoken.ENV, "hi_IN-pratham-medium")
+    assert spoken.voices()[0].name == "hi_IN-pratham-medium"
+    assert spoken.pick("Tuesday").name == "hi_IN-pratham-medium"   # can't tell: theirs
+
+
+def test_a_voice_reads_its_own_language_and_another_reads_the_rest(shelf):
+    hindi = "कूड़ा मंगलवार को जाता है।"
+    english = "The bins go out on Tuesday, and that is all."
+    assert spoken.pick(hindi).name == "hi_IN-pratham-medium"
+    assert spoken.pick(english, "hi_IN-pratham-medium").name == "en_US-lessac-medium"
+    assert spoken.pick(hindi, "hi_IN-pratham-medium").name == "hi_IN-pratham-medium"
+    assert spoken.pick(english, "no-such-voice").name == "en_US-lessac-medium"
+
+
+def test_a_language_with_no_voice_here_is_not_read_in_the_wrong_one(shelf):
+    with pytest.raises(spoken.Unspoken, match="in German and there's no German voice"):
+        spoken.pick("Der Müll wird am Dienstag abgeholt, das ist gut.")
+    a_voice(shelf, "de_DE-thorsten-medium", "de", "German")
+    assert spoken.pick("Der Müll wird am Dienstag abgeholt, das ist gut.").family == "de"
+
+
+def test_their_own_voice_is_chosen_by_number_or_name_and_kept_beside_when(shelf, tmp_path):
+    choices = spoken.Choices(tmp_path)
+    choices.set("mahen", "always")
+    listed = spoken.voice_words(choices, "mahen", None, "/voice")
+    assert "in en_US-lessac-medium (English)" in listed
+    assert "2. hi_IN-pratham-medium (Hindi)" in listed and "/voice use N" in listed
+    said = spoken.voice_words(choices, "mahen", None, "/voice use 2")
+    assert said.startswith("From now on, I read to you in hi_IN-pratham-medium (Hindi)")
+    assert choices.voice("mahen", None) == "hi_IN-pratham-medium"
+    assert choices.choice("mahen", None) == "always"                 # when is kept
+    assert "no voice 'klingon'" in spoken.voice_words(choices, "mahen", None,
+                                                      "/voice use klingon")
+    said = spoken.voice_words(choices, "mahen", None, "/voice use default",
+                              voice="hi_IN-pratham-medium")       # the actors file's
+    assert said.startswith("Back to the usual voice: in hi_IN-pratham-medium")
+    assert choices.own_voice("mahen") is None
+
+
+def test_a_choice_kept_the_first_way_still_reads(tmp_path):
+    (tmp_path / spoken.FILE).write_text('{"mahen": "always"}')
+    choices = spoken.Choices(tmp_path)
+    assert choices.get("mahen") == "always"
+    choices.set_voice("mahen", "hi_IN-pratham-medium")
+    assert choices.get("mahen") == "always" and choices.own_voice("mahen")
+
+
+def test_a_voice_in_the_actors_file_is_a_name(tmp_path):
+    with pytest.raises(ConfigProblem, match="voice must be a voice's name"):
+        ActorBook.from_dict({"actor": {"mahen": {"voice": "../../etc/passwd"}}})
+    book = ActorBook.from_dict({"actor": {"mahen": {"voice": "hi_IN-pratham-medium"}}})
+    assert book.get("mahen").voice == "hi_IN-pratham-medium"
+
+
+def test_settings_list_the_voices_here_and_keep_a_persons(shelf, tmp_path):
+    from dvara import settings
+
+    path = tmp_path / "actors.toml"
+    path.write_text("[actor.priya]\n")
+    got = settings.set_person(path, "priya", {"voice": "hi_IN-pratham-medium"})
+    assert got["voice"] == "hi_IN-pratham-medium"
+    shown = settings.show(root=tmp_path / "agents", actors=path, policy=tmp_path / "p.toml")
+    assert {"name": "hi_IN-pratham-medium", "language": "Hindi"} in shown["voices"]
+
+
+def test_a_hindi_answer_on_telegram_is_read_in_the_hindi_voice(make_bot, make_service,  # noqa: F811
+                                                               voiced):
+    fake = Patient([message("bins?")])
+    bot = make_bot(fake, service=make_service([says("कूड़ा मंगलवार को जाता है।")],
+                                              actors=people("always")))
+    asyncio.run(bot.run())
+    assert len(fake.of("sendVoice")) == 1
+    assert voiced.voices == ["hi_IN-pratham-medium"]
+
+
+# ---- what's sent unasked --------------------------------------------------------
+
+def test_a_notice_is_marked_to_be_read_only_for_someone_who_chose_always(make_service):
+    seen = []
+
+    async def sender(address, text, extra=None):
+        seen.append(extra)
+
+    for choice, wanted in (("always", True), (None, False), ("when-spoken", False)):
+        service = make_service(actors=people(choice))
+        service.notices.route("telegram", sender)
+        asyncio.run(service.notices.send("mahen", [("telegram", str(KNOWN))], "Brief"))
+        assert bool((seen[-1] or {}).get("speak")) is wanted, choice
+    service.voices.set_voice("mahen", "hi_IN-pratham-medium")
+    service.voices.set("mahen", "always")
+    asyncio.run(service.notices.send("mahen", [("telegram", str(KNOWN))], "Brief"))
+    assert seen[-1] == {"speak": True, "voice": "hi_IN-pratham-medium"}
+
+
+def test_a_morning_brief_on_telegram_is_its_words_then_a_voice_note(make_bot, voiced):  # noqa: F811
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot._deliver_notice(str(KNOWN), "Good morning: 2 new mails.",
+                                    extra={"speak": True, "voice": None}))
+    order = [m for m, _ in fake.calls if m in ("sendMessage", "sendVoice")]
+    assert order == ["sendMessage", "sendVoice"]
+    asyncio.run(bot._deliver_notice(str(KNOWN), "No voice for this one."))
+    assert len(fake.of("sendVoice")) == 1
+
+
+def test_a_notice_on_the_page_plays_by_itself_for_always(make_service, voiced):
+    service = make_service(actors=people("always"), web=True)
+    asyncio.run(service.notices.send("mahen", [("web", "mahen")], "Good morning."))
+    line = service.web.look("mahen")["lines"][-1]
+    assert line["who"] == "notice" and line["speak"] is True

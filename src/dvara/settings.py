@@ -36,7 +36,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-from dvara import promoting, tomledit, toolbox
+from dvara import promoting, spoken, tomledit, toolbox
 from dvara.actors import OWN_SETU, ActorBook
 from dvara.errors import ConfigProblem
 from dvara.gate import LADDER
@@ -69,7 +69,7 @@ def person(actor) -> dict:
             "phones": list(actor.phones) or None, "telegram": telegram,
             "hours": str(actor.hours) if actor.hours else None,
             "max_turns_per_day": actor.max_turns_per_day, "approver": actor.approver,
-            "speak": actor.speak,
+            "speak": actor.speak, "voice": actor.voice,
             "other_channels": [f"{c.kind}:{c.id}" for c in actor.channels
                                if c.kind != "telegram"]}
 
@@ -124,6 +124,8 @@ def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None
                        "learned": promoting.learned(state, folder.name)})
     out["agents"] = agents
     out["household"] = household(state) if state is not None else None
+    # the voices this machine can read aloud in, for each person's Voice box
+    out["voices"] = [{"name": v.name, "language": v.language} for v in spoken.voices()]
     out["examples"] = sorted(p.name for p in examples.iterdir()
                              if (p / "agent.toml").is_file()) \
         if examples is not None and examples.is_dir() else []

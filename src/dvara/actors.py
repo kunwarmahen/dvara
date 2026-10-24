@@ -131,7 +131,7 @@ ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage",
                         "phone", "phones", "hours", "max_turns_per_day",
-                        "approver", "speak"})
+                        "approver", "speak", "voice"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -230,6 +230,9 @@ class Actor:
     #: When their answers are read aloud too (spoken.py): off,
     #: when-spoken or always. None is spoken.DEFAULT; their own /voice wins.
     speak: str | None = None
+    #: Whose voice reads to them, by name (``hi_IN-pratham-medium``);
+    #: None for the house's. Their own /voice use wins (spoken.py).
+    voice: str | None = None
 
     @property
     def has_phone(self) -> bool:
@@ -412,6 +415,7 @@ class ActorBook:
                 max_turns_per_day=_count(body, "max_turns_per_day", name, where),
                 approver=_approver(body, name, where),
                 speak=_speak(body, name, where),
+                voice=_voice_name(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -711,6 +715,20 @@ def _speak(body: dict, name: str, where) -> str | None:
         raise ConfigProblem(f"{where}: [actor.{name}] speak must be one of "
                             f"{', '.join(CHOICES)} (got {value!r}); leave it out "
                             f"for {DEFAULT}")
+    return value
+
+
+def _voice_name(body: dict, name: str, where) -> str | None:
+    """A voice by its name. Whether it is installed is the machine's
+    business, not the file's: one missing reads in the house's voice."""
+    from dvara.spoken import NAME
+
+    value = body.get("voice")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not NAME.match(value):
+        raise ConfigProblem(f"{where}: [actor.{name}] voice must be a voice's name, "
+                            f'like "hi_IN-pratham-medium" (got {value!r})')
     return value
 
 
