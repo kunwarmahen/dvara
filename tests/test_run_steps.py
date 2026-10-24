@@ -97,3 +97,36 @@ def test_a_person_asks_for_their_own_last_turn_in_the_chat(make_service):
 
     assert "1. read_file" in reply.text and reply.run_id is None
     assert len(service.scripted.requests) == 2          # no model asked for it
+
+
+# ---- the home page's chat: an answer's own steps, by its line ---------------------
+
+def test_a_page_answer_opens_its_own_steps_and_nobody_elses(make_service):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+    from tests.test_web import AUTH, TOKEN, settled
+
+    service = make_service([calls("read_file", {"path": "a.txt"}), says("done")],
+                           web=True, actors=people())
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        client.post("/web/message", headers=AUTH,
+                    json={"actor": "owner", "agent": "greeter", "text": "read a.txt"})
+        seen = settled(client, "owner")
+        mine, answer = seen["lines"][0], seen["lines"][-1]
+        assert answer["steps"] is True and "steps" not in mine and "run" not in answer
+        got = client.get(f"/web/steps?actor=owner&line={answer['id']}", headers=AUTH)
+        assert got.status_code == 200
+        view = got.json()
+        assert [s["tool"] for s in view["steps"]] == ["read_file"]
+        assert view["said"][0].startswith("1. read_file")
+        made = client.get(f"/web/steps/export?actor=owner&line={answer['id']}",
+                          headers=AUTH)
+        assert made.status_code == 200 and "## 1. read_file" in made.text
+        assert "attachment" in made.headers["content-disposition"]
+        # their own words have no steps, and the line is nobody else's to open
+        assert client.get(f"/web/steps?actor=owner&line={mine['id']}",
+                          headers=AUTH).status_code == 404
+        assert client.get(f"/web/steps?actor=guest&line={answer['id']}",
+                          headers=AUTH).status_code == 404

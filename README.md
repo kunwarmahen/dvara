@@ -571,7 +571,9 @@ else leaves it.
 time (the tool, what it was given, what came back, how long, who said
 yes), and `/steps 2` with the second. The owner's page has **Steps** on
 every run. The owner sees anybody else's run as its shape only, without
-what the tools were given and read
+what the tools were given and read. On a page's chat (Sarathi's home
+page), every answer has **Steps** folded under it: that person's own
+run, whole, and its file for a bug report
 ([notes/60](notes/60-a-run-step-by-step.md)).
 
 **What's wrong with mine.** `/doctor` answers in red, amber and green
@@ -991,6 +993,8 @@ POST /web/asks/{id}  {actor, approve}            -> {answered, approved}
 POST /web/holds/{id} {actor, answers}            -> {started}
 GET  /web/file?actor=&line=&n=                   -> a file a line carried
 GET  /web/spoken?actor=&line=                    -> that answer read aloud (WAV), made once
+GET  /web/steps?actor=&line=                     -> yantra.steps.v1 of that answer's own run, + said
+GET  /web/steps/export?actor=&line=              -> the same, as a file for a bug report (Markdown)
 GET  /web/push?actor=                            -> {topic}  (their ntfy topic, or null)
 POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts page)
 ```
@@ -1455,7 +1459,7 @@ reads that person's key from `<state>/memory.json`
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
-| `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat ([notes/60](notes/60-a-run-step-by-step.md)) |
+| `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat; an answer's own on a page's chat, by its line (`web.py`) ([notes/60](notes/60-a-run-step-by-step.md)) |
 | `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |

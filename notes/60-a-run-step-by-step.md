@@ -52,7 +52,17 @@ the guest's run as a file: 403 "only your own runs make one"
 
 ## What was deliberately not built
 
-* **The guest's own Steps on their page.** Sarathi's home chat shows a
-  person their answers; a steps link there is the next place for it.
+* ~~**The guest's own Steps on their page.**~~ Built: every answer in
+  Sarathi's home chat has **Steps** folded under it, the person's own run
+  whole, with its file for a bug report. The web channel keeps each
+  answer's run id on its line and serves it only to that line's person
+  (`GET /web/steps?actor=&line=`, `/web/steps/export`); the id never
+  reaches the page.
+
+  Live, a scratch Dvara on `qwen3.8:latest` and a scratch home page: the
+  answer *"Couldn't fetch it: this session is running unattended …"*
+  opened to `1 step · 19s · end_turn`, `1. web_fetch 18:37:08 · refused
+  (unattended)`, and its file began *"This file holds what the agent's
+  tools were given and what they read"*.
 * **A step's pictures on Telegram.** `/steps` is words, and a picture
   per step would be a burst of photos in a chat.

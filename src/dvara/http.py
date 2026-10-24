@@ -658,6 +658,42 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=404, detail="no such file any more")
         return FileResponse(path, filename=path.name)
 
+    @app.get("/web/steps")
+    async def web_steps(actor: str = "", line: int = 0,
+                        authorization: str | None = Header(default=None)) -> dict:
+        """What an answer's turn did, step by step (yantra.steps.v1), with
+        each step said in a line (``said``) as the terminal's /steps says it."""
+        check(authorization)
+        from yantra import steps
+
+        from dvara.runsteps import NoSteps
+        try:
+            view = web_for(actor).steps(actor, line)
+        except NoSteps as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        if view is None:
+            raise HTTPException(status_code=404, detail="that answer has no steps")
+        return {**view, "said": [steps.step_line(s) for s in view["steps"]]}
+
+    @app.get("/web/steps/export")
+    async def web_steps_export(actor: str = "", line: int = 0,
+                               authorization: str | None = Header(default=None)) -> Any:
+        """The same turn as a file for a bug report (Markdown), which says
+        at its top that it holds what the tools read."""
+        check(authorization)
+        from yantra import steps
+
+        from dvara.runsteps import NoSteps
+        try:
+            view = web_for(actor).steps(actor, line)
+        except NoSteps as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        if view is None:
+            raise HTTPException(status_code=404, detail="that answer has no steps")
+        return Response(steps.markdown(view), media_type="text/markdown; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="steps-{view.get("run")}.md"'})
+
     @app.get("/web/spoken")
     async def web_spoken(actor: str = "", line: int = 0,
                          authorization: str | None = Header(default=None)) -> Any:

@@ -34,6 +34,11 @@ a turn that is lost anyway.
 KEPT ON DISK, AND CAPPED. One SQLite file next to ``runs.sqlite3``. The
 newest ``KEEP_PER_PERSON`` lines a person has are kept; older ones go.
 
+AN ANSWER'S STEPS, BY ITS LINE. Each answer's line keeps its run's id,
+and the page asks for what that turn did by the line, as it asks for a
+file: the run id stays here, and a line opens only for its own person
+(``steps``). Pictures are said as a count; the bytes stay in the run.
+
 ON WHEN ASKED FOR. ``dvara serve --web`` turns it on, and then every
 person on the roster has it, with no line in ``actors.toml``: the page
 in front of it says who they are (a trusted caller naming an actor, as
@@ -109,6 +114,10 @@ class Line:
                      "transcript", "heard", "speak"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
+        # its turn can be read step by step (``steps``); asked for by line,
+        # like a file, so the run's id stays here
+        if self.extra.get("run"):
+            out["steps"] = True
         return out
 
 
@@ -294,6 +303,8 @@ class WebChannel:
 
     def answered(self, actor: str, agent: str, reply: Reply) -> Line:
         return self.book.add(actor, "agent", reply.text, agent=agent, extra={
+            # the run, for its steps (``steps``); a word's answer has none
+            "run": reply.run_id,
             "receipt": reply.receipt,
             "files": [str(f) for f in reply.files],
             "held": reply.held.id if reply.held else None,
@@ -305,6 +316,25 @@ class WebChannel:
             # sign-in words it told them to send, as buttons (accounts.taps)
             "taps": None if reply.held else [{"word": w, "label": tap_label(w)}
                                              for w in taps(reply.text)]})
+
+    def steps(self, actor: str, line_id: int) -> dict | None:
+        """What an answer's own turn did, step by step (runsteps.py), by
+        its line: the person's own run, whole, as on the owner's page for
+        the owner's own. Pictures are said as a count -- the page shows
+        them nowhere, and their bytes would be most of the answer. None
+        when the line has no run, or the run isn't theirs."""
+        from dvara import runsteps
+
+        line = self.book.get(actor, line_id)
+        run_id = (line.extra.get("run") or "") if line else ""
+        run = self.service.runs.get(run_id) if run_id else None
+        if run is None or run.actor != actor:
+            return None
+        view = runsteps.timeline(self.service.sessions, run)
+        for step in view.get("steps") or []:
+            step["pictures"] = [{"media_type": p.get("media_type")}
+                                for p in step.get("pictures") or []]
+        return view
 
     def file(self, actor: str, line_id: int, n: int) -> Path | None:
         """A file a line carried, by line and number -- the path never
