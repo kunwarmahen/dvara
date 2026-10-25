@@ -12,6 +12,7 @@ thirty-first, was still gone.
     /chats 2                go back into that one
     /chats delete 2         ask to delete it for good
     /chats export 2         that one as a file, to share
+    /chats export 2 pdf     that one as a PDF (printed.py)
     /chats delete 2 sure    delete it for good
 
 EVERY CONVERSATION, AS IT GOES. Each turn writes its conversation to the
@@ -41,8 +42,11 @@ SHARED AS A FILE. ``/chats export N`` writes that conversation as a
 Markdown file (Yantra's ``export_markdown``: words, answers, the tools'
 names, never their output) into the person's folder with that agent,
 under ``shared/``, and it goes out with the answer: a document on
-Telegram, a file on the page. A page that wants it without a chat line
-asks ``GET /web/chats/ID/export``.
+Telegram, a file on the page. ``/chats export N pdf`` makes it a PDF
+instead, printed here by the browser already on this machine
+(printed.py), for a phone that opens a PDF and not a Markdown file. A
+page that wants it without a chat line asks ``GET /web/chats/ID/export``
+(``?as=pdf`` for the PDF).
 
 DELETED MEANS GONE, ASKED ONCE. A chat has no dialog, so ``/chats delete
 N`` says which conversation that is and what to send to delete it; only
@@ -173,14 +177,25 @@ def tested(case_id: str, title: str, used: list[str], words: list[str]) -> str:
             f"(nothing real runs), and I must {', and '.join(checks)}.")
 
 
+#: What ``/chats export N`` may be asked for as, after the number.
+EXPORT_AS = {"pdf": "pdf", "md": "md", "markdown": "md"}
+
+
 def export_pick(text: str) -> int | None:
-    """The N of ``/chats export N``, or None when that isn't what was said."""
+    """The N of ``/chats export N [pdf]``, or None when that isn't what was said."""
     if not is_word(text):
         return None
     parts = picked(text).split()
-    if len(parts) == 2 and parts[0].lower() == "export" and parts[1].isdigit():
+    if (len(parts) in (2, 3) and parts[0].lower() == "export" and parts[1].isdigit()
+            and (len(parts) == 2 or parts[2].lower() in EXPORT_AS)):
         return int(parts[1])
     return None
+
+
+def export_as(text: str) -> str:
+    """``pdf`` for ``/chats export N pdf`` (printed.py), else ``md``."""
+    parts = picked(text).split()
+    return EXPORT_AS.get(parts[2].lower(), "md") if len(parts) == 3 else "md"
 
 
 def export_to(folder: Path, kept: dict, agent: str) -> Path:

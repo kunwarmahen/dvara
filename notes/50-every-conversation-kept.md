@@ -141,4 +141,6 @@ phone width.
   run stays whole. Telegram keeps its own copy on the phone.
 * ~~**A conversation as a test.**~~ Built: `/keep test` and `/chats
   test N` ([note 57](57-a-test-of-your-own.md)).
+* ~~**A PDF where there is no print window.**~~ `/chats export N pdf`,
+  printed by the machine's own Chrome ([note 69](69-a-picture-and-a-pdf.md)).
 * **Naming a conversation.** Its title is its first words.

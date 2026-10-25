@@ -188,6 +188,9 @@ offers the two words only where the package remembers.
 * **Kept as it was said.** `/remember` keeps the sentence as the model
   worded it. A person who wants it said differently tells the agent
   ("remember I moved here in August"), which asks before it writes.
+* ~~**Seeing, or undoing, what they turned down.**~~ `/remember
+  declined` and `/remember undo N`, and **Turned down** on Sarathi's home
+  page ([note 68](68-what-you-turned-down.md)).
 * ~~**A look back without `/new`.**~~ A conversation nobody has written
   in for 30 minutes is looked back over too, and the person sent what it
   noticed ([note 39](39-while-nobody-is-writing.md)).

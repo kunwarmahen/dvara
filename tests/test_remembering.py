@@ -8,7 +8,9 @@ login it runs as would hand them to the next person who asks. So the
 tests look back, check nothing is in the store until ``/remember``, and
 check that each person's ``/memory`` shows their own facts and nobody
 else's. A fact they turned down that comes back at every ``/new`` is
-the same failure from the other side: their word ignored. The other
+the same failure from the other side: their word ignored -- and so is a
+"never again" sent by mistake that nothing but the owner can undo, or an
+undo that keeps what it should only offer again. The other
 bias is a look back that costs the start-over: a model that fails
 mid-look-back must still leave the conversation forgotten.
 """
@@ -253,7 +255,7 @@ def test_what_they_turn_down_is_never_offered_again(make_service, remembers):
     say(service, "I live in Pune", actor="guest")
     start_over(service, actor="guest")
     reply = say(service, "/remember not 1", actor="guest")
-    assert reply.text == "I won't offer these again:\n- Lives in Pune (Asia/Kolkata time)"
+    assert reply.text.startswith("I won't offer these again:\n- Lives in Pune (Asia/Kolkata time)")
     assert kept("guest") == []
     # the next look back reads them the same way; only the cat comes back
     say(service, "still in Pune", actor="guest")
@@ -292,3 +294,75 @@ def test_a_declined_fact_said_another_way_stays_declined(tmp_path):
     offered.add("guest", "greeter", [Offer("Is learning Marathi")])
     offered.take("guest", [1])
     assert offered.declined("guest") == ["Lives in Pune"]
+
+
+# ---- what they turned down, seen and taken back --------------------------------
+# The other side of "never again": a slip of the number was for good, and
+# only the owner opening the file could undo it. Undoing must not keep.
+
+
+def test_declined_lists_newest_first_and_undo_puts_it_back_unkept(make_service, remembers):
+    service = make_service([says("ok"), says(LOOKED)])
+    say(service, "I live in Pune", actor="guest")
+    start_over(service, actor="guest")
+    say(service, "/remember not 1", actor="guest")          # Pune
+    say(service, "/remember not 1", actor="guest")          # then the cat
+    listed = say(service, "/remember declined", actor="guest").text
+    assert listed.index("1. Has a cat called Biscuit") < listed.index("2. Lives in Pune")
+    undone = say(service, "/remember undo 2", actor="guest").text
+    assert undone.startswith("Back on your list (not kept yet):\n- Lives in Pune")
+    assert kept("guest") == []                              # undone is not kept
+    assert "1. Lives in Pune" in say(service, "/remember", actor="guest").text
+    assert "Pune" not in say(service, "/remember declined", actor="guest").text
+    say(service, "/remember 1", actor="guest")
+    assert kept("guest") == ["Lives in Pune (Asia/Kolkata time)"]
+    assert len(service.scripted.requests) == 2              # no model for any of it
+
+
+def test_undo_of_a_number_not_listed_is_said(make_service, remembers):
+    service = make_service([])
+    assert say(service, "/remember declined").text.startswith("You haven't turned anything")
+    assert "nothing to undo" in say(service, "/remember undo 1").text
+    offered = service.offered
+    offered.add("owner", "greeter", [remembering.Offer("Has a cat")])
+    offered.take("owner", [1], decline=True)
+    assert "there's no 3" in say(service, "/remember undo 3").text
+    assert "Which ones?" in say(service, "/remember undo").text
+
+
+def test_undecline_by_words_ignores_what_was_never_declined(tmp_path):
+    offered = remembering.Offered(tmp_path)
+    offered.add("guest", "greeter", [remembering.Offer("Lives in Pune"),
+                                     remembering.Offer("Has a cat")])
+    offered.take("guest", [1, 2], decline=True)
+    assert offered.undecline("guest", ["Has a cat", "Owns a boat"]) == ["Has a cat"]
+    assert offered.declined("guest") == ["Lives in Pune"]
+    assert [o.statement for o in offered.get("guest")] == ["Has a cat"]
+    assert offered.undecline("other", ["Has a cat"]) == []
+
+
+def test_the_page_sees_and_undoes_only_their_own(make_service, remembers):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service([], web=True)
+    service.offered.add("guest", "greeter", [remembering.Offer("Lives in Pune")])
+    service.offered.take("guest", [1], decline=True)
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    with TestClient(create_app(service, token=token)) as client:
+        mine = client.get("/web/declined", headers=auth, params={"actor": "guest"}).json()
+        assert mine == {"declined": ["Lives in Pune"], "waiting": 0}
+        theirs = client.get("/web/declined", headers=auth, params={"actor": "owner"}).json()
+        assert theirs["declined"] == []
+        # the owner can't undo the guest's by naming the words
+        client.post("/web/declined", headers=auth,
+                    json={"actor": "owner", "undo": ["Lives in Pune"]})
+        assert service.offered.declined("guest") == ["Lives in Pune"]
+        back = client.post("/web/declined", headers=auth,
+                           json={"actor": "guest", "undo": ["Lives in Pune"]}).json()
+        assert back == {"back": ["Lives in Pune"], "declined": [], "waiting": 1}
+        assert client.post("/web/declined", headers=auth,
+                           json={"actor": "guest", "undo": "Lives"}).status_code == 400
+    assert kept("guest") == []

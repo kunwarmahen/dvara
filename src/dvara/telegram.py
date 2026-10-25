@@ -192,6 +192,10 @@ SEND_GAP = 1.05
 #: The largest file the Bot API lets a bot send, and the longest caption.
 FILE_LIMIT = 50 * 1024 * 1024
 CAPTION_LIMIT = 1024
+#: A picture goes as a photo, which shows in the chat, up to Telegram's
+#: limit for one; a bigger one, or another kind, goes as a document.
+PHOTO_LIMIT = 10 * 1024 * 1024
+PHOTO_KINDS = (".jpg", ".jpeg", ".png", ".webp")
 
 #: A typing indicator lasts five seconds at Telegram's end, so it has to
 #: be renewed. The only feedback a turn-shaped medium has while a model
@@ -671,7 +675,8 @@ class TelegramBot:
             await self._send(chat, text)
         else:
             self.outbox.answered(row, [text])
-            await self._send_file(chat, path, caption=elide(text, CAPTION_LIMIT))
+            await self._send_file(chat, path, caption=elide(text, CAPTION_LIMIT),
+                                  photo=False)
         self.outbox.sent(row, 1)
         self.outbox.settled(row)
 
@@ -782,7 +787,8 @@ class TelegramBot:
         lines.append("Send /new to start our conversation over. Every conversation "
                      "is kept: /chats lists them, /chats and a word finds one, "
                      "/chats N goes back into it, /chats export N sends it "
-                     "to you as a file to share. /keep test keeps the one "
+                     "to you as a file to share (/chats export N pdf as a PDF). "
+                     "/keep test keeps the one "
                      "we're in as a test, with the words my answer must say "
                      "after it: /keep test May 20, refund. /tests shows them "
                      "and how each did; /tests delete N takes one back.")
@@ -1118,14 +1124,32 @@ class TelegramBot:
             finally:
                 self._pacer.sent(chat)
 
-    async def _send_file(self, chat: int, path, *, caption: str):
-        """One file into one chat, as a document, paced like a message."""
+    async def _send_file(self, chat: int, path, *, caption: str,
+                         photo: bool = True):
+        """One file into one chat, paced like a message.
+
+        A PICTURE IS A PHOTO. Sent as a document, a picture was a grey
+        file icon with a name, to be tapped and opened in another app;
+        as a photo it is the picture, in the chat. Telegram makes a photo
+        smaller on its way, so ``/file NAME`` -- asking for the file
+        itself -- still sends the document (``photo=False``), the
+        original to the byte. One Telegram won't take as a photo -- too
+        big, too long and thin, a format it reads differently -- goes as
+        the document it always was, rather than not at all.
+        """
+        data = path.read_bytes()
         async with self._pacer.lock(chat):
             await self._pacer.wait(chat)
             try:
+                if photo and path.suffix.lower() in PHOTO_KINDS and len(data) <= PHOTO_LIMIT:
+                    try:
+                        return await self._api("sendPhoto", upload=(
+                            "photo", (path.name, data)), chat_id=chat, caption=caption)
+                    except TelegramError as exc:
+                        self._note(f"telegram: {path.name} went as a file, not a "
+                                   f"photo -- {exc}")
                 return await self._api("sendDocument", upload=(
-                    "document", (path.name, path.read_bytes())),
-                    chat_id=chat, caption=caption)
+                    "document", (path.name, data)), chat_id=chat, caption=caption)
             finally:
                 self._pacer.sent(chat)
 
@@ -1252,7 +1276,7 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
                   ("file", "Send one of them: /file NAME")]
     if _remembers(spec):
         words += [("memory", "What I remember about you"),
-                  ("remember", "Keep what I noticed: /remember 1 2")]
+                  ("remember", "Keep what I noticed: /remember 1 2; /remember declined")]
     if spec.connections:
         words += [("accounts", "Your connected accounts"),
                   ("connect", "Connect one: /connect NAME"),

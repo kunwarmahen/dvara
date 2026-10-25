@@ -14,6 +14,8 @@ without the owner opening the store.
     /remember all        keep all of it
     /remember not 2      not that one, and never offered again
     /remember none       none of it, never offered again
+    /remember declined   what they turned down, newest first
+    /remember undo 1     that one may be offered again: back on the list
 
 THE LOOK BACK IS YANTRA'S, AND SO IS WHAT IT NOTICES MID-TURN. Yantra's
 own look back (its memory/reflect.py) asks the agent's model once what
@@ -59,6 +61,17 @@ a candidate that is ``same`` as one declined is never offered again.
 Declining opens no store and asks no model. A fact reworded past
 ``same`` can still come back once; declining it again covers that
 wording too.
+
+AND WHAT THEY TURNED DOWN, THEY CAN TAKE BACK. "Never again" typed with
+the wrong number was never again for good, and the only way back was the
+owner opening the file. ``/remember declined`` lists what they turned
+down, newest first (a slip is usually the last one), and ``/remember
+undo 1`` takes that one off it. UNDONE IS NOT KEPT: it goes back on the
+waiting list, where ``/remember N`` keeps it and nothing else does --
+the word that keeps a fact stays the one word that keeps a fact. The
+home page shows the same list with an Undo beside each (Dvara's
+``GET``/``POST /web/declined``); like declining, no store is opened and
+no model asked.
 """
 
 from __future__ import annotations
@@ -82,6 +95,10 @@ DECLINED = 200
 NOT = ("not", "no", "skip", "ignore", "drop", "never", "forget")
 #: The words that turn down everything waiting.
 NONE = ("none", "neither", "nothing")
+#: ``/remember declined``: what they turned down.
+DECLINED_WORDS = ("declined", "turned", "refused")
+#: ``/remember undo N``: one they turned down, offered again.
+UNDO = ("undo", "unblock", "restore")
 
 NOTHING_HERE = "{agent} doesn't keep memories about the people it talks to."
 NO_STORE = ("Your memories aren't open for you here yet. The owner can give "
@@ -197,6 +214,24 @@ class Offered:
         return taken
 
 
+    def undecline(self, actor: str, statements: list[str]) -> list[str]:
+        """Those of ``statements`` this person turned down, taken off that
+        list and put back on the waiting one (not kept: ``/remember N``
+        keeps). What came back, in the order asked."""
+        data = self._read()
+        declined = self.declined(actor)
+        back = [d for d in dict.fromkeys(statements) if d in declined]
+        if not back:
+            return []
+        waiting = self.get(actor)
+        for d in back:
+            if not any(same(d, w.statement) for w in waiting):
+                waiting.append(Offer(d))
+        self._put(data, actor, waiting[-WAITING:], [d for d in declined if d not in back])
+        self._write(data)
+        return back
+
+
 _NUMBER = re.compile(r"\d+")
 
 
@@ -235,6 +270,58 @@ def declining(rest: str) -> tuple[bool, str]:
     return False, rest
 
 
+def about_declined(rest: str) -> tuple[str, str] | None:
+    """``/remember declined`` -> ``("list", "")``; ``/remember undo 2`` ->
+    ``("undo", "2")``; anything else None."""
+    words = rest.split(maxsplit=1)
+    first = words[0].lower() if words else ""
+    if first in DECLINED_WORDS:
+        return "list", ""
+    if first in UNDO:
+        return "undo", words[1] if len(words) > 1 else ""
+    return None
+
+
+def undo_chosen(rest: str, count: int) -> list[int] | str:
+    """The numbers of ``/remember undo …`` against the declined list."""
+    if not count:
+        return "You haven't turned anything down, so there's nothing to undo."
+    if rest.lower() in ("all", "everything", "*"):
+        return list(range(1, count + 1))
+    numbers = sorted({int(n) for n in _NUMBER.findall(rest)})
+    if not numbers:
+        return ("Which ones? Send /remember declined to see what you turned down, "
+                "then /remember undo with their numbers.")
+    wrong = [n for n in numbers if not 1 <= n <= count]
+    if wrong:
+        return (f"You turned down {count} thing{'s' if count != 1 else ''}; there's no "
+                f"{', '.join(map(str, wrong))}. Send /remember declined to see them.")
+    return numbers
+
+
+def declined_listing(declined: list[str]) -> str:
+    """``/remember declined``: newest first, numbered for ``/remember undo``."""
+    if not declined:
+        return ("You haven't turned anything down. When I list what I noticed about "
+                "you, /remember not 2 turns one down for good, and it shows here.")
+    shown = declined[:LISTED]
+    lines = [f"You turned these down, so I don't offer them again ({len(declined)}, "
+             "newest first):"]
+    lines += [f"{n}. {d}" for n, d in enumerate(shown, 1)]
+    if len(declined) > LISTED:
+        lines.append(f"…and {len(declined) - LISTED} more.")
+    lines.append("Send /remember undo 1 to take one back: it goes back on your list, "
+                 "and /remember keeps it from there.")
+    return "\n".join(lines)
+
+
+def undone_words(statements: list[str], waiting: int) -> str:
+    """What ``/remember undo`` put back, and how to keep it."""
+    return ("Back on your list (not kept yet):\n"
+            + "\n".join(f"- {s}" for s in statements)
+            + f"\nSend /remember to see the {waiting} waiting, and /remember N to keep one.")
+
+
 def chosen(rest: str, count: int) -> list[int] | str:
     """The numbers asked for, or the words saying why not."""
     if not count:
@@ -257,7 +344,8 @@ def listing(offers: list[Offer], *, head: str) -> str:
     lines += [f"{n}. {o.statement}" for n, o in enumerate(offers, 1)]
     lines.append("Send /remember with the numbers to keep them (/remember 1 2), or "
                  "/remember all. Nothing is kept unless you do. /remember not 1 2 "
-                 "(or /remember none) and I won't offer those again.")
+                 "(or /remember none) and I won't offer those again; /remember "
+                 "declined shows what you turned down.")
     return "\n".join(lines)
 
 
@@ -280,7 +368,8 @@ def noticed(new: int) -> str:
 
 
 def declined_words(statements: list[str]) -> str:
-    return "I won't offer these again:\n" + "\n".join(f"- {s}" for s in statements)
+    return ("I won't offer these again:\n" + "\n".join(f"- {s}" for s in statements)
+            + "\n(A slip? /remember declined, then /remember undo 1.)")
 
 
 def kept_words(statements: list[str]) -> str:

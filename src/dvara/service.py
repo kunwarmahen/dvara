@@ -119,7 +119,8 @@ from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
 from dvara import (attached, carrying, checkup, files, fresh, heard, household, learning, limits,
-                   money, past, patience, phoneview, ready, remembering, seen, signins, spoken)
+                   money, past, patience, phoneview, printed, ready, remembering, seen,
+                   signins, spoken)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -917,7 +918,8 @@ class Service:
                          stop_reason="new")
         if not unattended and past.export_pick(text) is not None:
             # One of theirs, as a file to share: it goes with the answer.
-            said, made = self._past_export(key, who, agent, past.export_pick(text))
+            said, made = await self._past_export(key, who, agent, past.export_pick(text),
+                                                 kind=past.export_as(text))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="files", files=(made,) if made else ())
         if not unattended and past.is_word(text):
@@ -2074,22 +2076,37 @@ class Service:
             return "Send /tests to see your kept tests, /tests delete N to take one back."
         return past.tests_listing(agent, kept)
 
-    def _past_export(self, key: str, who: Actor, agent: str,
-                     n: int) -> tuple[str, Path | None]:
-        """``/chats export N``: the conversation as a Markdown file in their
-        folder with this agent (``shared/``), sent with the answer. Words,
-        answers and the tools' names -- never a tool's output (Yantra's
-        history.export_markdown)."""
+    async def _past_export(self, key: str, who: Actor, agent: str, n: int, *,
+                           kind: str = "md") -> tuple[str, Path | None]:
+        """``/chats export N [pdf]``: the conversation as a Markdown file in
+        their folder with this agent (``shared/``), sent with the answer;
+        ``pdf``, printed by this machine's browser (printed.py), or the
+        Markdown file and why not. Words, answers and the tools' names --
+        never a tool's output (Yantra's history.export_markdown)."""
         rows = self.past.listed(who.id, agent)
         if not 1 <= n <= len(rows):
             return f"There's no conversation {n}. Send /chats to see them.", None
         kept = self.past.read(who.id, rows[n - 1].id)
         if kept is None:
             return "That conversation just went. Send /chats to see what's kept.", None
-        made = past.export_to(self._workspace(key) / past.SHARED, kept, agent)
+        folder = self._workspace(key) / past.SHARED
+        why_not = ""
+        if kind == "pdf":
+            try:
+                made = await printed.pdf_to(folder, kept, agent=agent, zone=who.zone)
+            except (printed.Unprinted, OSError) as exc:
+                self._note(f"dvara: {who.id}: no PDF -- {exc}")
+                why_not = (" I couldn't make a PDF where I run (it needs a browser "
+                           "here), so this is the Markdown file.")
+            else:
+                return (f"Here is “{kept['title']}” as a PDF, to share: your words, my "
+                        f"answers and the names of the tools I used (never what they "
+                        f"returned). It's kept in your files too, as "
+                        f"{past.SHARED}/{made.name}."), made
+        made = past.export_to(folder, kept, agent)
         return (f"Here is “{kept['title']}”, to share: your words, my answers and the "
                 f"names of the tools I used (never what they returned). It's kept in "
-                f"your files too, as {past.SHARED}/{made.name}."), made
+                f"your files too, as {past.SHARED}/{made.name}.{why_not}"), made
 
     def _past_delete(self, who: Actor, agent: str, n: int, sure: bool,
                      open_id: str | None) -> str:
@@ -2268,6 +2285,8 @@ class Service:
         if word == "/remember":
             if not rest and offers:
                 return remembering.listing(offers, head="I noticed this about you:")
+            if (about := remembering.about_declined(rest)) is not None:
+                return self._declined_words(who, *about)
             decline, rest = remembering.declining(rest)
             pick = remembering.chosen(rest, len(offers))
             if isinstance(pick, str):
@@ -2308,6 +2327,18 @@ class Service:
             except Exception as exc:  # noqa: BLE001 -- a store down is a sentence
                 self._note(f"dvara: {who.id}: {word} failed -- {type(exc).__name__}: {exc}")
                 return "I couldn't reach where your memories are kept just now. Try again soon."
+
+    def _declined_words(self, who: Actor, verb: str, rest: str) -> str:
+        """``/remember declined`` and ``/remember undo N``: only the list
+        changes, as when they declined (remembering.py)."""
+        declined = self.offered.declined(who.id)[::-1]      # newest first
+        if verb == "list":
+            return remembering.declined_listing(declined)
+        pick = remembering.undo_chosen(rest, len(declined))
+        if isinstance(pick, str):
+            return pick
+        back = self.offered.undecline(who.id, [declined[n - 1] for n in pick])
+        return remembering.undone_words(back, len(self.offered.get(who.id)))
 
     # ---- chores: what happens with nobody writing ----------------------------
 

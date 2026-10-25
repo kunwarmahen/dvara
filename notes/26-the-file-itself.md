@@ -94,6 +94,9 @@ path on the reply (`Reply.files`). How a file looks is the channel's
 call:
 
 * **Telegram** sends it as a document, with its name as the caption.
+  (A picture the agent or a notice sends goes as a photo instead, which
+  shows in the chat; `/file NAME` still sends the document, the
+  original: [note 69](69-a-picture-and-a-pdf.md).)
   Bots can send up to 50 MB; a bigger file gets a sentence saying so
   instead of a failed upload. An empty file gets *"is empty, so there is
   nothing to send"*, because Telegram refuses empty uploads and a

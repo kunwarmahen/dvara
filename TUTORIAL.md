@@ -523,7 +523,9 @@ instead means "never mind", and the waiting calls are set aside.
   file a schedule wrote is one their chat can read
   ([note 25](notes/25-the-persons-folder.md)). They can have a file
   from it sent to them: `/files` lists it, `/file NAME` sends one, on
-  Telegram as a document, and no agent is involved. The other way, a
+  Telegram as a document (the original), and no agent is involved. A
+  picture the agent or a schedule sends arrives as a photo you see in
+  the chat ([note 69](notes/69-a-picture-and-a-pdf.md)). The other way, a
   photo or file they send lands in the folder under `from-you/` and the
   agent is told ([note 44](notes/44-what-they-send.md)). An agent that lists
   `send_file` can send one too, asked like any write
@@ -1357,7 +1359,11 @@ The last answer lists only the boiler conversation, with *boiler*
 marked, and its number in the whole list (2). `/chats 2` goes back into
 it. `/chats export 2` sends it to you as a file to share: your words, the
 agent's answers and the names of the tools it used, never what a tool
-returned (on Telegram it arrives as a document). `/chats delete 2` asks
+returned (on Telegram it arrives as a document). On a phone, `/chats
+export 2 pdf` is easier to open: the same conversation as a PDF, made by
+the Chrome already on the computer, Hindi and emoji included. With no
+browser where Dvara runs, you get the Markdown file and a sentence
+saying so ([note 69](notes/69-a-picture-and-a-pdf.md)). `/chats delete 2` asks
 first; `/chats delete 2 sure` deletes it for
 good. The conversation open now can't be deleted until you `/new`.
 Telegram's command menu lists `/chats` as *Our conversations: find,
@@ -1441,7 +1447,7 @@ Starting fresh. What we said before is kept: /chats lists it, if you want to go 
 greeter: Looking back over the conversation we just ended, I noticed this about you:
 1. Lives in Pune, India (relocated there in the recent past).
 2. Works night shifts as a nurse, which shapes their daily schedule (…).
-Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again; /remember declined shows what you turned down.
 ```
 
 On Telegram, or the home page's chat, the list comes as a message of
@@ -1473,10 +1479,33 @@ dvara say --actor guest --agent greeter "/remember not 1"
 ```
 I won't offer these again:
 - Works night shifts as a nurse, which shapes their daily schedule (…).
+(A slip? /remember declined, then /remember undo 1.)
 ```
 
 (It's number 1 now: keeping the first moved it up. `/remember none`
 turns down everything waiting.)
+
+Turned down the wrong one? Numbers move as you keep things, so it
+happens. See what you turned down, newest first, and take one back:
+
+```bash
+dvara say --actor guest --agent greeter "/remember declined"
+dvara say --actor guest --agent greeter "/remember undo 1"
+```
+
+```
+You turned these down, so I don't offer them again (1, newest first):
+1. Works night shifts as a nurse, which shapes their daily schedule (…).
+Send /remember undo 1 to take one back: it goes back on your list, and /remember keeps it from there.
+
+Back on your list (not kept yet):
+- Works night shifts as a nurse, which shapes their daily schedule (…).
+Send /remember to see the 1 waiting, and /remember N to keep one.
+```
+
+Undo doesn't keep it: it's back on the list, and `/remember 1` keeps it.
+On Sarathi's home page the **Turned down** button shows the same list,
+with an **Undo** beside each ([note 68](notes/68-what-you-turned-down.md)).
 
 `/memory forget 1` takes it back. Mid-conversation, what the agent
 notices joins the same list, and the answer gets one line saying so.
@@ -1504,7 +1533,7 @@ on Telegram, on the page, and on the phone if §22 is set up:
 greeter: Looking back over our conversation, I noticed this about you:
 1. Lives in Raleigh (near RDU airport).
 2. Works night shifts at a hospital.
-Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again.
+Send /remember with the numbers to keep them (/remember 1 2), or /remember all. Nothing is kept unless you do. /remember not 1 2 (or /remember none) and I won't offer those again; /remember declined shows what you turned down.
 ```
 
 The conversation is still there: carry on as before. It happens once

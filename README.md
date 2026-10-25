@@ -455,7 +455,11 @@ asks in a chat, and in a schedule it runs only if the card allowed it
 ([notes/26](notes/26-the-file-itself.md)). A picture of a signed-in site
 ("send me a screenshot of my chart") is one such file: the site's
 `screenshot` saves it under `screenshots/` in their folder, and
-`send_file` sends it (Yantra's notes/137).
+`send_file` sends it (Yantra's notes/137). On Telegram a picture an
+agent or a notice sends arrives as a photo you see in the chat, not a
+file to open; `/file NAME` still sends the original as a document, and a
+picture Telegram won't take as a photo goes as a document too
+([notes/69](notes/69-a-picture-and-a-pdf.md)).
 
 And the other way: a photo or a file sent to the bot (or with the
 paperclip on the page) is kept in their folder with that agent under
@@ -484,6 +488,7 @@ And anyone can start their conversation with an agent over:
 /chats 2                       go back into one (the one you're in is kept)
 /chats export 2                that one as a file to share (words, answers,
                                tool names -- never what a tool returned)
+/chats export 2 pdf            the same as a PDF, made here (opens on any phone)
 /chats delete 2                delete one for good (asks you to add "sure")
 /chats test 2 May 20, refund   keep one as a test: replayed with the tools
                                answering from what they said then (nothing
@@ -508,7 +513,11 @@ it, on whichever channel you ask from
 ([notes/45](notes/45-going-back.md),
 [notes/50](notes/50-every-conversation-kept.md)). A page gets the same
 through `GET /web/chats`, `GET /web/chats/ID`, `GET
-/web/chats/ID/export` (Markdown) and `DELETE /web/chats/ID`; Sarathi's home page has a History button on them.
+/web/chats/ID/export` (Markdown; `?as=pdf` for the PDF) and `DELETE /web/chats/ID`; Sarathi's home page has a History button on them.
+The PDF is printed by the browser already on this machine (headless
+Chrome, the one the browser tools use), so Hindi and emoji come out
+right with nothing new installed; with no browser you get the Markdown
+file and a sentence saying why ([notes/69](notes/69-a-picture-and-a-pdf.md)).
 
 With an agent that remembers people (below), anyone can see and choose
 what it keeps about them:
@@ -519,6 +528,8 @@ what it keeps about them:
 /remember                      what the agent noticed, numbered, not kept yet
 /remember 1 3                  keep those (or /remember all)
 /remember not 2                not that one, never offered again (or /remember none)
+/remember declined             what you turned down, newest first
+/remember undo 1               that one may be offered again (back on the list, not kept)
 ```
 
 Anyone can also tell every agent in the house something, with any agent:
@@ -997,6 +1008,9 @@ GET  /web/steps?actor=&line=                     -> yantra.steps.v1 of that answ
 GET  /web/steps/export?actor=&line=              -> the same, as a file for a bug report (Markdown)
 GET  /web/push?actor=                            -> {topic}  (their ntfy topic, or null)
 POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts page)
+GET  /web/declined?actor=                        -> {declined: [newest first], waiting}
+POST /web/declined {actor, undo: [fact, ...]}    -> {back, declined, waiting}  (not kept)
+GET  /web/chats/ID/export?actor=&as=pdf          -> that conversation as a PDF (503: no browser)
 ```
 
 A program that runs turns for people who are not there — a scheduler —
@@ -1311,7 +1325,12 @@ Nothing is kept until they send `/remember 1 3` (or `all`); what they
 turn down with `/remember not 2` (or `none`) is never offered again; and
 `/memory` shows them what is kept, with `/memory forget ID` to take one
 back. The list waits in `<state>/offered.json`, yours alone
-([notes/38](notes/38-what-they-said-in-passing.md)). A memory an answer
+([notes/38](notes/38-what-they-said-in-passing.md)). A "not" sent with
+the wrong number can be taken back: `/remember declined` lists what they
+turned down, newest first, and `/remember undo 1` puts it back on the
+list, not kept, for `/remember N` to keep. Sarathi's home page has the
+same list under **Turned down**, with an Undo beside each
+([notes/68](notes/68-what-you-turned-down.md)). A memory an answer
 drew on says when, `(used 2026-10-23)`, and stays among the newest: Yantra
 tells the store at the end of each turn, so a fact someone relies on
 doesn't age out of what their conversations start with (Yantra's note 143).
@@ -1455,15 +1474,16 @@ reads that person's key from `<state>/memory.json`
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
 | `spoken.py` | an answer read aloud by Piper on this machine, sent after the words: a Telegram voice note (OGG Opus by ffmpeg), the page's ▶ Listen (WAV, made once per voice); code, links and tables left out, long answers cut at a sentence; `speak` per person (off, when-spoken, always: notices too) and their own `/voice`; every voice here, each person's own (`voice =`, `/voice use`), the answer's language told by script or small words and read in a voice for it, never in one that can't ([notes/64](notes/64-an-answer-read-aloud.md), [notes/65](notes/65-whose-voice-and-which-language.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
-| `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
+| `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document, the original), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
+| `printed.py` | a conversation as a PDF for `/chats export N pdf` and `?as=pdf`: an escaped HTML page with nothing to fetch, printed by the machine's own headless Chrome so every script prints; no browser, the Markdown file and why ([notes/69](notes/69-a-picture-and-a-pdf.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
 | `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat; an answer's own on a page's chat, by its line (`web.py`) ([notes/60](notes/60-a-run-step-by-step.md)) |
 | `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
-| `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)) |
+| `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)); `/remember declined` and `/remember undo N`, and the page's `/web/declined`, to see and take back what they turned down ([notes/68](notes/68-what-you-turned-down.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
 | `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it ([notes/40](notes/40-a-notice-on-their-phone.md)) |
 | `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |
@@ -1488,7 +1508,7 @@ reads that person's key from `<state>/memory.json`
 | `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay ([notes/42](notes/42-seeing-the-work.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)); read aloud too for someone who chose "always", in their voice ([notes/65](notes/65-whose-voice-and-which-language.md)) |
-| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |
+| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)), a picture as a photo, falling back to a document ([notes/69](notes/69-a-picture-and-a-pdf.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |

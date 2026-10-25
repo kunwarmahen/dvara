@@ -71,9 +71,10 @@ import re
 import secrets
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from yantra import parse_grant
@@ -616,10 +617,13 @@ def create_app(service: Service, *, token: str,
                 "open": conversation_id in service.past.open_ids(actor)}
 
     @app.get("/web/chats/{conversation_id}/export")
-    async def web_chat_export(conversation_id: str, actor: str = "",
+    async def web_chat_export(conversation_id: str, actor: str = "", as_: str = Query(
+                                  default="md", alias="as"),
                               authorization: str | None = Header(default=None)) -> Response:
         """One conversation as a Markdown file to share (past.py): words,
-        answers, the tools' names. Only ever the person's own."""
+        answers, the tools' names. ``?as=pdf``: printed by this machine's
+        browser (printed.py); 503 when there is none. Only ever the
+        person's own."""
         check(authorization)
         web_for(actor)
         kept = service.past.read(actor, conversation_id)
@@ -628,6 +632,20 @@ def create_app(service: Service, *, token: str,
         from urllib.parse import quote
 
         from yantra.history import export_markdown, export_name
+        if as_ == "pdf":
+            import tempfile
+
+            from dvara import printed
+            with tempfile.TemporaryDirectory(prefix="dvara-pdf-") as tmp:
+                try:
+                    made = await printed.pdf_to(Path(tmp), kept, agent=kept["folder"] or "Agent",
+                                                zone=service.actors.get(actor).zone)
+                except printed.Unprinted as exc:
+                    raise HTTPException(status_code=503,
+                                        detail=f"no PDF here: {exc}") from None
+                raw = made.read_bytes()
+            return Response(raw, media_type="application/pdf", headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(made.name)}"})
         return Response(export_markdown(kept, agent=kept["folder"] or "Agent"),
                         media_type="text/markdown; charset=utf-8",
                         headers={"Content-Disposition":
@@ -647,6 +665,36 @@ def create_app(service: Service, *, token: str,
         if not service.past.delete(actor, conversation_id):
             raise HTTPException(status_code=404, detail="that conversation is gone")
         return {"deleted": conversation_id}
+
+    # ---- what they turned down with /remember not (remembering.py) ----------
+
+    @app.get("/web/declined")
+    async def web_declined(actor: str = "",
+                           authorization: str | None = Header(default=None)) -> dict:
+        """What this person turned down, newest first, and how many facts
+        wait for their /remember."""
+        check(authorization)
+        web_for(actor)
+        return {"declined": service.offered.declined(actor)[::-1],
+                "waiting": len(service.offered.get(actor))}
+
+    @app.post("/web/declined")
+    async def web_undecline(request: Request,
+                            authorization: str | None = Header(default=None)) -> dict:
+        """``{actor, undo: [statement, …]}``: those may be offered again,
+        back on the waiting list -- not kept; /remember N keeps. By the
+        words, not a number, so a list drawn a minute ago can't undo the
+        wrong one."""
+        check(authorization)
+        body = await request.json()
+        actor = body.get("actor")
+        web_for(actor)
+        undo = body.get("undo")
+        if not isinstance(undo, list) or not all(isinstance(u, str) for u in undo):
+            raise HTTPException(status_code=400, detail="undo must be a list of facts")
+        back = service.offered.undecline(actor, undo)
+        return {"back": back, "declined": service.offered.declined(actor)[::-1],
+                "waiting": len(service.offered.get(actor))}
 
     @app.get("/web/file")
     async def web_file(actor: str = "", line: int = 0, n: int = 0,
