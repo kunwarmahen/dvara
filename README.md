@@ -882,7 +882,7 @@ after a `kill -9` and from another container
 
 ```
 $ dvara status
-dvara 0.1.0 · state /home/you/dvara/state
+dvara 2026.10.25.1 · state /home/you/dvara/state
 serving at http://127.0.0.1:8765 (dvara serve, since 2026-10-06T02:56:39+00:00)
 agents: greeter, minder, scribe  ·  people: 2
 ```
@@ -1128,7 +1128,7 @@ agent as them through this service.
 ```bash
 export SAMAY_DVARA_URL=http://127.0.0.1:8765 SAMAY_DVARA_TOKEN=$DVARA_TOKEN
 dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PATH
-#   dvara: schedules through samay 0.1.0 (/path/to/samay); its clock is running
+#   dvara: schedules through samay 2026.10.23.8 (/path/to/samay); its clock is running
 ```
 
 * Off unless asked for: it lets every person you serve put work on a
@@ -1179,7 +1179,7 @@ it will run.
 ```bash
 export PRAHARI_DVARA_URL=http://127.0.0.1:8765 PRAHARI_DVARA_TOKEN=$DVARA_TOKEN
 dvara --ask --prahari /path/to/prahari serve --port 8765
-#   dvara: watches through prahari 0.1.0 (/path/to/prahari) for everyone; it is watching
+#   dvara: watches through prahari 2026.10.23.1 (/path/to/prahari) for everyone; it is watching
 ```
 
 * EACH PERSON'S OWN: a watch's look comes back here as its person
@@ -1213,7 +1213,7 @@ on the phone.
 
 ```bash
 dvara --ask --sparsh /path/to/sparsh telegram --agent phone        # or DVARA_SPARSH=PATH
-#   dvara: the phone through sparsh 0.1.0 (/path/to/sparsh); phone: emulator-5554
+#   dvara: the phone through sparsh 2026.10.23.3 (/path/to/sparsh); phone: emulator-5554
 ```
 
 ```toml
@@ -1513,6 +1513,7 @@ reads that person's key from `<state>/memory.json`
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |
 | `status.py` | `dvara status --json`: is it serving, where, and what it would serve, asked of the lock ([notes/23](notes/23-is-the-door-open.md)) |
+| `version.py` | `dvara --version` and status's `"version"`: the day of the last commit and that day's count (2026.10.25.3), with the commit; from git, else the VERSION file `sarathi image` writes |
 | `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches, the folder's lock and the page's answers read aloud (`voice-cache`) left out, nothing opened |
 | `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
 | `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)) |

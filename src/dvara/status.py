@@ -24,7 +24,6 @@ person -- a count of them.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from dvara.actors import ActorBook
@@ -40,10 +39,16 @@ SERVING = ("dvara serve", "dvara telegram")
 
 
 def _version() -> str:
-    try:
-        return version("dvara")
-    except PackageNotFoundError:
-        return "unknown"
+    """The day of the last commit and that day's count (version.py)."""
+    from dvara import version
+
+    return version.version()
+
+
+def _commit() -> str:
+    from dvara import version
+
+    return version.commit()
 
 
 def report(*, root: Path, actors: Path, state: Path) -> dict:
@@ -65,6 +70,7 @@ def report(*, root: Path, actors: Path, state: Path) -> dict:
     return {
         "format": FORMAT,
         "version": _version(),
+        "commit": _commit(),
         "root": str(root),
         "actors": str(actors),
         "state": str(state),

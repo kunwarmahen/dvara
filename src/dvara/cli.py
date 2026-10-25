@@ -59,7 +59,7 @@ from pathlib import Path
 
 from yantra import render_case
 
-from dvara import patience, signins
+from dvara import patience, signins, version
 from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, ON_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run, unasserted
@@ -83,6 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="dvara",
         description="the door your agents live behind",
     )
+    parser.add_argument("--version", action=version.Show)
     parser.add_argument("--root", default=os.environ.get("DVARA_ROOT", DEFAULT_ROOT),
                         help="the OWNER-CONTROLLED directory of agent packages. "
                              "Agents are named, never pathed: nothing a caller "
