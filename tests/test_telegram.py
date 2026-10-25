@@ -1070,3 +1070,38 @@ def test_a_file_too_big_to_download_is_said_and_no_turn_runs(make_bot):
     asyncio.run(bot.run())
     assert fake.texts()[0].startswith("I couldn't get that file: film.mp4 is over")
     assert not [m for m, _ in fake.calls if m == "getFile"]
+
+
+# ---- an answer's Markdown, shown -------------------------------------------
+
+
+def test_an_answers_markdown_goes_as_bold_and_italic_not_asterisks(make_bot):
+    fake = FakeTelegram([message("what's new?")])
+    bot = make_bot(fake, script=[says(
+        'The row now reads:\n\n**Bad Company — 20:39**\nAjay: *"balm for your palm?"*')])
+    asyncio.run(bot.run())
+    sent = fake.sent()[-1]
+    assert sent["text"] == ('The row now reads:\n\nBad Company — 20:39\n'
+                            'Ajay: "balm for your palm?"')
+    shown = {(e["type"], sent["text"][e["offset"]:e["offset"] + e["length"]])
+             for e in sent["entities"]}
+    assert shown == {("bold", "Bad Company — 20:39"),
+                     ("italic", '"balm for your palm?"')}
+
+
+def test_a_plain_answer_carries_no_entities(make_bot):
+    fake = FakeTelegram([message("go")])
+    bot = make_bot(fake, script=[says("rm *.log, 2 * 3, my_file_name.txt")])
+    asyncio.run(bot.run())
+    assert fake.sent()[-1] == {"chat_id": KNOWN,
+                               "text": "rm *.log, 2 * 3, my_file_name.txt"}
+
+
+def test_marks_refused_send_the_words_as_written(make_bot):
+    fake = FakeTelegram([message("go")])
+    fake.status["sendMessage"] = [httpx.Response(
+        400, json={"ok": False, "description": "Bad Request: wrong url"})]
+    bot = make_bot(fake, script=[says("see [here](https://x.example/)")])
+    asyncio.run(bot.run())
+    assert fake.texts() == ["see here", "see [here](https://x.example/)"]
+    assert "entities" not in fake.sent()[-1]

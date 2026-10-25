@@ -81,16 +81,22 @@ are handled, and they are different problems:
   a notifier is a delivery that failed, which the desk already knows how
   to read.
 
-## Plain text, on purpose
+## Plain text, on purpose -- and bold beside it
 
 Nothing here sets ``parse_mode``. Markdown and HTML modes make the
 MODEL'S PUNCTUATION A SYNTAX ERROR: an answer with one unmatched
 asterisk, or a stray ``_`` in a filename, comes back as a 400 and the
 person gets nothing at all. Splitting formatted text is worse again --
 a cut through a code fence renders the second half as prose. So a reply
-goes out as what it is, and the one piece of decoration this service ever
+goes out as plain text, and the one piece of decoration this service ever
 wanted (note 06 guessed at italics for the receipt) is a plain line under
 a blank one.
+
+An answer's own Markdown is still SHOWN, not printed: ``marked.py``
+takes the ``**`` and ``*`` out here and sends, beside the plain words,
+the entities saying which of them are bold. There is no syntax for
+Telegram to refuse; and if it refuses anyway, the words go again as they
+were written (note 70).
 
 ## What a bot is allowed to decide
 
@@ -163,6 +169,7 @@ from dvara.asks import Answer, Ask, NotYours, Withdraw
 from dvara.errors import ConfigProblem, Refused
 from dvara.holds import Hold, NoSuchHold, NotYourHold
 from dvara.locks import KeyedLocks
+from dvara.marked import marked as _marked
 from dvara.outbox import Outbox, Owed
 from dvara.service import Service
 
@@ -641,7 +648,7 @@ class TelegramBot:
                      if last and reply.held is not None else
                      {"reply_markup": markup} if last and (markup := _tap_buttons(reply.text))
                      else {})
-            await self._send(chat, chunk, **extra)
+            await self._send(chat, chunk, marked=True, **extra)
             self.outbox.sent(row, count)
         if reply.speak and reply.text.strip():
             await self._speak(chat, reply.text, voice=reply.voice)
@@ -733,7 +740,7 @@ class TelegramBot:
             f"I restarted while sending {rest}my answer to your message "
             f"from {when} (“{debt.asked}”). Here it is."))
         for count, chunk in enumerate(debt.unsent, start=debt.sent + 1):
-            await self._send(chat, chunk)
+            await self._send(chat, chunk, marked=True)
             self.outbox.sent(debt.id, count)
 
     async def _show_menu(self) -> None:
@@ -855,7 +862,7 @@ class TelegramBot:
             for count, part in enumerate(parts, start=1):
                 more = ({"reply_markup": _offer_buttons(offer)}
                         if offer and count == len(parts) else {})
-                await self._send(chat, part, **more)
+                await self._send(chat, part, marked=True, **more)
         if extra.get("speak") and text.strip():     # "always": a notice too
             await self._speak(chat, text, voice=extra.get("voice"))
 
@@ -985,7 +992,7 @@ class TelegramBot:
             via=Channel(kind="telegram", id=str(native)), agent=agent,
             thread=str(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
         for part in split_message(reply.text):
-            await self._send(chat, part)
+            await self._send(chat, part, marked=True)
 
     async def _download(self, message: dict) -> Attachment:
         """The photo (its largest size) or document a message carries, as
@@ -1109,16 +1116,34 @@ class TelegramBot:
 
     # ---- the wire ----------------------------------------------------------
 
-    async def _send(self, chat: int, text: str, **extra):
+    async def _send(self, chat: int, text: str, *, marked: bool = False,
+                    **extra):
         """One message into one chat, no faster than the limit allows.
 
         No ``parse_mode``. See the module docstring: a mode makes the
         model's own punctuation a syntax error, and the failure is the
         whole answer rather than one italic word.
+
+        ``marked`` is for the agent's words: their Markdown sent as
+        entities (marked.py). A refusal of those -- a link Telegram won't
+        take -- sends the words again as written, so the worst of it is
+        the asterisks this used to show.
         """
         async with self._pacer.lock(chat):
             await self._pacer.wait(chat)
             try:
+                if marked:
+                    plain, entities = _marked(text)
+                    if entities:
+                        try:
+                            return await self._api("sendMessage", chat_id=chat,
+                                                   text=plain, entities=entities,
+                                                   **extra)
+                        except TelegramError as exc:
+                            if ": 400 " not in str(exc):
+                                raise           # a flood wait, not the marks
+                            self._note(f"telegram: an answer went without its "
+                                       f"bold and italics -- {exc}")
                 return await self._api("sendMessage", chat_id=chat,
                                        text=text, **extra)
             finally:

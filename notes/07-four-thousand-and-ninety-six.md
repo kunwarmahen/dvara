@@ -89,6 +89,10 @@ guess about what this channel would decide was wrong, and it was wrong
 because the answer being formatted is written by a model rather than by
 the adapter. The receipt goes out as a plain line under a blank one.
 
+The answer's own Markdown is shown without a parse mode: its marks are
+taken out and sent beside it as entities, which Telegram has nothing to
+refuse in ([note 70](70-bold-not-asterisks.md)).
+
 ## The poll loop never awaits a turn
 
 This one is a deadlock, and it only appears on the path nobody tries by
@@ -400,3 +404,7 @@ reading.
   shipped in [note 09](09-a-process-you-walk-away-from.md), which this
   note is the reason for.
 * ~~**Locks are still never evicted**~~ — shipped in [note 11](11-only-while-somebody-is-waiting.md); unchanged from notes 01–06.
+* ~~**An answer's `**bold**` shows its asterisks.**~~ — shown as bold,
+  italic, code and links in [note 70](70-bold-not-asterisks.md), as
+  entities rather than a parse mode, so the refusal argued above still
+  holds.
