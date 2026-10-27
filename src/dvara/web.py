@@ -31,6 +31,12 @@ the answer so far and each step as a line. Live is kept in memory only
 -- the answer line is the record; a restart mid-turn loses the view of
 a turn that is lost anyway.
 
+/new STARTS THE PAGE OVER TOO. The conversation it ends is kept in the
+person's log (past.py, History, ``/chats``), so the page has no reason to
+go on showing it: the answer to a ``/new`` is marked ``fresh``, and a page
+opened afresh shows only from the newest such line; a page already open
+clears when it arrives. The lines before it stay in this file, as ever.
+
 KEPT ON DISK, AND CAPPED. One SQLite file next to ``runs.sqlite3``. The
 newest ``KEEP_PER_PERSON`` lines a person has are kept; older ones go.
 
@@ -58,7 +64,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dvara import spoken
+from dvara import fresh, spoken
 from dvara.accounts import tap_label, taps
 from dvara.attached import Attachment, safe_name
 from dvara.errors import Refused
@@ -111,7 +117,7 @@ class Line:
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
         for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent",
-                     "transcript", "heard", "speak"):
+                     "transcript", "heard", "speak", "fresh"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         # its turn can be read step by step (``steps``); asked for by line,
@@ -155,7 +161,8 @@ class WebBook:
 
     def after(self, actor: str, after: int = 0, limit: int = PAGE) -> list[Line]:
         """A person's lines after ``after``, oldest first. ``after=0`` is
-        the newest ``limit`` of them: a page opened fresh shows the end."""
+        the newest ``limit`` of them since the last ``/new`` (``fresh``):
+        a page opened fresh shows the end of the conversation it's in."""
         with self._lock:
             if after > 0:
                 rows = self._db.execute(
@@ -163,10 +170,14 @@ class WebBook:
                     "WHERE actor = ? AND id > ? ORDER BY id LIMIT ?",
                     (actor, after, limit)).fetchall()
             else:
+                # json.dumps writes the mark as exactly this
+                since = self._db.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM lines WHERE actor = ? "
+                    "AND extra LIKE '%\"fresh\": true%'", (actor,)).fetchone()[0]
                 rows = self._db.execute(
                     "SELECT id, actor, at, who, agent, text, extra FROM lines "
-                    "WHERE actor = ? ORDER BY id DESC LIMIT ?",
-                    (actor, limit)).fetchall()[::-1]
+                    "WHERE actor = ? AND id >= ? ORDER BY id DESC LIMIT ?",
+                    (actor, since, limit)).fetchall()[::-1]
         return [_line(row) for row in rows]
 
     def get(self, actor: str, line_id: int) -> Line | None:
@@ -259,7 +270,8 @@ class WebChannel:
         live = Live()
         self._start(actor, agent, self.service.deliver(
             actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND,
-            watch=live, attachments=attachments or ()), live)
+            watch=live, attachments=attachments or ()), live,
+            new=not attachments and fresh.is_new_word(text))
         return line
 
     def carry_on(self, hold_id: str, actor: str, answers: dict) -> None:
@@ -277,7 +289,8 @@ class WebChannel:
         self._start(actor, hold.agent, self.service.resume(
             hold_id, answers=answers, actor=actor, door=KIND, watch=live), live)
 
-    def _start(self, actor: str, agent: str, turn, live: Live | None = None) -> None:
+    def _start(self, actor: str, agent: str, turn, live: Live | None = None,
+               *, new: bool = False) -> None:
         self._busy.add((actor, agent))
         if live is not None:
             self._live[(actor, agent)] = live
@@ -292,7 +305,9 @@ class WebChannel:
                 self.book.add(actor, "agent", f"That went wrong: {exc}",
                               agent=agent, extra={"stop_reason": "error"})
             else:
-                self.answered(actor, agent, reply)
+                # a /new refused under a running turn started nothing over
+                self.answered(actor, agent, reply, new=new and reply.stop_reason == "new"
+                              and reply.text != fresh.STILL_ANSWERING)
             finally:
                 self._busy.discard((actor, agent))
                 self._live.pop((actor, agent), None)
@@ -301,8 +316,10 @@ class WebChannel:
         self._jobs.add(job)
         job.add_done_callback(self._jobs.discard)
 
-    def answered(self, actor: str, agent: str, reply: Reply) -> Line:
+    def answered(self, actor: str, agent: str, reply: Reply, *, new: bool = False) -> Line:
         return self.book.add(actor, "agent", reply.text, agent=agent, extra={
+            # the page starts over from here (/new)
+            "fresh": new,
             # the run, for its steps (``steps``); a word's answer has none
             "run": reply.run_id,
             "receipt": reply.receipt,

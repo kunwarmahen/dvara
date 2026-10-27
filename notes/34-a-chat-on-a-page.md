@@ -56,6 +56,16 @@ A question that a page turn raises goes to the person's Telegram as
 well, if they have one, and the page lists it too (`asks` in the look).
 The first answer anywhere settles it, as it always has (note 12).
 
+**`/new` starts the page over too.** The conversation it ends is kept in
+the person's log (note 50's `/chats`, the History page), so the page has
+no reason to go on showing it under the next one: a person who asked for
+their profiles, sent `/new` and still saw the profiles would think the
+agent still had them in mind. The answer to `/new` is marked `fresh`; a
+look from the start (`after=0`) returns only from the newest such line,
+and a page already open clears when that line arrives. The lines before
+it stay in `web.sqlite3`, capped as always, and a `/new` refused under a
+running turn ("I'm still working on your last message…") marks nothing.
+
 ## A turn runs behind the request
 
 `POST /web/message` writes the line down, starts the turn, and answers

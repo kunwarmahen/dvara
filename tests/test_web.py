@@ -185,3 +185,29 @@ def test_the_accounts_page_button_says_why_when_there_is_no_link(page):
     assert got["url"] is None and "No accounts are set up for you" in got["said"]
     assert page.post("/web/accounts-page", json={"actor": "nobody"},
                      headers=AUTH).status_code == 404
+
+
+def test_new_starts_the_page_over_and_keeps_the_lines_before(page):
+    page.post("/web/message", headers=AUTH, json={
+        "actor": "owner", "agent": "greeter", "text": "List my profiles"})
+    settled(page)
+    page.post("/web/message", headers=AUTH, json={
+        "actor": "owner", "agent": "greeter", "text": "/new"})
+    seen = settled(page)
+    assert [ln["who"] for ln in seen["lines"]] == ["agent"]
+    assert seen["lines"][0].get("fresh") and seen["lines"][0]["text"].startswith("Starting fresh")
+    page.post("/web/message", headers=AUTH, json={
+        "actor": "owner", "agent": "greeter", "text": "hi"})
+    seen = settled(page)
+    assert [ln["text"] for ln in seen["lines"]][1:] == ["hi", "Again."]
+    # the lines before /new are still kept, only not shown
+    kept = page.service.web.book._db.execute(
+        "SELECT COUNT(*) FROM lines WHERE actor = 'owner'").fetchone()[0]
+    assert kept == 6
+
+
+def test_a_new_word_that_isnt_new_marks_nothing(page):
+    page.post("/web/message", headers=AUTH, json={
+        "actor": "owner", "agent": "greeter", "text": "/newsletter please"})
+    seen = settled(page)
+    assert not any(ln.get("fresh") for ln in seen["lines"])
