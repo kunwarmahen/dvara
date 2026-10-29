@@ -103,6 +103,13 @@ first turn to a bot that asks you before anything changes.
   `--memory`, a package that asks for memory keeps each person's in
   Smritikosh, which finds them by meaning, with that person's own key
   ([notes/37](notes/37-their-own-memories.md)).
+* **[Vaani](https://github.com/kunwarmahen/vaani)** — a Home Assistant
+  Voice puck answered by a person's agents: Vaani hears the question
+  (Whisper on that computer), tells who asked it (a voice print, or the
+  puck's own person when unsure), and calls `POST /message` as that
+  person with `came_by: "vaani"` and a thread per puck (`vaani:<puck>`).
+  Who may do what stays here. `$DVARA_WHISPER` is the same Whisper, for
+  voice notes ([notes/47](notes/47-a-voice-note.md)).
 * **[Sarathi](https://github.com/kunwarmahen/sarathi)** — starts this
   door beside Yantra's page and Samay's clock, wired to the clock, with
   a Telegram bot: `sarathi dvara`, then `sarathi up` (its note 04).
