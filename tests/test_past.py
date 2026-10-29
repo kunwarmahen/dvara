@@ -365,6 +365,7 @@ def test_the_page_renames_and_pins_only_the_persons_own(make_service):
         rows = client.get("/web/chats", headers=auth, params={"actor": "owner"}).json()["rows"]
         old = rows[1]["id"]
         assert rows[1]["roads"] == ["the page"] and rows[1]["pinned"] is False
+        assert rows[0]["here"] and not rows[1]["here"]
         assert client.post(f"/web/chats/{old}/rename", headers=auth,
                            json={"actor": "owner", "title": "Holiday"}).status_code == 200
         assert client.post(f"/web/chats/{old}/pin", headers=auth,

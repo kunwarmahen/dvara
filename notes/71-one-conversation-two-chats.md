@@ -65,8 +65,21 @@ POST /web/chats/ID/rename   {"actor": A, "title": "Holiday"}   empty title: firs
 POST /web/chats/ID/pin      {"actor": A, "pinned": true}
 ```
 
-Each row of `GET /web/chats` carries `roads` and `pinned` too. Someone
-else's conversation, or one that's gone, is a 404.
+Each row of `GET /web/chats` carries `roads` and `pinned` too, and
+`here`: whether the page's own chat is in it, so a page can show the
+conversation it is in even when its window has no lines of it left.
+Someone else's conversation, or one that's gone, is a 404.
+
+## What was sent, by itself
+
+A page that lists conversations at the side wants what was sent to the
+person unasked (a schedule's answer, a watch, a sign-in that stopped) in
+a place of its own, not between their words. Those are already lines on
+the web channel, marked `notice`; but a page opened afresh shows only
+the lines since the last `/new`, so a notice from before it was gone
+from the page. `GET /web/notices?actor=A` gives the person's notices,
+newest first, whatever `/new` cleared, from the same kept lines (they
+age out with the rest). Sarathi's bell counts and lists them.
 
 ## Live receipt
 

@@ -77,6 +77,19 @@ def test_a_notice_waits_on_the_page_for_a_person_with_no_telegram(page):
     assert [(ln["who"], ln["text"]) for ln in lines] == [("notice", "2 new mails")]
 
 
+def test_notices_are_listed_by_themselves_newest_first_even_after_new(page):
+    for text in ("2 new mails", "the parcel is out for delivery"):
+        page.post("/notify", headers=AUTH, json={"actor": "owner", "text": text})
+    page.post("/web/message", headers=AUTH, json={
+        "actor": "owner", "agent": "greeter", "text": "/new"})
+    settled(page)
+    got = page.get("/web/notices?actor=owner", headers=AUTH).json()["notices"]
+    assert [n["text"] for n in got] == ["the parcel is out for delivery", "2 new mails"]
+    assert all(n["who"] == "notice" for n in got)
+    assert page.get("/web/notices?actor=guest", headers=AUTH).json()["notices"] == []
+    assert page.get("/web/notices?actor=owner").status_code == 401
+
+
 def test_one_persons_lines_are_never_anothers(page):
     page.post("/notify", headers=AUTH, json={"actor": "guest", "text": "yours"})
     assert page.get("/web?actor=owner", headers=AUTH).json()["lines"] == []

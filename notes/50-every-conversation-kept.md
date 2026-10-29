@@ -75,7 +75,8 @@ The last two, and each row's `roads` and `pinned`, are
 
 A page carries one on by saying `/chats open ID` as a message, so the
 answer is a line like any other, with its transcript drawn in place.
-Sarathi's home page has a **History** button that uses all of this.
+Sarathi's home page used all of this behind a **History** button; it
+is now the list of conversations beside its chat (Sarathi's notes/33).
 
 ## Live receipt
 

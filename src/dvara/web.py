@@ -13,10 +13,13 @@ on the page, what their agent answered, and every notice sent to them
 list; a notice "waits until they open the page" because it is a line
 they have not scrolled to yet. Telegram's notices go out at once and are
 gone; these are kept, so a person away for a week finds the week.
+A page that keeps them in a place of their own asks for them alone
+(``notices``), whatever ``/new`` has cleared from the chat.
 
 THE CHAT IS THE PAGE'S OWN CONVERSATION. Turns from here run under the
 thread ``web:chat``, beside Telegram's ``telegram:<chat>`` -- a chat on
-Telegram does not continue on the page, and the reverse. The person is
+Telegram does not continue on the page by itself, and the reverse;
+``/chats N`` opens one in both, and both carry it on (past.py). The person is
 the same person on both: same allowance, rules, folder, sign-ins, and
 one queue of questions. A question a page turn raises still goes to
 their Telegram if they have one, and the page lists it too; the first
@@ -178,6 +181,17 @@ class WebBook:
                     "SELECT id, actor, at, who, agent, text, extra FROM lines "
                     "WHERE actor = ? AND id >= ? ORDER BY id DESC LIMIT ?",
                     (actor, since, limit)).fetchall()[::-1]
+        return [_line(row) for row in rows]
+
+    def notices(self, actor: str, limit: int = PAGE) -> list[Line]:
+        """What was sent to a person without their asking (a schedule's
+        answer, a watch, a sign-in that stopped), newest first, whatever
+        ``/new`` cleared from the chat: a page lists them by themselves."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, actor, at, who, agent, text, extra FROM lines "
+                "WHERE actor = ? AND who = 'notice' ORDER BY id DESC LIMIT ?",
+                (actor, limit)).fetchall()
         return [_line(row) for row in rows]
 
     def get(self, actor: str, line_id: int) -> Line | None:

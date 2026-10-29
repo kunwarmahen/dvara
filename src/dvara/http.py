@@ -497,6 +497,14 @@ def create_app(service: Service, *, token: str,
         service.refresh()
         return web_for(actor).look(actor, max(0, after))
 
+    @app.get("/web/notices")
+    async def web_notices(actor: str = "",
+                          authorization: str | None = Header(default=None)) -> dict:
+        """What was sent to this person without their asking, newest first,
+        including what ``/new`` cleared from the chat (web.py)."""
+        check(authorization)
+        return {"notices": [ln.as_dict() for ln in web_for(actor).book.notices(actor)]}
+
     @app.post("/web/message")
     async def web_say(request: Request,
                       authorization: str | None = Header(default=None)) -> dict:

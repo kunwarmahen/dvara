@@ -356,10 +356,18 @@ class PastBook:
                 (len(prefix), prefix)).fetchall()}
 
     def page_rows(self, actor: str, words: str = "") -> list[dict]:
-        """The page's list: every agent's, each row saying which agent and
-        whether it is open in a chat now (a page offers no delete there)."""
-        open_now = self.open_ids(actor)
-        return [{**r.as_dict(), "agent": r.folder, "open": r.id in open_now}
+        """The page's list: every agent's, each row saying which agent,
+        whether it is open in a chat now (a page offers no delete there),
+        and whether that chat is the page's own (``here``)."""
+        prefix = quote(actor, safe="") + "/"
+        with self._lock:
+            keys = self._db.execute(
+                "SELECT key, conversation FROM current WHERE substr(key, 1, ?) = ?",
+                (len(prefix), prefix)).fetchall()
+        open_now = {c for _, c in keys}
+        here = {c for k, c in keys if came_of_key(k) == CAME["web"]}
+        return [{**r.as_dict(), "agent": r.folder, "open": r.id in open_now,
+                 "here": r.id in here}
                 for r in self.listed(actor, None, words)]
 
     # ---- writing ---------------------------------------------------------------

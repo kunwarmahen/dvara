@@ -1398,9 +1398,10 @@ runs. The owner hears only when one breaks. `/chats test 2 turn 1`
 keeps an earlier answer; `/tests` shows yours and how each did, and
 `/tests delete N` takes one back (note 57).
 
-On Sarathi's home page the same thing is the **History** button: a
-search box, the list, a conversation to read, **Carry on in the chat**,
-and **Delete**. Deleting there clears the person's history. The page's
+On Sarathi's home page the same thing is the list of conversations at
+the left of the chat: a search box, every conversation marked by where
+it went on, one read in the chat's place and carried on by writing under
+it, and a ⋯ on each to rename, pin, share or **Delete** it. Deleting there clears the person's history. The page's
 own chat scroll and the owner's run ledger keep their copies of those
 lines until they age out, on purpose: the owner's record stays whole
 ([notes/50](notes/50-every-conversation-kept.md)).
