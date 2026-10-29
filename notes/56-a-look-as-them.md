@@ -115,6 +115,28 @@ Live, on a scratch Dvara where asha has `setu = true`: her account
 --account mail:home --for asha` opened it through this endpoint, and a
 mail landing fired her watch and only hers (Prahari's notes/02).
 
+## A look that waited on the service it came to
+
+Because a look comes back here, anything that waits for a look *on
+Dvara's event loop* waits for itself. Two things did, both because of
+the create_watch card, whose *now:* line is a preview, which is a look.
+Yantra's async loop built the card inline before asking. Then this
+service's step line on the page (`watch.said`) asked for the same
+summary again after the call ran. Each time the loop sat blocked until
+Prahari's 180-second look limit ran out. The page froze, a question
+lapsed unanswered, and the watch's first look, made the second it was
+saved, failed with *the look took longer than 180s*. The timestamped
+log showed the gaps: exactly 180 seconds, one before each question and
+one at each save.
+
+A STEP LINE NEVER RUNS A CARD THAT ASKS ITS SERVER. A tool with a card
+of its own (`explain`: Prahari's, Samay's, the phone's) is said on the
+page by its call, name and arguments, which is all one line holds
+anyway. Every other tool keeps its summary. The card itself is now
+built off the loop on Yantra's side (its note 140), so the preview it
+asks for is answered here like any other look. `tests/test_watch_said.py`
+pins both halves of the step line.
+
 ## Tests
 
 `tests/test_looks_as_them.py`: a guest's look reads the guest's own

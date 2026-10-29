@@ -31,6 +31,7 @@ steps between.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -47,9 +48,20 @@ STEPS_KEPT = 40
 
 
 def said(agent: Any, call: Any) -> str:
-    """The step's one line: the tool's own summary, as a question shows it."""
+    """The step's one line: the tool's own summary, as a question shows it.
+
+    NEVER A CARD THAT ASKS ITS SERVER. A tool with a card of its own
+    (``explain``: Prahari's, Samay's, the phone's) may call its server to
+    write it -- create_watch previews the watch, a look that on this road
+    comes back to this very service -- and this runs on the loop, inside
+    the turn's stream. So such a step is said by its name and arguments,
+    which is all one line holds anyway."""
     try:
-        line = agent._get_visible_tool(call.name).summary(call.arguments, agent.ctx)
+        tool = agent._get_visible_tool(call.name)
+        if getattr(tool, "explain", None) is not None:
+            line = f"{call.name}({json.dumps(call.arguments, default=str)})"
+        else:
+            line = tool.summary(call.arguments, agent.ctx)
     except Exception:          # a broken summary is a name, never a crash
         line = call.name
     line = " ".join(str(line).split())
