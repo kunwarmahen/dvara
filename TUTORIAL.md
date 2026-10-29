@@ -354,12 +354,17 @@ button, **approve all for this task**: one yes, and the rest of that
 task's after-reading questions run, unless the agent reads something new
 (a purchase is still asked every time). And a person's `trusted = [...]`
 in `actors.toml` names servers whose answers are their own words, such as
-`samay` or `homeassistant-home`; reading those asks nothing new.
+`samay` or `homeassistant-home`; reading those asks nothing new. The
+names must be exact: the part between `mcp__` and the next `__` in a
+tool's full name, as `/steps` shows it. `homeassistant` alone matches
+nothing, quietly. A change to `actors.toml` counts from the next
+message.
 
 If *everything* is asked, look at how Dvara was started. The owner's half
 of yolo is `--yolo` on the command line, and with `--ask` alone every
 change is a question, whatever `actors.toml` and the package say.
-Sarathi's *Let "Never asked" work* switch adds it.
+Sarathi's *Let "Never asked" work* switch adds it, once Dvara is started
+again (Sarathi's **Apply**); saving the switch alone changes nothing yet.
 
 **Two kinds of silence**, and this is the part that took a rewrite:
 

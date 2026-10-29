@@ -78,7 +78,12 @@ name the server (samay) or the one tool (mcp__samay__list_schedules) instead
 ```
 
 The server's name is what follows `mcp__` in its tools' names, so
-`mcp__homeassistant-home__call_service` means `homeassistant-home`. The
+`mcp__homeassistant-home__call_service` means `homeassistant-home`. It
+must be exact. This house first wrote `homeassistant`, which matches no
+server; that isn't an error (a server may be connected later), so the
+only sign is still being asked. Like everything in `actors.toml` it
+counts from the next message, with no restart. The house rung below
+is different: it's on the command line, so it needs Dvara started again. The
 page's person form has a box for it, *Sources they trust*.
 
 ## Live receipt

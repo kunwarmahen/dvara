@@ -306,7 +306,11 @@ whatever this file or a package says. Sarathi's `[dvara] yolo` adds it
 `trusted` names servers whose answers are that person's own words, by
 the server's name (`samay`) or one tool's full name; after reading one,
 a change asks nothing new. No wildcards, and never the web
-([notes/72](notes/72-asked-less-not-never.md)).
+([notes/72](notes/72-asked-less-not-never.md)). The name must be the server's exact name, the part between `mcp__` and
+the next `__` in its tools' names (`mcp__homeassistant-home__call_service`
+is `homeassistant-home`); a near miss like `homeassistant` matches nothing
+and isn't an error. Like the rest of this file it's reread before each
+message, with no restart. `--yolo`, on the command line, needs one.
 
 An unknown key is an error, not a shrug:
 
