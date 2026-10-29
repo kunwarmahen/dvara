@@ -108,8 +108,12 @@ first turn to a bot that asks you before anything changes.
   (Whisper on that computer), tells who asked it (a voice print, or the
   puck's own person when unsure), and calls `POST /message` as that
   person with `came_by: "vaani"` and a thread per puck (`vaani:<puck>`).
-  Who may do what stays here. `$DVARA_WHISPER` is the same Whisper, for
-  voice notes ([notes/47](notes/47-a-voice-note.md)).
+  Who may do what stays here. The agent's questions reach the puck too:
+  Vaani reads `GET /asks` while a turn runs, puts each to the person out
+  loud and answers `POST /asks/ID`; a question no standing yes covers
+  says `"always_ask": true`, and Vaani asks for the person's spoken PIN.
+  `/new` from the puck starts that conversation over. `$DVARA_WHISPER`
+  is the same Whisper, for voice notes ([notes/47](notes/47-a-voice-note.md)).
 * **[Sarathi](https://github.com/kunwarmahen/sarathi)** — starts this
   door beside Yantra's page and Samay's clock, wired to the clock, with
   a Telegram bot: `sarathi dvara`, then `sarathi up` (its note 04).
