@@ -49,7 +49,8 @@ write over what the page said.
 The list used to say where a conversation was going on now. Now it says
 every road it went on: *"— Thu 29 Oct 16:09, on Telegram and the page,
 3 messages"*. A puck's conversation is named by its puck (*the kitchen
-puck*), not by the program behind it.
+puck*), not by the program behind it. One kept before that says only
+*vaani*, and nothing recorded which puck, so it's listed as *a puck*.
 
 ## Named and pinned
 
