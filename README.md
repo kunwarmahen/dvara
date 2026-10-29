@@ -490,7 +490,8 @@ And anyone can start their conversation with an agent over:
 ```
 /new                           start over; files, schedules, accounts and
                                the ledger all stay, and this conversation is kept
-/chats                         every conversation, newest first
+/chats                         every conversation, newest first (a question is
+                               there from the moment it's asked, not when answered)
 /chats boiler                  only the ones that say "boiler"
 /chats 2                       go back into one (the one you're in is kept)
 /chats export 2                that one as a file to share (words, answers,

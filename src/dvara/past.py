@@ -16,8 +16,11 @@ thirty-first, was still gone.
     /chats delete 2 sure    delete it for good
 
 EVERY CONVERSATION, AS IT GOES. Each turn writes its conversation to the
-person's own log -- Yantra's ``history.ConversationLog``, the same one
-its terminal and page keep -- under the conversation's id. ``/new``
+person's own log (Yantra's ``history.ConversationLog``, the same one
+its terminal and page keep) under the conversation's id -- when the
+question comes in, at each step, and at its end, so a long job (a
+flight search waiting on a yes at a kitchen puck) is in the list from
+the moment it was asked. ``/new``
 only starts a new id; there is nothing left to copy. A conversation cut
 off by a restart is there, and so is the one nobody ended. A run a
 schedule started is not a conversation and is not kept here; Samay's

@@ -1649,6 +1649,23 @@ class Service:
         except (MCPError, SparshLinkError) as exc:
             self._note(f"dvara: {who.id}'s phone is off for this turn -- sparsh: {exc}")
 
+    def _keep_past(self, agent, *, key: str, run: Run, who: Actor, provider_name: str,
+                   asking: str | None = None) -> None:
+        """The conversation as it is now, into the person's history -- a
+        person's, never a schedule's run, and never at the turn's cost.
+        ``asking``: the message the turn is about to send, not yet in the
+        agent's history."""
+        if is_unattended():
+            return
+        try:
+            payload = snapshot(agent, provider_name)
+            if asking is not None:
+                payload["history"].append(
+                    {"role": "user", "content": [{"kind": "text", "text": asking}]})
+            self.past.kept(who.id, run.agent, key, run.thread, payload)
+        except Exception as exc:
+            self._note(f"dvara: conversation not kept: {exc}")
+
     async def _run_turn(self, agent, *, key: str, run: Run,
                         resuming: Hold | None, answers, door: str | None,
                         decisions: Decisions, wait, ceiling, provider_name: str,
@@ -1660,8 +1677,13 @@ class Service:
         agent.turn_tag = run.id
         # EVERY STEP IS SAVED, not only the turn's end: a restart in the
         # middle of a job leaves it here as far as it got (carrying.py).
-        agent.on_step = lambda a: self.sessions.save(
-            a, provider_name=provider_name, session_id=key)
+        # And the person's history (past.py) follows it: a question is in
+        # their list as soon as it's asked, not when a long job is done.
+        def stepped(a) -> None:
+            self.sessions.save(a, provider_name=provider_name, session_id=key)
+            self._keep_past(a, key=key, run=run, who=who, provider_name=provider_name)
+
+        agent.on_step = stepped
         if resuming is not None:
             events = self._carry_on(agent, resuming, answers or {}, run,
                                     decisions, door)
@@ -1683,6 +1705,9 @@ class Service:
                     images = attached.pictures(list(kept))
                 else:
                     message = f"{message}\n\n{attached.NOT_SEEN}"
+            # in the history now, before the model has said a word
+            self._keep_past(agent, key=key, run=run, who=who,
+                            provider_name=provider_name, asking=message)
             events = agent.run_streaming(message, images=images)
         before_total = _copy(agent.total_usage)
         before_models = {m: _copy(u) for m, u in agent.usage_by_model.items()}

@@ -391,3 +391,22 @@ def test_chats_test_n_turn_k_keeps_that_turn(make_service, tmp_path, monkeypatch
     [case] = load_cases(tmp_path / "tests" / "people" / "owner" / "greeter")
     assert case.user_message == "when is the trip?" and case.answer_contains == ["Friday"]
     assert "has 2 turns, not 7" in say(service, "/chats test 1 turn 7").text
+
+
+def test_a_question_is_in_the_history_while_it_is_still_being_answered(make_service):
+    """A long job -- a flight search that waits on a yes -- was only in the
+    list once it ended. The question is there as soon as it's asked."""
+    service = make_service([says("Flights found.")])
+    seen_mid_turn = []
+    asked = service.scripted._next
+
+    def while_working(**kwargs):
+        seen_mid_turn.append([(r.title, r.turns)
+                              for r in service.past.listed("owner", "greeter")])
+        return asked(**kwargs)
+
+    service.scripted._next = while_working
+    say(service, "find me a flight to Phoenix on Sunday")
+    assert seen_mid_turn == [[("find me a flight to Phoenix on Sunday", 1)]]
+    assert [r.title for r in service.past.listed("owner", "greeter")] == [
+        "find me a flight to Phoenix on Sunday"]                 # one row, not two
