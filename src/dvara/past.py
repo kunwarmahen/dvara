@@ -31,15 +31,25 @@ conversations with every agent (each row's folder is the agent's name),
 so one person's never shows to another by construction, not by a WHERE
 clause, and a person who leaves can be removed by removing a file.
 
-OPENING ONE MOVES THE CONVERSATION, NOT A COPY. The one you named
+OPENING ONE JOINS THE CONVERSATION, NOT A COPY. The one you named
 becomes the conversation here, on the channel you asked from -- one
 begun on Telegram can be carried on on the page -- and its next turn
-grows its own row. The one you were in is already kept. One still open
-in another chat is not opened twice: two chats writing one row would
-each overwrite the other, so it says where it is open. Nothing else
+grows its own row. The one you were in is already kept. Nothing else
 moves: the folder, the files, the schedules and the ledger never
 belonged to a conversation. Like ``/new``, never under a turn still
 working on it.
+
+ONE CONVERSATION, SEVERAL CHATS. One still open on Telegram stays open
+there too: both carry it on, and the next message on Telegram follows
+what was said on the page. Each chat saves its own copy of where it is
+(Yantra's sessions), so ``latest`` says which chat's copy is the row as
+the log has it. Before a turn, a chat that is behind takes the row
+again (``behind``, then ``caught_up``), and the turn holds the
+conversation as well as its chat, so two chats never write it at once:
+the second waits, as a second message on one chat does. A question one
+chat was waiting on is set aside when another chat says something, the
+rule a new message already follows on one chat. ``/new`` leaves only
+the chat it was sent on.
 
 SHARED AS A FILE. ``/chats export N`` writes that conversation as a
 Markdown file (Yantra's ``export_markdown``: words, answers, the tools'
@@ -102,9 +112,15 @@ CREATE TABLE IF NOT EXISTS current (
     key           TEXT PRIMARY KEY,
     conversation  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS latest (
+    conversation  TEXT PRIMARY KEY,
+    key           TEXT NOT NULL
+);
 """
 
 CAME = {"telegram": "Telegram", "web": "the page", "http": "HTTP"}
+#: A puck's thread (``vaani:kitchen``) is named by its puck.
+PUCK = "vaani"
 
 
 def is_word(text: str) -> bool:
@@ -226,7 +242,9 @@ def came_of_key(key: str) -> str:
 
 
 def came_of(thread: str) -> str:
-    kind = thread.split(":", 1)[0] if ":" in thread else ""
+    kind, _, rest = thread.partition(":") if ":" in thread else ("", "", "")
+    if kind == PUCK and rest:
+        return f"the {rest} puck"
     return CAME.get(kind, kind or "here")
 
 
@@ -277,6 +295,38 @@ class PastBook:
             self._db.commit()
             return made
 
+    def _open_here(self, key: str) -> str | None:
+        """The id this chat is in, without starting one."""
+        with self._lock:
+            row = self._db.execute("SELECT conversation FROM current WHERE key = ?",
+                                   (key,)).fetchone()
+        return row[0] if row else None
+
+    def _mark_latest(self, key: str, conversation_id: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO latest (conversation, key) VALUES (?, ?) "
+                "ON CONFLICT(conversation) DO UPDATE SET key = excluded.key",
+                (conversation_id, key))
+            self._db.commit()
+
+    def behind(self, key: str) -> str | None:
+        """The conversation this chat is in, when another chat wrote it
+        since this one did: its copy must be taken again before a turn."""
+        conversation = self._open_here(key)
+        if conversation is None:
+            return None
+        with self._lock:
+            row = self._db.execute("SELECT key FROM latest WHERE conversation = ?",
+                                   (conversation,)).fetchone()
+        return conversation if row is not None and row[0] != key else None
+
+    def caught_up(self, key: str) -> None:
+        """This chat's copy is the row again."""
+        conversation = self._open_here(key)
+        if conversation is not None:
+            self._mark_latest(key, conversation)
+
     def _set_current(self, key: str, conversation_id: str | None) -> None:
         with self._lock:
             if conversation_id is None:
@@ -316,24 +366,43 @@ class PastBook:
 
     def kept(self, actor: str, agent: str, key: str, thread: str, payload: dict) -> None:
         """A turn's conversation, as it is now, into the person's log."""
-        self.log(actor).keep(self.current(key), payload, road=came_of(thread),
-                             folder=agent)
+        conversation = self.current(key)
+        self.log(actor).keep(conversation, payload, road=came_of(thread), folder=agent)
+        self._mark_latest(key, conversation)
 
     def ended(self, key: str) -> None:
         """``/new``: the next turn here starts a new conversation."""
         self._set_current(key, None)
 
     def opened(self, key: str, conversation_id: str) -> None:
-        """``/chats N``: this chat's next turn grows that conversation."""
+        """``/chats N``: this chat's next turn grows that conversation,
+        from the row just taken (so it is not behind)."""
         self._set_current(key, conversation_id)
+        self._mark_latest(key, conversation_id)
 
     def delete(self, actor: str, conversation_id: str) -> bool:
-        return self.log(actor).delete(conversation_id)
+        if not self.log(actor).delete(conversation_id):
+            return False
+        with self._lock:
+            self._db.execute("DELETE FROM latest WHERE conversation = ?", (conversation_id,))
+            self._db.commit()
+        return True
+
+    def rename(self, actor: str, conversation_id: str, title: str) -> bool:
+        """The person's own title for it (an empty one: its first words)."""
+        return self._path(actor).exists() and self.log(actor).rename(conversation_id, title)
+
+    def pin(self, actor: str, conversation_id: str, pinned: bool = True) -> bool:
+        return self._path(actor).exists() and self.log(actor).pin(conversation_id, pinned)
 
     def forget_all(self, actor: str) -> None:
         """A person removed: their file goes."""
+        prefix = quote(actor, safe="") + "/"
         with self._lock:
             log = self._logs.pop(actor, None)
+            self._db.execute("DELETE FROM latest WHERE substr(key, 1, ?) = ?",
+                             (len(prefix), prefix))
+            self._db.commit()
         if log is not None:
             log.close()
         with suppress(FileNotFoundError):
@@ -405,7 +474,9 @@ def listing(agent: str, rows: list[Kept], words: str = "", *,
         n = (numbers or {}).get(row.id, place)
         when = datetime.fromisoformat(row.updated_at).astimezone().strftime("%a %-d %b %H:%M")
         here = " (this one)" if row.id == open_id else ""
-        out.append(f"{n}. {row.title}{here} — {when}, on {row.road}, {row.turns} "
+        pin = " (pinned)" if row.pinned else ""
+        roads = " and ".join(row.roads or (row.road,))
+        out.append(f"{n}. {row.title}{here}{pin} — {when}, on {roads}, {row.turns} "
                    f"message{'s' if row.turns != 1 else ''}")
         if row.snippet:
             snip = " ".join(row.snippet.replace(HIT, "*").replace(END, "*").split())

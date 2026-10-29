@@ -666,6 +666,37 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=404, detail="that conversation is gone")
         return {"deleted": conversation_id}
 
+    @app.post("/web/chats/{conversation_id}/rename")
+    async def web_chat_rename(conversation_id: str, request: Request,
+                              authorization: str | None = Header(default=None)) -> dict:
+        """``{actor, title}``: the person's own title for it, which search
+        finds too; an empty title gives its first words back."""
+        check(authorization)
+        body = await request.json()
+        actor = body.get("actor")
+        web_for(actor)
+        title = body.get("title")
+        if not isinstance(title, str):
+            raise HTTPException(status_code=400, detail="title must be words")
+        if not service.past.rename(actor, conversation_id, title):
+            raise HTTPException(status_code=404, detail="that conversation is gone")
+        return {"renamed": conversation_id}
+
+    @app.post("/web/chats/{conversation_id}/pin")
+    async def web_chat_pin(conversation_id: str, request: Request,
+                           authorization: str | None = Header(default=None)) -> dict:
+        """``{actor, pinned}``: kept above the newest in the list, or not."""
+        check(authorization)
+        body = await request.json()
+        actor = body.get("actor")
+        web_for(actor)
+        pinned = body.get("pinned", True)
+        if not isinstance(pinned, bool):
+            raise HTTPException(status_code=400, detail="pinned must be true or false")
+        if not service.past.pin(actor, conversation_id, pinned):
+            raise HTTPException(status_code=404, detail="that conversation is gone")
+        return {"pinned": pinned}
+
     # ---- what they turned down with /remember not (remembering.py) ----------
 
     @app.get("/web/declined")

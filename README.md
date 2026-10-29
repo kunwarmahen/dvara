@@ -494,10 +494,12 @@ And anyone can start their conversation with an agent over:
 ```
 /new                           start over; files, schedules, accounts and
                                the ledger all stay, and this conversation is kept
-/chats                         every conversation, newest first (a question is
-                               there from the moment it's asked, not when answered)
+/chats                         every conversation, pinned ones first, then newest
+                               (a question is there from the moment it's asked,
+                               not when answered; each says every road it went on)
 /chats boiler                  only the ones that say "boiler"
-/chats 2                       go back into one (the one you're in is kept)
+/chats 2                       go back into one (the one you're in is kept); one
+                               open on Telegram stays open there too
 /chats export 2                that one as a file to share (words, answers,
                                tool names -- never what a tool returned)
 /chats export 2 pdf            the same as a PDF, made here (opens on any phone)
@@ -523,9 +525,13 @@ conversation is kept as it goes, whether `/new` ends it or not, in each
 person's own file. `/chats` finds one by its words and goes back into
 it, on whichever channel you ask from
 ([notes/45](notes/45-going-back.md),
-[notes/50](notes/50-every-conversation-kept.md)). A page gets the same
+[notes/50](notes/50-every-conversation-kept.md)). One open on Telegram
+stays open there when the page opens it: both carry it on, each taking
+what the other said before its next turn
+([notes/71](notes/71-one-conversation-two-chats.md)). A page gets the same
 through `GET /web/chats`, `GET /web/chats/ID`, `GET
-/web/chats/ID/export` (Markdown; `?as=pdf` for the PDF) and `DELETE /web/chats/ID`; Sarathi's home page has a History button on them.
+/web/chats/ID/export` (Markdown; `?as=pdf` for the PDF) and `DELETE /web/chats/ID`,
+and names or pins one with `POST /web/chats/ID/rename` and `/pin`; Sarathi's home page uses them.
 The PDF is printed by the browser already on this machine (headless
 Chrome, the one the browser tools use), so Hindi and emoji come out
 right with nothing new installed; with no browser you get the Markdown
@@ -1026,6 +1032,8 @@ POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts p
 GET  /web/declined?actor=                        -> {declined: [newest first], waiting}
 POST /web/declined {actor, undo: [fact, ...]}    -> {back, declined, waiting}  (not kept)
 GET  /web/chats/ID/export?actor=&as=pdf          -> that conversation as a PDF (503: no browser)
+POST /web/chats/ID/rename {actor, title}         -> {renamed}  (empty title: its first words)
+POST /web/chats/ID/pin    {actor, pinned}        -> {pinned}
 ```
 
 A program that runs turns for people who are not there — a scheduler —
@@ -1494,7 +1502,7 @@ reads that person's key from `<state>/memory.json`
 | `marked.py` | an answer's Markdown as Telegram entities: the plain words, and beside them which are bold, italic, code or a link, counted in UTF-16; a mark only where it opens and closes against a word, so `snake_case` and `rm *.log` stay as typed; refused, the words go as written ([notes/70](notes/70-bold-not-asterisks.md)) |
 | `printed.py` | a conversation as a PDF for `/chats export N pdf` and `?as=pdf`: an escaped HTML page with nothing to fetch, printed by the machine's own headless Chrome so every script prints; no browser, the Markdown file and why ([notes/69](notes/69-a-picture-and-a-pdf.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
-| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
+| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); one conversation open on several chats, each taking the row again when another wrote it, the turn holding the conversation's lock, rename and pin ([notes/71](notes/71-one-conversation-two-chats.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
 | `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat; an answer's own on a page's chat, by its line (`web.py`) ([notes/60](notes/60-a-run-step-by-step.md)) |
 | `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |

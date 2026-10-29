@@ -36,10 +36,9 @@ to the id its turns write to. `/new` drops the mapping, `/chats N` points
 it at the old one, and that conversation's next turn grows its own row.
 The list holds one line per conversation, never a copy per reopening.
 
-NOT OPENED TWICE. A conversation still going on Telegram isn't opened on
-the page as well: two chats writing one row would each overwrite the
-other. The answer says where it's open (*"That conversation is still
-going on Telegram. Carry it on there, or send /new there first."*).
+~~NOT OPENED TWICE.~~ A conversation still going on Telegram now opens on
+the page as well, and both carry it on: each chat takes the row again
+before a turn when the other wrote it since ([note 71](71-one-conversation-two-chats.md)).
 
 A NUMBER MEANS WHAT WAS ON SCREEN. `/chats boiler` shows each match with
 its number in the whole list, so the `/chats 2` sent next opens the row
@@ -67,7 +66,12 @@ GET    /web/chats?actor=A&q=WORDS     every agent's, newest first; q searches
 GET    /web/chats/ID?actor=A          one, to read: entries (tools too) + transcript
 GET    /web/chats/ID/export?actor=A   one as a Markdown file, to share
 DELETE /web/chats/ID?actor=A          gone for good; 409 if open in a chat now
+POST   /web/chats/ID/rename           {actor, title}: the person's own title
+POST   /web/chats/ID/pin              {actor, pinned}: kept above the newest
 ```
+
+The last two, and each row's `roads` and `pinned`, are
+[note 71](71-one-conversation-two-chats.md)'s.
 
 A page carries one on by saying `/chats open ID` as a message, so the
 answer is a line like any other, with its transcript drawn in place.
@@ -143,4 +147,4 @@ phone width.
   test N` ([note 57](57-a-test-of-your-own.md)).
 * ~~**A PDF where there is no print window.**~~ `/chats export N pdf`,
   printed by the machine's own Chrome ([note 69](69-a-picture-and-a-pdf.md)).
-* **Naming a conversation.** Its title is its first words.
+* ~~**Naming a conversation.**~~ Rename and pin, kept in the person's own file ([note 71](71-one-conversation-two-chats.md)).

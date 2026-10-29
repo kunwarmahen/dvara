@@ -164,11 +164,72 @@ def test_a_persons_file_is_never_a_step_up(tmp_path):
     book.close()
 
 
-def test_one_still_open_in_another_chat_is_not_opened_twice(make_service):
+def test_one_open_in_another_chat_is_opened_here_too_and_says_so(make_service):
     service = make_service([says("Friday."), says("hi")])
     say(service, "trip?", thread="telegram:1")
     said = say(service, "/chats 1", thread="web:chat")
-    assert said.text.startswith("That conversation is still going on Telegram.")
+    assert said.text.startswith("Back in: trip?")
+    assert said.text.endswith("It's open on Telegram too: what's said in either "
+                              "carries it on.")
+
+
+def test_two_chats_on_one_conversation_each_see_what_the_other_said(make_service):
+    service = make_service([says("Friday."), says("A packed lunch."), says("By nine.")])
+    say(service, "when is the trip?", thread="telegram:1")
+    say(service, "/chats 1", thread="web:chat")
+    say(service, "what should he bring?", thread="web:chat")
+    say(service, "when should he be there?", thread="telegram:1")
+    assert shown(service) == ["when is the trip?", "what should he bring?",
+                              "when should he be there?"]
+    [row] = service.past.listed("owner", "greeter")
+    assert row.turns == 3
+    assert set(row.roads) == {"Telegram", "the page"}
+    listed = say(service, "/chats", thread="telegram:1").text
+    assert "on Telegram and the page, 3 messages" in listed
+
+
+def test_a_pinned_conversation_says_so_in_the_list(make_service):
+    service = make_service([says("Friday.")])
+    say(service, "when is the trip?")
+    [row] = service.past.listed("owner", "greeter")
+    service.past.pin("owner", row.id)
+    assert "1. when is the trip? (this one) (pinned) —" in say(service, "/chats").text
+
+
+def test_a_chat_that_is_not_behind_keeps_its_own_copy(make_service):
+    service = make_service([says("Friday."), says("Lunch.")])
+    say(service, "when is the trip?", thread="telegram:1")
+    key = session_key("owner", "greeter", "telegram:1")
+    assert service.past.behind(key) is None
+    say(service, "what to bring?", thread="telegram:1")
+    assert shown(service) == ["when is the trip?", "what to bring?"]
+
+
+def test_new_on_one_chat_leaves_the_other_in_the_conversation(make_service):
+    service = make_service([says("Friday."), says("hi"), says("Lunch.")])
+    say(service, "when is the trip?", thread="telegram:1")
+    say(service, "/chats 1", thread="web:chat")
+    say(service, "/new", thread="web:chat")
+    say(service, "hello", thread="web:chat")
+    say(service, "what to bring?", thread="telegram:1")
+    assert shown(service) == ["when is the trip?", "what to bring?"]
+
+
+def test_a_question_waiting_on_one_chat_is_set_aside_when_another_speaks(make_service):
+    service = make_service([says("Friday."), says("Lunch.")])
+    say(service, "when is the trip?", thread="telegram:1")
+    say(service, "/chats 1", thread="web:chat")
+    telegram = session_key("owner", "greeter", "telegram:1")
+    dropped = []
+    real = service.holds.drop_key
+    service.holds.drop_key = lambda key: dropped.append(key) or real(key)
+    say(service, "what to bring?", thread="web:chat")
+    assert telegram in dropped
+
+
+def test_a_pucks_conversation_is_named_by_its_puck():
+    assert past.came_of("vaani:kitchen") == "the kitchen puck"
+    assert past.came_of("telegram:42") == "Telegram"
 
 
 def test_export_sends_a_file_of_words_and_tool_names(make_service):
@@ -287,6 +348,36 @@ def test_the_page_lists_searches_reads_and_deletes(make_service):
                               params={"actor": "owner"}).status_code == 200
         assert client.get(f"/web/chats/{old}", headers=auth,
                           params={"actor": "owner"}).status_code == 404
+
+
+def test_the_page_renames_and_pins_only_the_persons_own(make_service):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service([says("Lisbon in May."), says("1.5 bar.")], web=True)
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    with TestClient(create_app(service, token=token)) as client:
+        finish(client, auth, "where should we go?")
+        finish(client, auth, "/new")
+        finish(client, auth, "boiler pressure?")
+        rows = client.get("/web/chats", headers=auth, params={"actor": "owner"}).json()["rows"]
+        old = rows[1]["id"]
+        assert rows[1]["roads"] == ["the page"] and rows[1]["pinned"] is False
+        assert client.post(f"/web/chats/{old}/rename", headers=auth,
+                           json={"actor": "owner", "title": "Holiday"}).status_code == 200
+        assert client.post(f"/web/chats/{old}/pin", headers=auth,
+                           json={"actor": "owner", "pinned": True}).status_code == 200
+        rows = client.get("/web/chats", headers=auth, params={"actor": "owner"}).json()["rows"]
+        assert [(r["title"], r["pinned"]) for r in rows] == [("Holiday", True),
+                                                            ("boiler pressure?", False)]
+        assert client.post(f"/web/chats/{old}/rename", headers=auth,
+                           json={"actor": "guest", "title": "x"}).status_code == 404
+        assert client.post(f"/web/chats/{old}/pin", headers=auth,
+                           json={"actor": "owner", "pinned": "yes"}).status_code == 400
+        assert client.post(f"/web/chats/{old}/rename", headers=auth,
+                           json={"actor": "owner", "title": 3}).status_code == 400
 
 
 def test_the_page_carries_one_on(make_service):

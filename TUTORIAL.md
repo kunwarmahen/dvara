@@ -1369,6 +1369,26 @@ good. The conversation open now can't be deleted until you `/new`.
 Telegram's command menu lists `/chats` as *Our conversations: find,
 open, delete*.
 
+**One conversation on Telegram and the page.** Opening one that's still
+going on Telegram doesn't take it away from Telegram: both carry it on.
+Try it with two threads standing in for the two:
+
+```bash
+dvara say --actor owner --agent greeter --thread telegram:1 "What pressure should a boiler show when cold?"
+dvara say --actor owner --agent greeter --thread web:chat "/chats 1"
+dvara say --actor owner --agent greeter --thread web:chat "And if it shows 0.5 bar?"
+dvara say --actor owner --agent greeter --thread telegram:1 "What did I just ask on the page?"
+```
+
+The second answer ends *"It's open on Telegram too: what's said in either
+carries it on."* The last one knows you asked about 0.5 bar. `/chats`
+then says *"on Telegram and the page"* for that one conversation. A
+question Telegram was waiting on (a yes for an email) is set aside when
+you say something new on the page, as a new message on Telegram itself
+would. A page can also give a conversation a name of your own and pin it
+to the top of the list; `/chats` then marks it *(pinned)*
+([note 71](notes/71-one-conversation-two-chats.md)).
+
 An answer that was right (and checked) can be kept as a test:
 `/keep test 7:45, coach` keeps the conversation open now, `/chats test 2`
 one from the list. The words, comma-separated, are what the answer must
@@ -2061,6 +2081,7 @@ Each topic, and the note that argues it:
 | `notes/44-what-they-send.md` | a picture or file the person sends: kept in their folder under `from-you/`, a picture shown to a model that can see |
 | `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again (now every conversation: note 50) |
 | `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
+| `notes/71-one-conversation-two-chats.md` | one conversation open on Telegram and the page at once, each taking what the other said before its turn; named and pinned |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |

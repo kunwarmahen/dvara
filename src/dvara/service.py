@@ -86,7 +86,7 @@ import asyncio
 import json
 import re
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -1025,7 +1025,9 @@ class Service:
                              stop_reason="skipped")
             scheduled = PhoneRun(steps=tuple(phone_steps), phones=which)
 
-        async with self._locks.hold(key):
+        async with self._locks.hold(key), self._shared(key, unattended):
+            if not unattended:
+                self._catch_up(key, who)
             # Costing zero until something is spent. The distinction the
             # ledger draws is between "nothing was spent" and "tokens
             # were spent that nobody can price", and a refusal is firmly
@@ -1126,7 +1128,7 @@ class Service:
         who = self.actors.may(actor, hold.agent)
         spec = self.roster.spec(hold.agent)
 
-        async with self._locks.hold(hold.key):
+        async with self._locks.hold(hold.key), self._shared(hold.key, False):
             # Looked up again under the lock: two answers racing for one
             # hold must not both carry it on.
             if self.holds.get(hold_id) is None:
@@ -2033,9 +2035,6 @@ class Service:
         if chosen.id == open_id:
             return "That's the conversation we're in now."
         elsewhere = [k for k in self.past.open_on(who.id, chosen.id) if k != key]
-        if elsewhere:
-            return (f"That conversation is still going on {past.came_of_key(elsewhere[0])}. "
-                    f"Carry it on there, or send /new there first.")
         if key in self._locks:
             return fresh.STILL_ANSWERING.replace("/new", f"/chats {pick}")
         async with self._locks.hold(key):
@@ -2047,6 +2046,9 @@ class Service:
             self.sessions.save_payload(payload, session_id=key)
             self.past.opened(key, chosen.id)
         said = past.reopened(payload, agent)
+        if elsewhere:
+            said += (f"\n\nIt's open on {past.came_of_key(elsewhere[0])} too: what's "
+                     f"said in either carries it on.")
         if self.learning.drop_lesson(who.id, agent):
             from yantra.skills.lesson import DROPPED
             said = f"{said}\n\n{DROPPED}"
@@ -2546,6 +2548,30 @@ class Service:
             told.mark(key, info)
             sent += 1
         return sent
+
+    def _shared(self, key: str, unattended: bool):
+        """The conversation's own lock, beside its chat's (past.py: one
+        conversation, several chats). A schedule's run has none."""
+        if unattended:
+            return nullcontext()
+        return self._locks.hold(f"conversation:{self.past.current(key)}")
+
+    def _catch_up(self, key: str, who: Actor) -> None:
+        """Before a turn: a chat behind its conversation takes it again,
+        and a question another chat on it was waiting on is set aside --
+        what a new message does on one chat (past.py)."""
+        conversation = self.past.behind(key)
+        if conversation is not None:
+            payload = self.past.payload(who.id, conversation)
+            if payload is not None:
+                self.holds.drop_key(key)
+                self.sessions.forget(key)
+                self.sessions.save_payload(payload, session_id=key)
+            self.past.caught_up(key)
+        here = self.past.current(key)
+        for other in self.past.open_on(who.id, here):
+            if other != key:
+                self.holds.drop_key(other)
 
     def _rehydrate(self, agent, key: str) -> None:
         """Restore the conversation; keep the identity we just built.
