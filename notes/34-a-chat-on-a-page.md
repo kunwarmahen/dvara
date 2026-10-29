@@ -48,7 +48,8 @@ the door with it.
 
 Turns from the page run under the thread `web:chat`, beside Telegram's
 `telegram:<chat>`. **A chat on Telegram does not continue on the page,
-and the reverse.** Each place keeps its own history. Everything else is
+and the reverse** -- not by itself: `/chats N` opens one in both, and
+both carry it on ([note 71](71-one-conversation-two-chats.md)). Each place keeps its own history. Everything else is
 one person: the same allowance, the same rules, the same folder, the
 same Setu sign-ins, and one queue of questions.
 

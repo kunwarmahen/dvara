@@ -1284,9 +1284,11 @@ it with `POST /web/asks/{id}` and `{"actor": "owner", "approve": true}`.
 
 You won't usually type these. Sarathi starts the door with `--web` and
 puts the chat on its home page. Two things to know: the page's chat is
-its own conversation (one on Telegram doesn't continue there), and the
-person is the same person on both, with the same allowance, rules and
-questions ([notes/34](notes/34-a-chat-on-a-page.md)).
+its own conversation (one on Telegram doesn't continue there by itself,
+but `/chats N` on the page opens it there too, and both carry it on;
+[notes/71](notes/71-one-conversation-two-chats.md)), and the person is
+the same person on both, with the same allowance, rules and questions
+([notes/34](notes/34-a-chat-on-a-page.md)).
 
 ### A job a restart stopped
 
