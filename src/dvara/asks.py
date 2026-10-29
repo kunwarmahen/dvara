@@ -174,6 +174,10 @@ class Ask:
     #: step found it, what it would tap ringed (Yantra's card_picture).
     #: The person answers by looking; None for a question in words.
     picture: bytes | None = field(default=None, repr=False)
+    #: The call is one no standing yes covers (Yantra's ``always_ask``: a
+    #: purchase, a send, a change after reading outside text). A channel
+    #: that can ask for more than a tap -- Vaani's spoken PIN -- does.
+    always_ask: bool = False
 
     def as_dict(self) -> dict:
         """The wire shape. One place, so a channel and the HTTP surface agree.
@@ -186,6 +190,8 @@ class Ask:
                "thread": self.thread, "tool": self.tool,
                "summary": self.summary,
                "asked_at": self.asked_at.isoformat(timespec="seconds")}
+        if self.always_ask:
+            out["always_ask"] = True
         if self.picture is not None:
             # only ever listed to the person it was put to (/asks?actor=)
             out["picture"] = base64.b64encode(self.picture).decode()
@@ -304,7 +310,7 @@ class AskDesk:
                   reach: Sequence[tuple[str, str]] = (),
                   timeout: float | None = None,
                   picture: bytes | None = None,
-                  scheduled: bool = False) -> Answer:
+                  scheduled: bool = False, always_ask: bool = False) -> Answer:
         """Ask, wait, and come back with a decision either way.
 
         Never raises for anything a person or a channel could have caused:
@@ -337,7 +343,8 @@ class AskDesk:
         limit = (self.timeout if timeout is None
                  else max(0.0, timeout if scheduled else min(self.timeout, timeout)))
         ask = Ask(id=fresh_id(), actor=actor, agent=agent,
-                  thread=thread, tool=tool, summary=summary, picture=picture)
+                  thread=thread, tool=tool, summary=summary, picture=picture,
+                  always_ask=always_ask)
         loop = asyncio.get_running_loop()
         future: asyncio.Future[tuple[bool, str | None]] = loop.create_future()
         self._waiting[ask.id] = (ask, future, loop)

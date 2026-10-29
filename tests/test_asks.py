@@ -596,3 +596,37 @@ def test_a_notifier_that_returns_nothing_is_taken_down_by_nobody():
 
     assert run(go()).approved is False
     assert len(seen) == 1
+
+
+def test_a_call_no_standing_yes_covers_says_so_to_whoever_lists_it():
+    """Vaani asks for a spoken PIN for these: the listing has to say which."""
+    from dvara.asks import Ask
+    plain = Ask(id="a1", actor="owner", agent="minder", thread="t", tool="browser_open",
+                summary="Open a page")
+    weighty = Ask(id="a2", actor="owner", agent="minder", thread="t", tool="send_email",
+                  summary="Send it", always_ask=True)
+    assert "always_ask" not in plain.as_dict() and weighty.as_dict()["always_ask"] is True
+
+
+def test_the_gate_hands_the_mark_to_the_desk():
+    import asyncio
+
+    from yantra.permissions import PermissionRequest
+
+    from dvara import gate
+    from dvara.asks import Answer
+
+    seen = {}
+
+    class Desk:
+        timeout, on_timeout = 60.0, "deny"
+
+        async def put(self, **kwargs):
+            seen.update(kwargs)
+            return Answer(approved=True, reason=None)
+
+    request = PermissionRequest(tool_name="send_email", arguments={}, summary="Send it",
+                                read_only=False, always_ask=True)
+    assert asyncio.run(gate.put(Desk(), request, actor="owner", agent="minder",
+                                thread="vaani:kitchen")) is True
+    assert seen["always_ask"] is True

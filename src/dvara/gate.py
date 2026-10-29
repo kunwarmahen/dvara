@@ -392,7 +392,8 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
                                 tool=request.tool_name,
                                 summary=request.summary, reach=reach,
                                 timeout=deadline, picture=_png(request),
-                                scheduled=scheduled)
+                                scheduled=scheduled,
+                                always_ask=bool(getattr(request, "always_ask", False)))
     finally:
         # Spent in a finally: a question the caller hung up on still kept
         # the person waiting for as long as it was up.
