@@ -38,6 +38,30 @@ def test_a_named_model_is_used_as_named(monkeypatch):
     assert heard.which_model("http://nowhere.invalid") == "gemma4:e4b"
 
 
+def test_whisper_is_asked_first_and_ollama_is_the_fallback(monkeypatch, tmp_path):
+    import httpx
+    asked = []
+
+    def post(url, **kw):
+        asked.append(url)
+        if "transcriptions" in url:
+            if "down" in url:
+                raise httpx.ConnectError("refused")
+            assert kw["files"]["file"][2] == "audio/wav"
+            return httpx.Response(200, json={"text": " call  Ravi on Monday "},
+                                  request=httpx.Request("POST", url))
+        return httpx.Response(200, json={"message": {"content": "from ollama"}},
+                              request=httpx.Request("POST", url))
+    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(heard, "to_wav", lambda path: b"RIFF")
+    monkeypatch.setenv(heard.ENV, "gemma4:e4b")
+    monkeypatch.setenv(heard.WHISPER, "http://whisper.test:11435")
+    assert heard._hear(tmp_path / "v.ogg") == "call Ravi on Monday"
+    assert asked == ["http://whisper.test:11435/v1/audio/transcriptions"]
+    monkeypatch.setenv(heard.WHISPER, "http://down.test:11435")
+    assert heard._hear(tmp_path / "v.ogg") == "from ollama"
+
+
 def test_without_ffmpeg_it_says_so(monkeypatch, tmp_path):
     monkeypatch.setattr(heard.shutil, "which", lambda name: None)
     words, why = asyncio.run(heard.hear(tmp_path / "v.ogg"))

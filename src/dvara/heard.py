@@ -16,8 +16,14 @@ WHAT WAS HEARD IS SHOWN. The person sees *I heard: "…"* with the answer
 (a line on the page, a message before the answer on Telegram), so a
 mishearing is caught by the one person who knows what they said.
 
-WHICH MODEL. ``$DVARA_HEARING`` names one; otherwise the smallest local
-model Ollama lists with "audio". None is said plainly: the recording is
+WHICH MODEL. A Whisper on this computer first, when ``$DVARA_WHISPER``
+gives its address: any server on the OpenAI transcription road
+(``faster-whisper-server``, whisper.cpp's), made to write speech down and
+faster at it than a model asked to. Otherwise ``$DVARA_HEARING`` names an
+Ollama model; otherwise the smallest local one Ollama lists with
+"audio". A Whisper that doesn't answer falls back to Ollama's, and the
+reason is kept for the line that says nothing could listen. None is
+said plainly: the recording is
 kept in their folder (``from-you/``), and the agent is told it can't
 listen to it -- never a guess at what it said.
 
@@ -37,6 +43,10 @@ from pathlib import Path
 
 #: The model to hear with, by name.
 ENV = "DVARA_HEARING"
+#: A Whisper server's address (the OpenAI transcription road), tried first.
+WHISPER = "DVARA_WHISPER"
+#: The Whisper model asked for; a server with one model ignores it.
+WHISPER_MODEL = "DVARA_WHISPER_MODEL"
 #: How long hearing one note may take, and the longest note heard.
 WITHIN = 180.0
 LONGEST_SECONDS = 300
@@ -94,7 +104,41 @@ def to_wav(path: Path) -> bytes:
         return out.read_bytes()
 
 
+def _whisper(url: str, wav: bytes) -> str:
+    import httpx
+
+    model = os.environ.get(WHISPER_MODEL, "").strip() or "Systran/faster-whisper-small"
+    try:
+        answer = httpx.post(f"{url.rstrip('/')}/v1/audio/transcriptions", timeout=WITHIN,
+                            data={"model": model},
+                            files={"file": ("note.wav", wav, "audio/wav")})
+        answer.raise_for_status()
+        words = str(answer.json().get("text") or "")
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ValueError(f"Whisper at {url} didn't answer: {exc}") from None
+    words = " ".join(words.split()).strip()
+    if not words:
+        raise ValueError("Whisper heard nothing in it")
+    return words
+
+
 def _hear(path: Path) -> str:
+    whisper = os.environ.get(WHISPER, "").strip()
+    if whisper:
+        try:
+            return _whisper(whisper, to_wav(path))
+        except ValueError as exc:
+            if "heard nothing" in str(exc):
+                raise
+            missed = str(exc)
+        try:
+            return _hear_ollama(path)
+        except ValueError as exc:
+            raise ValueError(f"{missed}; and {exc}") from None
+    return _hear_ollama(path)
+
+
+def _hear_ollama(path: Path) -> str:
     import httpx
 
     base = ollama_url()

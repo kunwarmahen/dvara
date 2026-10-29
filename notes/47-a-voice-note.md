@@ -15,6 +15,19 @@ model Ollama has. Ollama takes WAV, not Telegram's OGG/Opus (it answers
 *"Failed to load image or audio file"*), so `ffmpeg` converts it first,
 mono 16 kHz, the first five minutes.
 
+**A WHISPER, WHEN THERE IS ONE, FIRST.** A model asked to write a note
+down is a general model doing a narrow job; Whisper is made for it, and
+a house that runs voice for Home Assistant often has one already.
+`$DVARA_WHISPER` gives its address -- any server with the OpenAI
+transcription road (`faster-whisper-server`, whisper.cpp's): the WAV is
+posted to `/v1/audio/transcriptions` (`$DVARA_WHISPER_MODEL`, default
+`Systran/faster-whisper-small`). One that doesn't answer falls back to
+the Ollama model above, and both reasons are kept for the line that
+says nothing could listen. Sarathi sets it from `[dvara] whisper`.
+Live: a Telegram-style OGG/Opus note of Piper saying *"What's on my
+calendar tomorrow? See the list."* came back word for word from
+`faster-whisper-server` (`Systran/faster-whisper-small`, CUDA) in 0.8 s.
+
 The turn is the words, with a line that says where they came from:
 
 ```
