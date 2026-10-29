@@ -133,6 +133,9 @@ def test_an_agent_added_from_an_example_and_removed_aside(tmp_path):
         == "helper"
     aside = settings.remove_agent(root, "helper")
     assert not (root / "helper").exists() and (aside / "agent.toml").is_file()
+    shown = settings.show(root=root, actors=tmp_path / "actors.toml",
+                          policy=tmp_path / "policy.toml")
+    assert [a["name"] for a in shown["agents"]] == []
 
 
 def test_a_whole_file_as_text_is_checked_first(actors):

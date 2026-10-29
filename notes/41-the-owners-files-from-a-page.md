@@ -53,7 +53,9 @@ Sarathi's home page calls these (its note 16). Each answers
   key's default.
 * **NAMES, NEVER PATHS.** A person or agent name is letters, digits, `-`
   and `_`, so a page can't reach outside Dvara's folders. A removed
-  agent's folder is moved aside (`.removed-NAME`), never deleted.
+  agent's folder is moved aside (`.removed-NAME`), never deleted, and not
+  listed: Settings lists only the folders the roster would load
+  (a name that can't start with a dot).
 
 ## The rules file sits beside the people
 
