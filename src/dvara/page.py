@@ -14,7 +14,7 @@ those at a time, in a terminal. This page shows them together:
     GET /api/file?agent=A&path=P          one of the owner's own files, as text
     GET /api/schedules       each person's schedules, as Samay says them
     GET  /api/waiting        the owner's questions and held turns, from the door
-    POST /api/asks/ID        {approve: true|false}
+    POST /api/asks/ID        {approve: true|false, for_turn?: true}
     POST /api/holds/ID       {answers: {call id: true|false|"reason"}}
 
 A SEPARATE PROCESS, AND IT ONLY READS. ``dvara page`` reads what ``dvara
@@ -218,9 +218,11 @@ class Door:
                 "asks": [a for a in asks.get("asks", []) if a.get("actor") == self.owner],
                 "holds": [h for h in holds.get("holds", []) if h.get("actor") == self.owner]}
 
-    def answer(self, ask_id: str, approve: bool) -> tuple[int, dict]:
+    def answer(self, ask_id: str, approve: bool,
+               for_turn: bool = False) -> tuple[int, dict]:
         return self._call("POST", f"/asks/{quote(ask_id, safe='')}",
-                          body={"actor": self.owner, "approve": approve})
+                          body={"actor": self.owner, "approve": approve,
+                                **({"for_turn": True} if for_turn else {})})
 
     def carry_on(self, hold_id: str, answers: dict[str, bool | str]) -> tuple[int, dict]:
         return self._call("POST", f"/holds/{quote(hold_id, safe='')}",
@@ -320,7 +322,8 @@ class Api:
             raise ApiError(400, "answers maps each waiting call's id to true, false, "
                                 "or a reason")
         try:
-            code, data = (door.answer(item, approve) if kind == "asks"
+            code, data = (door.answer(item, approve, body.get("for_turn") is True)
+                          if kind == "asks"
                           else door.carry_on(item, answers))
         except httpx.HTTPError as exc:
             raise ApiError(502, f"the door didn't answer ({type(exc).__name__})") from None

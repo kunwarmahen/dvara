@@ -543,6 +543,41 @@ def test_a_press_lands_on_the_desk_and_clears_the_buttons(make_bot,
     assert "reply_markup" not in edited
 
 
+def test_a_question_asked_after_reading_offers_approve_all_for_this_task(make_bot):
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asyncio.run(bot._deliver_ask(_ask(for_turn=True)))
+    rows = fake.sent()[0]["reply_markup"]["inline_keyboard"]
+    assert [b["callback_data"] for b in rows[0]] == ["y:abc123", "n:abc123"]
+    assert rows[1] == [{"text": "approve all for this task", "callback_data": "t:abc123"}]
+
+
+def test_pressing_approve_all_lands_a_yes_for_the_task(make_bot, make_service, actors):
+    desk = AskDesk(timeout=5)
+    service = make_service([says("ok")], actors=actors, asks=desk)
+    fake = FakeTelegram()
+    bot = make_bot(fake, service=service)
+    desk.route("telegram", bot._deliver_ask)
+
+    async def go():
+        put = asyncio.ensure_future(desk.put(
+            actor="mahen", agent="greeter", thread="t", tool="bash", summary="ls",
+            reach=(("telegram", str(KNOWN)),), for_turn=True))
+        await _delivered(fake)
+        pressed = press(desk.pending("mahen")[0].id)
+        pressed["callback_query"]["data"] = "t" + pressed["callback_query"]["data"][1:]
+        await bot._handle(pressed)
+        answer = await put
+        await desk.withdrawn()
+        return answer
+
+    answer = asyncio.run(go())
+    assert answer.approved is True and answer.for_turn is True
+    assert fake.of("answerCallbackQuery")[0]["text"] == "approved for the rest of this task"
+    assert fake.of("editMessageText")[0]["text"].endswith(
+        "— approved, and the rest of this task")
+
+
 async def _delivered(fake) -> None:
     """Until the question has actually gone out -- a real round trip."""
     while not any("reply_markup" in p for p in fake.sent()):

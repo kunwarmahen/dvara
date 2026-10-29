@@ -154,7 +154,7 @@ are errors too:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak, voice, zone
+setu_accounts, setu_manage, speak, trusted, voice, zone
 ```
 
 A misspelled ceiling that quietly means "no ceiling" is exactly the
@@ -347,6 +347,19 @@ Neither the yolo rung nor an `allow` rule in `policy.toml` covers it.
 With somebody to ask it's a question, and with nobody it's refused, and
 the model is told not to act on that text ([notes/58](notes/58-outside-text-asks.md);
 Yantra's notes/142).
+
+Two things keep that from becoming a question on every step
+([notes/72](notes/72-asked-less-not-never.md)). Such a card has a third
+button, **approve all for this task**: one yes, and the rest of that
+task's after-reading questions run, unless the agent reads something new
+(a purchase is still asked every time). And a person's `trusted = [...]`
+in `actors.toml` names servers whose answers are their own words, such as
+`samay` or `homeassistant-home`; reading those asks nothing new.
+
+If *everything* is asked, look at how Dvara was started. The owner's half
+of yolo is `--yolo` on the command line, and with `--ask` alone every
+change is a question, whatever `actors.toml` and the package say.
+Sarathi's *Let "Never asked" work* switch adds it.
 
 **Two kinds of silence**, and this is the part that took a rewrite:
 
@@ -2085,6 +2098,7 @@ Each topic, and the note that argues it:
 | `notes/45-going-back.md` | `/chats`: what `/new` ended, kept and listed, and opened again (now every conversation: note 50) |
 | `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
 | `notes/71-one-conversation-two-chats.md` | one conversation open on Telegram and the page at once, each taking what the other said before its turn; named and pinned |
+| `notes/72-asked-less-not-never.md` | **approve all for this task** on a question asked only because of a read; `trusted` servers aren't outside text; `--ask` alone asks everything |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |

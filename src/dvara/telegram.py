@@ -884,7 +884,7 @@ class TelegramBot:
         Telegram's, so it stays here in the closure; the desk only knows
         that there is something to call.
         """
-        data = [f"y:{ask.id}", f"n:{ask.id}"]
+        data = [f"y:{ask.id}", f"n:{ask.id}", f"t:{ask.id}"]
         if any(len(d.encode("utf-8")) > CALLBACK_LIMIT for d in data):
             raise TelegramError(
                 f"an ask id of {len(ask.id)} characters does not fit in a "
@@ -907,7 +907,8 @@ class TelegramBot:
             reply_markup={"inline_keyboard": [[
                 {"text": "approve", "callback_data": data[0]},
                 {"text": "refuse", "callback_data": data[1]},
-            ]]})
+            ], *([[{"text": FOR_TURN_BUTTON, "callback_data": data[2]}]]
+                 if ask.for_turn else [])]})
         message_id = (sent or {}).get("message_id")
 
         async def withdraw(answer: Answer | None) -> None:
@@ -945,7 +946,7 @@ class TelegramBot:
             await self._tapped(query, ask_id)
             return
         if self.service.asks is None or not ask_id \
-                or verdict not in ("y", "n"):
+                or verdict not in ("y", "n", "t"):
             await self._toast(query_id, "that button means nothing here")
             return
         try:
@@ -953,10 +954,11 @@ class TelegramBot:
         except Refused as exc:
             await self._toast(query_id, str(exc))
             return
-        approve = verdict == "y"
+        approve = verdict in ("y", "t")
         try:
             landed = self.service.asks.answer(ask_id, actor=actor,
-                                              approve=approve, via="telegram")
+                                              approve=approve, via="telegram",
+                                              for_turn=verdict == "t")
         except NotYours as exc:
             # The id was forwarded, or an adapter is routing badly. Said
             # to the presser rather than swallowed: a button that does
@@ -970,7 +972,9 @@ class TelegramBot:
         # down on every channel it went to, this one included, through
         # the undo ``_deliver_ask`` handed it -- one writer, so a press
         # here and an answer from anywhere else go through the same code.
-        await self._toast(query_id, "approved" if approve else "refused")
+        await self._toast(query_id, ("approved for the rest of this task"
+                                     if verdict == "t" else
+                                     "approved" if approve else "refused"))
 
     async def _skill(self, query: dict, data: str, *, keep: bool) -> None:
         """Keep or Not now on a skill offered: the same words typed
@@ -1267,6 +1271,12 @@ class TelegramBot:
         raise TelegramError(f"{method}: gave up after a rate limit")
 
 
+#: The third button, on a question asked only because the agent read
+#: something you didn't write (gate.put). Words a person reads, so no
+#: "turn": the task is what they asked for.
+FOR_TURN_BUTTON = "approve all for this task"
+
+
 def ending(answer: Answer | None) -> str:
     """The words left under a question once it is over.
 
@@ -1281,7 +1291,8 @@ def ending(answer: Answer | None) -> str:
         return "nobody answered in time, so the turn is waiting for you"
     if answer.code == REFUSED_TIMEOUT:
         return "nobody answered in time, so it was refused"
-    decided = "approved" if answer.approved else "refused"
+    decided = ("approved, and the rest of this task" if answer.for_turn
+               else "approved" if answer.approved else "refused")
     if answer.via in (None, "telegram"):
         return decided
     place = {"terminal": "at the terminal", "http": "over HTTP"}

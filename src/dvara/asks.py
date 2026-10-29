@@ -145,6 +145,9 @@ DEFAULT_TIMEOUT = 120.0
 #: What an unanswered question comes to. Never "allow": see the module
 #: docstring.
 ON_TIMEOUT = ("deny", "hold")
+#: How many turns' "yes, and the rest of this task" the desk keeps. A turn
+#: lasts minutes; this only bounds a long-running service's memory.
+FOR_TURN_KEPT = 256
 
 
 @dataclass(frozen=True)
@@ -178,6 +181,10 @@ class Ask:
     #: purchase, a send, a change after reading outside text). A channel
     #: that can ask for more than a tap -- Vaani's spoken PIN -- does.
     always_ask: bool = False
+    #: The call asks only because the turn read outside text, so it may be
+    #: answered "yes, and the rest of this task" (gate.put). A channel
+    #: shows that third answer only when this is set.
+    for_turn: bool = False
 
     def as_dict(self) -> dict:
         """The wire shape. One place, so a channel and the HTTP surface agree.
@@ -192,6 +199,8 @@ class Ask:
                "asked_at": self.asked_at.isoformat(timespec="seconds")}
         if self.always_ask:
             out["always_ask"] = True
+        if self.for_turn:
+            out["for_turn"] = True
         if self.picture is not None:
             # only ever listed to the person it was put to (/asks?actor=)
             out["picture"] = base64.b64encode(self.picture).decode()
@@ -229,6 +238,10 @@ class Answer:
     #: because "where were you when you approved this?" is a question an
     #: owner asks of a Run six months later and nothing could answer.
     via: str | None = None
+    #: The yes covers the rest of this turn's after-reading questions, so
+    #: long as nothing new is read (gate.put). Only ever True on a yes to
+    #: a question that offered it.
+    for_turn: bool = False
 
 
 #: How a delivered question is taken down again, once it is over: given
@@ -277,14 +290,18 @@ class AskDesk:
         #: that is the only place a question could go.
         self.notify = notify
         self._routes: dict[str, Notifier] = {}
-        #: The future resolves with (approved, via) rather than a bare
-        #: bool, because the two facts are settled by the same person in
+        #: The future resolves with (approved, via, for_turn) rather than
+        #: a bare bool, because the facts are settled by the same person in
         #: the same act and a second channel for the second one would be
         #: a second thing that can be late or lost.
         self._waiting: dict[
-            str, tuple[Ask, asyncio.Future[tuple[bool, str | None]],
+            str, tuple[Ask, asyncio.Future[tuple[bool, str | None, bool]],
                        asyncio.AbstractEventLoop]
         ] = {}
+        #: turn id -> what that turn had read when its person said "yes,
+        #: and the rest of this task". In memory, like the questions: a
+        #: turn does not outlive the process either. The newest few only.
+        self._for_turn: dict[str, frozenset[str]] = {}
         #: Take-downs in flight. Held so the garbage collector cannot take
         #: one mid-edit, and emptied by their own callbacks.
         self._withdrawing: set[asyncio.Task] = set()
@@ -310,7 +327,8 @@ class AskDesk:
                   reach: Sequence[tuple[str, str]] = (),
                   timeout: float | None = None,
                   picture: bytes | None = None,
-                  scheduled: bool = False, always_ask: bool = False) -> Answer:
+                  scheduled: bool = False, always_ask: bool = False,
+                  for_turn: bool = False) -> Answer:
         """Ask, wait, and come back with a decision either way.
 
         Never raises for anything a person or a channel could have caused:
@@ -344,9 +362,9 @@ class AskDesk:
                  else max(0.0, timeout if scheduled else min(self.timeout, timeout)))
         ask = Ask(id=fresh_id(), actor=actor, agent=agent,
                   thread=thread, tool=tool, summary=summary, picture=picture,
-                  always_ask=always_ask)
+                  always_ask=always_ask, for_turn=for_turn)
         loop = asyncio.get_running_loop()
-        future: asyncio.Future[tuple[bool, str | None]] = loop.create_future()
+        future: asyncio.Future[tuple[bool, str | None, bool]] = loop.create_future()
         self._waiting[ask.id] = (ask, future, loop)
         deliveries = self._deliver(ask, reach)
         deadline = loop.time() + limit
@@ -368,7 +386,7 @@ class AskDesk:
             self._withdraw(deliveries, answer)
 
     async def _wait(self, ask: Ask,
-                    future: asyncio.Future[tuple[bool, str | None]],
+                    future: asyncio.Future[tuple[bool, str | None, bool]],
                     deliveries: list[asyncio.Future],
                     deadline: float, limit: float, lapses: bool = False) -> Answer:
         """The deadline, the deliveries and the answer, whichever speaks first."""
@@ -396,9 +414,9 @@ class AskDesk:
                     return Answer(False, _undeliverable(tool, failures[0]),
                                   REFUSED_UNATTENDED)
             if future.done():
-                approved, via = future.result()
+                approved, via, for_turn = future.result()
                 if approved:
-                    return Answer(True, via=via)
+                    return Answer(True, via=via, for_turn=for_turn and ask.for_turn)
                 return Answer(False, _refused(tool, actor), REFUSED_USER,
                               via=via)
             # Delivered, and nobody has answered yet. Round again on
@@ -481,7 +499,7 @@ class AskDesk:
         return found[0] if found else None
 
     def answer(self, ask_id: str, *, actor: str, approve: bool,
-               via: str | None = None) -> bool:
+               via: str | None = None, for_turn: bool = False) -> bool:
         """Land one decision. False when there was nothing to land on.
 
         WRONG ACTOR IS NOT AN ANSWER. The id alone would be enough for
@@ -497,6 +515,10 @@ class AskDesk:
         it is a record and never a check -- a front end that does not say
         still gets its answer landed, which keeps an old caller working
         and keeps this from becoming a second identity to get wrong.
+
+        ``for_turn`` is "yes, and the rest of this task". It means
+        something only with a yes, and only on a question that offered it
+        (``Ask.for_turn``); anywhere else it is a plain yes.
         """
         found = self._waiting.get(ask_id)
         if found is None:
@@ -510,15 +532,34 @@ class AskDesk:
             # second one did something.
             return False
         if _running_loop() is loop:
-            future.set_result((bool(approve), via))
+            future.set_result((bool(approve), via, bool(approve and for_turn)))
         else:
             # From anywhere else -- another thread, another loop -- the
             # answer has to be handed to the loop that is waiting on it.
             # Scheduled rather than set, so this returns "posted", not
             # "already delivered"; the difference is one tick of an event
             # loop that is not ours to run.
-            loop.call_soon_threadsafe(_resolve, future, bool(approve), via)
+            loop.call_soon_threadsafe(_resolve, future, bool(approve), via,
+                                      bool(approve and for_turn))
         return True
+
+    # ---- "yes, and the rest of this task" ------------------------------------
+
+    def yes_for_turn(self, turn_id: str, read: Sequence[str]) -> None:
+        """Remember a yes for the rest of ``turn_id``, given while it had
+        read ``read``. A later yes adds what was read since."""
+        if not turn_id:
+            return
+        seen = self._for_turn.pop(turn_id, frozenset())
+        self._for_turn[turn_id] = seen | frozenset(read)
+        while len(self._for_turn) > FOR_TURN_KEPT:
+            self._for_turn.pop(next(iter(self._for_turn)))
+
+    def covered_for_turn(self, turn_id: str, read: Sequence[str]) -> bool:
+        """A yes for this turn was given, and nothing has been read since
+        that the person was not shown when they gave it."""
+        seen = self._for_turn.get(turn_id) if turn_id else None
+        return seen is not None and frozenset(read) <= seen
 
 
 async def _quietly(undo: Awaitable[None]) -> None:
@@ -534,11 +575,11 @@ def _running_loop() -> asyncio.AbstractEventLoop | None:
         return None
 
 
-def _resolve(future: asyncio.Future[tuple[bool, str | None]], approve: bool,
-             via: str | None) -> None:
+def _resolve(future: asyncio.Future[tuple[bool, str | None, bool]], approve: bool,
+             via: str | None, for_turn: bool = False) -> None:
     """Set the result, unless the deadline got there first."""
     if not future.done():
-        future.set_result((approve, via))
+        future.set_result((approve, via, for_turn))
 
 
 class NotYours(Exception):

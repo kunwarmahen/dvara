@@ -675,7 +675,7 @@ class Service:
         except ConfigError:
             provider_name = "ollama"
             provider = self._provider(provider_name)
-        return spec.build_async(
+        agent = spec.build_async(
             permissions=self.policy.gate(
                 spec.permissions_mode, actor_mode=who.permissions, desk=self.asks,
                 actor=who.id, agent=spec.name, thread=LOOK_THREAD, reach=who.reach(),
@@ -683,6 +683,8 @@ class Service:
             cwd=self._workspace(key), provider=provider, provider_name=provider_name,
             model=self.model or spec.model or default_model(provider_name),
             own_skills_only=True)
+        agent.trusted_reads = who.trusted
+        return agent
 
     async def _look_servers(self, agent, *, who: Actor, spec: AgentSpec, key: str):
         """A call's servers: the person's accounts and the package's own --
@@ -1252,6 +1254,9 @@ class Service:
             # a sentence, or a channel adapter gets a traceback.
             raise Refused(f"that agent cannot run right now: {exc}") from exc
 
+        # What they trust is not outside text (Yantra's outside.py): a
+        # change after reading their own schedules asks nothing new.
+        agent.trusted_reads = who.trusted
         if who.zone and getattr(agent, "env_context", None) is not None:
             # Their clock, not this machine's: the time told with each
             # message, and the start of the session (actors.py's zone).

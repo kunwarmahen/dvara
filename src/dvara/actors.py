@@ -131,7 +131,7 @@ ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage",
                         "phone", "phones", "hours", "max_turns_per_day",
-                        "approver", "speak", "voice", "zone"})
+                        "approver", "speak", "voice", "zone", "trusted"})
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -237,6 +237,10 @@ class Actor:
     #: this machine is: the time their agents are told, when their
     #: schedules run, and their hours. None is this machine's (limits.py).
     zone: str | None = None
+    #: Servers whose answers are their own words, not outside text
+    #: (Yantra's outside.py): ``samay``, or one tool by its full name. A
+    #: change after reading one asks nothing new. () trusts nothing.
+    trusted: tuple[str, ...] = ()
 
     @property
     def has_phone(self) -> bool:
@@ -421,6 +425,7 @@ class ActorBook:
                 speak=_speak(body, name, where),
                 voice=_voice_name(body, name, where),
                 zone=_zone(body, name, where),
+                trusted=_trusted(body, name, where),
             )
         # Checked in __init__ rather than here, because the reverse index
         # is what makes the claim, and an ActorBook built any other way
@@ -755,6 +760,18 @@ def _zone(body: dict, name: str, where) -> str | None:
                             f'like "Europe/London" or "Asia/Kolkata" (got {value!r}); '
                             f"leave it out for this machine's") from None
     return value
+
+
+def _trusted(body: dict, name: str, where) -> tuple[str, ...]:
+    """Servers whose answers are the person's own words. Checked by
+    Yantra's own rule (no wildcards, only a server's tools), so the
+    file and the agent cannot come to disagree about what a name means."""
+    from yantra.outside import check_trusted
+
+    try:
+        return check_trusted(body.get("trusted"))
+    except ValueError as exc:
+        raise ConfigProblem(f"{where}: [actor.{name}] {exc}") from None
 
 
 def _money(body: dict, key: str, name: str, where) -> float | None:

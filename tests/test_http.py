@@ -182,6 +182,16 @@ def test_an_answer_that_is_not_a_boolean_is_refused(asking):
     assert asking.desk.pending()
 
 
+def test_for_the_task_that_is_not_a_boolean_is_refused(asking):
+    # the same rule as approve: a word is never read as a yes to more
+    ask = asking.get("/asks", headers=auth()).json()["asks"][0]
+    reply = asking.post(f"/asks/{ask['id']}",
+                        json={"actor": "owner", "approve": True, "for_turn": "yes"},
+                        headers=auth())
+    assert reply.status_code == 400
+    assert asking.desk.pending()
+
+
 def test_an_expired_question_answers_nothing(asking):
     reply = asking.post("/asks/nothing-like-a-real-id",
                         json={"actor": "owner", "approve": True},

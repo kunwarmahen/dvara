@@ -546,7 +546,8 @@ def create_app(service: Service, *, token: str,
                                 detail="this service does not escalate")
         try:
             landed = service.asks.answer(ask_id, actor=body["actor"],
-                                         approve=body["approve"], via="web")
+                                         approve=body["approve"], via="web",
+                                         for_turn=_for_turn(body))
         except NotYours:
             raise HTTPException(status_code=403,
                                 detail="that question was put to somebody else") from None
@@ -854,7 +855,8 @@ def create_app(service: Service, *, token: str,
                                 detail="this service does not escalate")
         try:
             landed = service.asks.answer(ask_id, actor=actor,
-                                         approve=body["approve"], via=door)
+                                         approve=body["approve"], via=door,
+                                         for_turn=_for_turn(body))
         except NotYours:
             # Distinguished from 404 deliberately. Both sides of this line
             # are inside the owner's trust boundary, and a routing bug in
@@ -1003,3 +1005,11 @@ def _streamed(service: Service, turn: dict) -> StreamingResponse:
         await job
 
     return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+
+def _for_turn(body: dict) -> bool:
+    """``"for_turn": true`` beside a yes: the rest of this task too
+    (gate.put). Anything but a real true is a plain answer."""
+    if body.get("for_turn", False) not in (True, False):
+        raise HTTPException(status_code=400, detail="for_turn must be true or false")
+    return body.get("for_turn") is True

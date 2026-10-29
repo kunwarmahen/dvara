@@ -126,7 +126,8 @@ class Decisions:
     is a column nobody reads. Absent means the rung.
     """
 
-    #: call id -> what decided it: ``rule:<id>`` or ``asked:<channel>``.
+    #: call id -> what decided it: ``rule:<id>``, ``asked:<channel>``,
+    #: ``ahead`` or ``for_turn``.
     by_call: dict[str, str] = field(default_factory=dict)
 
     def by_rule(self, call_id: str, rule) -> None:
@@ -150,6 +151,12 @@ class Decisions:
         accepted named this tool (``allow_tools`` on the turn)."""
         if call_id:
             self.by_call[call_id] = "ahead"
+
+    def for_turn(self, call_id: str) -> None:
+        """Covered by the person's "yes, and the rest of this task",
+        given to an earlier question in the same turn (``put``)."""
+        if call_id:
+            self.by_call[call_id] = "for_turn"
 
     def of(self, call_id: str) -> str | None:
         return self.by_call.get(call_id)
@@ -365,6 +372,19 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         if decisions is not None:
             decisions.ahead(request.call_id)
         return True
+    # YES, AND THE REST OF THIS TASK. A call asked about only because the
+    # turn read outside text may be covered by a yes the person gave to an
+    # earlier such question in the same turn -- after seeing what was
+    # read, on the card. NOTHING NEW READ SINCE: a page the agent opened
+    # after that yes is one the person never saw, so it asks again and
+    # names it. A spend or a phone's confirm asks for itself
+    # (``only_after_reading`` is False) and is never covered.
+    for_turn = bool(getattr(request, "only_after_reading", False)
+                    and request.turn_id)
+    if for_turn and desk.covered_for_turn(request.turn_id, request.after_reading):
+        if decisions is not None:
+            decisions.for_turn(request.call_id)
+        return True
     if NOBODY_ASKED.get():
         return refuse(request, f"{request.tool_name} was not run: nobody was asked, "
                       f"the turn is over.", code=REFUSED_UNATTENDED)
@@ -393,7 +413,8 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
                                 summary=request.summary, reach=reach,
                                 timeout=deadline, picture=_png(request),
                                 scheduled=scheduled,
-                                always_ask=bool(getattr(request, "always_ask", False)))
+                                always_ask=bool(getattr(request, "always_ask", False)),
+                                for_turn=for_turn)
     finally:
         # Spent in a finally: a question the caller hung up on still kept
         # the person waiting for as long as it was up.
@@ -420,6 +441,8 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
         decisions.by_person(request.call_id, answer.via)
     if not answer.approved:
         return refuse(request, answer.reason or "", code=answer.code)
+    if answer.for_turn:
+        desk.yes_for_turn(request.turn_id, request.after_reading)
     return True
 
 

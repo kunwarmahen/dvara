@@ -293,11 +293,20 @@ voice             = "hi_IN-pratham-medium"   # their own voice (default: the hou
 
 [actor.raj]
 zone              = "Europe/London" # their clock: the time told, schedules, hours
+trusted           = ["samay"]       # their own schedules aren't outside text
 ```
 
 `permissions` can only ever tighten. The mode a turn runs under is the
 minimum of the package's, the owner's and this one, so `"yolo"` beside a
-guest's name grants them exactly nothing.
+guest's name grants them exactly nothing. The owner's is `--yolo` on the
+command line: started with `--ask` alone, every change is asked about,
+whatever this file or a package says. Sarathi's `[dvara] yolo` adds it
+([notes/72](notes/72-asked-less-not-never.md)).
+
+`trusted` names servers whose answers are that person's own words, by
+the server's name (`samay`) or one tool's full name; after reading one,
+a change asks nothing new. No wildcards, and never the web
+([notes/72](notes/72-asked-less-not-never.md)).
 
 An unknown key is an error, not a shrug:
 
@@ -305,7 +314,7 @@ An unknown key is an error, not a shrug:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
 max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak, voice, zone
+setu_accounts, setu_manage, speak, trusted, voice, zone
 ```
 
 **Limits for a child.** `hours` is when their agents answer, on their
@@ -692,7 +701,10 @@ Three rules hold it up, and the third is the one worth carrying away:
   or `--yolo`, with what was read on the card's first line; with nobody
   to ask it is refused, and the model is told why. `send_file` is not
   such a change: it goes only to the person asking
-  ([notes/58](notes/58-outside-text-asks.md)).
+  ([notes/58](notes/58-outside-text-asks.md)). A change asked only
+  because of a read can be answered **approve all for this task**: the
+  rest of that turn's such questions then run, until it reads something
+  new; a spend is never covered ([notes/72](notes/72-asked-less-not-never.md)).
 
 `--policy` is required if you name it and optional as `policy.toml`
 beside the actors file (`~/dvara/policy.toml` by default), so a typo in
@@ -1010,7 +1022,7 @@ GET  /runs/{id}/steps                            -> yantra.steps.v1: that run, s
 GET  /agents                                     -> {agents: [...]}
 GET  /health
 GET  /asks?actor=                                -> {asks: [{id, tool, summary, ...}]}
-POST /asks/{id}    {actor, approve}              -> {answered, approved}
+POST /asks/{id}    {actor, approve, for_turn?}   -> {answered, approved}
 GET  /holds?actor=                               -> {holds: [{id, calls, age, ...}]}
 POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /message
 POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code, via}
@@ -1021,7 +1033,7 @@ POST /mail-login   {actor, ref}                  -> their mail login, from their
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}
 POST /web/message  {actor, agent, text}          -> {line}
-POST /web/asks/{id}  {actor, approve}            -> {answered, approved}
+POST /web/asks/{id}  {actor, approve, for_turn?} -> {answered, approved}
 POST /web/holds/{id} {actor, answers}            -> {started}
 GET  /web/file?actor=&line=&n=                   -> a file a line carried
 GET  /web/spoken?actor=&line=                    -> that answer read aloud (WAV), made once
@@ -1514,15 +1526,15 @@ reads that person's key from `<state>/memory.json`
 | `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
-| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)); whose phones, one owner each ([notes/54](notes/54-each-phone-ones.md)) |
+| `actors.py` | who is served, what they may reach, what they may spend, and where they can be reached ([notes/05](notes/05-one-person-two-channels.md)); reread when the file changes ([notes/09](notes/09-a-process-you-walk-away-from.md)); whose Setu sign-ins ([notes/19](notes/19-their-own-accounts.md)); whose phone, one person at most ([notes/30](notes/30-do-this-on-my-phone.md)); whose phones, one owner each ([notes/54](notes/54-each-phone-ones.md)); which servers' answers are their own words, `trusted` ([notes/72](notes/72-asked-less-not-never.md)) |
 | `keys.py` | the `(actor, agent, thread)` session key and its escaping |
 | `locks.py` | one lock per conversation or chat, dropped once nobody holds or waits on it ([notes/11](notes/11-only-while-somebody-is-waiting.md)) |
 | `money.py` | package ∧ actor ∧ what is left of today, and the line under the answer ([notes/06](notes/06-a-number-you-can-act-on.md)) |
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)); a scheduled run's own wait, after which a question lapses ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
 | `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)); of several, the one the schedule names ([notes/54](notes/54-each-phone-ones.md)) |
-| `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); no standing yes and no yolo rung covers an `always_ask` call (a spend, or a change after outside text), which is asked or refused in words ([notes/58](notes/58-outside-text-asks.md)) |
+| `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); one yes for the rest of a task, over a turn's after-reading questions only ([notes/72](notes/72-asked-less-not-never.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); no standing yes and no yolo rung covers an `always_ask` call (a spend, or a change after outside text), which is asked or refused in words ([notes/58](notes/58-outside-text-asks.md)) |
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
-| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)) |
+| `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)); a yes for the rest of a turn, kept per turn in memory ([notes/72](notes/72-asked-less-not-never.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), and which way each came in ([notes/36](notes/36-which-way-it-came-in.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
@@ -1533,7 +1545,7 @@ reads that person's key from `<state>/memory.json`
 | `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay ([notes/42](notes/42-seeing-the-work.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice, and the notices by themselves for a page's bell, [notes/71](notes/71-one-conversation-two-chats.md)), turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/new`'s answer marked `fresh`, and a page shown only from the newest one ([notes/34](notes/34-a-chat-on-a-page.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)); read aloud too for someone who chose "always", in their voice ([notes/65](notes/65-whose-voice-and-which-language.md)) |
-| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)), a picture as a photo, falling back to a document ([notes/69](notes/69-a-picture-and-a-pdf.md)); an answer's Markdown as bold and italic, not asterisks ([notes/70](notes/70-bold-not-asterisks.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |
+| `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)), a picture as a photo, falling back to a document ([notes/69](notes/69-a-picture-and-a-pdf.md)); an answer's Markdown as bold and italic, not asterisks ([notes/70](notes/70-bold-not-asterisks.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); **approve all for this task** under a question asked only because of a read ([notes/72](notes/72-asked-less-not-never.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |
 | `claim.py` | one dvara per state directory, and why ([notes/09](notes/09-a-process-you-walk-away-from.md)); who holds it, read without taking it ([notes/23](notes/23-is-the-door-open.md)) |
 | `page.py`, `static/` | `dvara page`: the owner's page. People, today's spend, agents and every turn, read from the actors file and the ledger; words only for the owner's own turns, channels by kind; each turn labelled and filtered by the way it came in ([notes/36](notes/36-which-way-it-came-in.md)); the owner's own questions and held turns answered through the running door; each person's files by name (the owner's opened) and schedules in Samay's words; its own token ([notes/29](notes/29-the-owners-page.md)) |

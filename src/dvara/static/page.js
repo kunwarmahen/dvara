@@ -281,20 +281,27 @@ function askCard(a) {
   const say = h("div.meta", {});
   const yes = h("button.btn.go", { type: "button" }, "Allow");
   const no = h("button.btn", { type: "button" }, "Refuse");
-  const decide = async (approve) => {
-    yes.disabled = no.disabled = true;
+  // Only on a question asked because the agent read something you didn't
+  // write: yes, and don't ask again this task unless it reads more.
+  const all = a.for_turn ? h("button.btn", { type: "button" }, "Allow all for this task")
+    : null;
+  const buttons = [yes, no, all].filter(Boolean);
+  const decide = async (approve, forTurn = false) => {
+    buttons.forEach((b) => { b.disabled = true; });
     say.textContent = approve ? "Allowing…" : "Refusing…";
     try {
-      await api(`/api/asks/${encodeURIComponent(a.id)}`, { approve });
-      say.textContent = approve ? "Allowed. The turn carries on." : "Refused.";
+      await api(`/api/asks/${encodeURIComponent(a.id)}`, { approve, for_turn: forTurn });
+      say.textContent = forTurn ? "Allowed, and the rest of this task. The turn carries on."
+        : approve ? "Allowed. The turn carries on." : "Refused.";
     } catch (err) {
       say.textContent = `Couldn't: ${err.message}`;
-      yes.disabled = no.disabled = false;
+      buttons.forEach((b) => { b.disabled = false; });
     }
     waitingKey = null;
   };
   yes.addEventListener("click", () => decide(true));
   no.addEventListener("click", () => decide(false));
+  if (all) all.addEventListener("click", () => decide(true, true));
   return h("article.run.ask", {},
     h("div.run-head", {}, h("span.run-who", {}, `${a.agent} asks to use ${a.tool}`),
       h("span.run-meta", { title: a.asked_at }, ago(a.asked_at))),
@@ -303,7 +310,7 @@ function askCard(a) {
                                alt: "the phone's screen; what it would tap is ringed" })
       : null,
     h("div.cmd", {}, a.summary),
-    h("div.actions", {}, yes, no), say);
+    h("div.actions", {}, ...buttons), say);
 }
 
 function holdCard(hd) {

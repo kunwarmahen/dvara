@@ -70,6 +70,7 @@ def person(actor) -> dict:
             "hours": str(actor.hours) if actor.hours else None,
             "max_turns_per_day": actor.max_turns_per_day, "approver": actor.approver,
             "speak": actor.speak, "voice": actor.voice, "zone": actor.zone,
+            "trusted": list(actor.trusted) or None,
             "other_channels": [f"{c.kind}:{c.id}" for c in actor.channels
                                if c.kind != "telegram"]}
 

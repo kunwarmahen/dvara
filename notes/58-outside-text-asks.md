@@ -41,4 +41,8 @@ and asking before each one would only be noise.
 A `deny` rule still bites first, and so does a `read_only` person who is
 never asked: nothing here loosens anything.
 
+Being asked less without being asked never came next: one yes for the
+rest of a task, and servers a person trusts
+([note 72](72-asked-less-not-never.md)).
+
 Tests: `tests/test_outside_text.py`.
