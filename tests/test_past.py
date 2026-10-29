@@ -227,6 +227,16 @@ def test_a_question_waiting_on_one_chat_is_set_aside_when_another_speaks(make_se
     assert telegram in dropped
 
 
+def test_a_puck_conversation_kept_before_pucks_were_named_says_a_puck(make_service):
+    service = make_service([says("Thursday.")])
+    say(service, "what day is it?")
+    [row] = service.past.listed("owner", "greeter")
+    log = service.past.log("owner")
+    log._db.execute("UPDATE conversations SET road = 'vaani', roads = '' WHERE id = ?", (row.id,))
+    log._db.commit()
+    assert "on a puck, 1 message" in say(service, "/chats", thread="telegram:1").text
+
+
 def test_a_pucks_conversation_is_named_by_its_puck():
     assert past.came_of("vaani:kitchen") == "the kitchen puck"
     assert past.came_of("telegram:42") == "Telegram"

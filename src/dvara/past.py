@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS latest (
 """
 
 CAME = {"telegram": "Telegram", "web": "the page", "http": "HTTP"}
-#: A puck's thread (``vaani:kitchen``) is named by its puck.
+#: A puck's thread (``vaani:kitchen``) is named by its puck. A row kept
+#: before that says only "vaani", and is listed as "a puck".
 PUCK = "vaani"
 
 
@@ -483,7 +484,7 @@ def listing(agent: str, rows: list[Kept], words: str = "", *,
         when = datetime.fromisoformat(row.updated_at).astimezone().strftime("%a %-d %b %H:%M")
         here = " (this one)" if row.id == open_id else ""
         pin = " (pinned)" if row.pinned else ""
-        roads = " and ".join(row.roads or (row.road,))
+        roads = " and ".join("a puck" if r == PUCK else r for r in row.roads or (row.road,))
         out.append(f"{n}. {row.title}{here}{pin} — {when}, on {roads}, {row.turns} "
                    f"message{'s' if row.turns != 1 else ''}")
         if row.snippet:
