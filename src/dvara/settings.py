@@ -40,7 +40,6 @@ from dvara import promoting, spoken, tomledit, toolbox
 from dvara.actors import OWN_SETU, ActorBook
 from dvara.errors import ConfigProblem
 from dvara.gate import LADDER
-from dvara.roster import NAME
 from dvara.rules import RuleBook
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,39}\Z")
@@ -101,7 +100,7 @@ def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None
     agents = []
     for folder in sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []:
         manifest = folder / "agent.toml"
-        # the roster's own rule, so a removed one (.removed-NAME) isn't listed
+        # a name, as the roster's: a removed one (.removed-NAME) isn't listed
         if not NAME.match(folder.name) or not manifest.is_file():
             continue
         raw = _read(manifest)
