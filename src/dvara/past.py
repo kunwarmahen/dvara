@@ -97,8 +97,10 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from yantra.history import (END, HIT, ConversationLog, Kept, export_markdown, export_name,
-                            new_id, title_of)
+from yantra.history import (END, HIT, TITLE, ConversationLog, Kept, export_markdown,
+                            export_name, new_id)
+
+from dvara import heard
 
 WORD = "/chats"
 #: Where a shared conversation's file is written, in the person's folder
@@ -272,7 +274,7 @@ class PastBook:
     def log(self, actor: str) -> ConversationLog:
         with self._lock:
             if actor not in self._logs:
-                self._logs[actor] = ConversationLog(self._path(actor))
+                self._logs[actor] = ConversationLog(self._path(actor), titled=titled)
             return self._logs[actor]
 
     def _path(self, actor: str) -> Path:
@@ -513,13 +515,27 @@ SHOWN = 4
 LINE = 300
 
 
+def titled(payload: dict) -> str:
+    """Its first words, a voice note's as they were said (heard.plain)."""
+    for message in payload.get("history") or []:
+        if message.get("role") == "user":
+            words = " ".join(heard.plain(_texts(message).strip()).split())
+            if words:
+                return words if len(words) <= TITLE else words[:TITLE - 1] + "…"
+    return ""
+
+
 def transcript(payload: dict) -> list[dict]:
     """The person's words and the agent's answers, in order: what a page
-    draws. A tool's output, and a turn's in-between text, never shows."""
+    draws. A tool's output, and a turn's in-between text, never shows.
+    Each keeps its own lines: an answer's list or table is markdown the
+    page draws, and squashed to one line it reads as a wall of words."""
     out: list[dict] = []
     for message in payload.get("history") or []:
         role = message.get("role")
-        words = " ".join(_texts(message).split())
+        words = "\n\n".join(b.get("text", "").strip() for b in message.get("content") or []
+                            if isinstance(b, dict) and b.get("kind") == "text"
+                            and b.get("text", "").strip())
         if not words:
             continue                  # a tool's result, or a call with no words
         who = "you" if role == "user" else "agent" if role == "assistant" else None
@@ -533,11 +549,12 @@ def transcript(payload: dict) -> list[dict]:
 
 
 def reopened(payload: dict, agent: str = "") -> str:
-    lines = [f"Back in: {title_of(payload) or '(no words)'}"]
+    lines = [f"Back in: {titled(payload) or '(no words)'}"]
     said = transcript(payload)[-SHOWN:]
     if said:
         lines += ["", "Where we left it:"]
         for row in said:
-            text = row["text"] if len(row["text"]) <= LINE else row["text"][:LINE - 1] + "…"
+            text = " ".join(heard.plain(row["text"]).split())   # one line each, in a message
+            text = text if len(text) <= LINE else text[:LINE - 1] + "…"
             lines.append(f"{'You' if row['who'] == 'you' else agent or 'Agent'}: {text}")
     return "\n".join(lines)

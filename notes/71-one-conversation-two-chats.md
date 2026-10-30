@@ -101,6 +101,14 @@ while the list still showed every tool of it. Each turn is kept in the
 conversation's row under its run id, so the web channel looks there
 next (`PastBook.with_run`), and **Steps** show what the list shows.
 
+## Its lines as they were
+
+A conversation opened again hands the page its transcript: your words
+and the agent's answers, no tools. Each keeps its own lines. Squashed
+into one, an answer's numbered list came back as a wall of words on the
+page the moment it was carried on. `/chats N`'s message on Telegram
+still makes each a line of its own.
+
 ## Live receipt
 
 A scratch Dvara from `examples/`, `qwen3.8:latest`, the `greeter` agent,

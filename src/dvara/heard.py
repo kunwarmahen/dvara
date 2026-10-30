@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -166,6 +167,19 @@ async def hear(path: Path) -> tuple[str | None, str]:
         return await asyncio.to_thread(_hear, path), ""
     except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
         return None, str(exc)
+
+
+_SAID = re.compile(r'^(.*?)\s*\(a voice note, heard as: "(.*)"\)$', re.S)
+
+
+def plain(text: str) -> str:
+    """The words of a message said() made, as the person said them: what
+    a list's name or a Telegram line shows instead of the agent's wording."""
+    found = _SAID.match(text.strip())
+    if not found:
+        return text
+    typed, words = found.groups()
+    return f"{typed} 🎤 “{words}”" if typed else f"🎤 “{words}”"
 
 
 def said(heard: str | None, text: str, name: str) -> str:

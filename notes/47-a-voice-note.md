@@ -48,6 +48,15 @@ sent. With nothing that can hear (no such model, or no ffmpeg), the
 agent is told plainly it can't listen to it and to ask them to type it,
 never a guess at what was said, and the owner's log says why.
 
+A NAME IS WHAT THEY SAID. A conversation is named by its first words,
+and a voice note's first words are this note's wrapping. So Dvara names
+it from the words inside (`heard.plain`): the list, `/chats` and the
+*Back in* line say *🎤 "how cold is it tonight?"*, typed words first
+when there were some. The agent is still given the wrapping; only the
+name and the lines a person reads change. Yantra's conversation log
+takes the naming from its host (`titled=`), since only Dvara knows the
+wrapping.
+
 ## On the page
 
 🎤 beside the paperclip records with the browser's MediaRecorder (webm,

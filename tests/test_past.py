@@ -289,6 +289,26 @@ def test_the_transcript_is_words_never_a_tools_output():
                                         {"who": "agent", "text": "It's up."}]
 
 
+def test_an_answer_comes_back_with_its_own_lines_not_one_wall_of_words():
+    answer = "Your 5 posts:\n\n1. **Oct 20** -- To @Marriott\n2. **Jun 27** -- To @elonmusk"
+    payload = {"history": [
+        {"role": "user", "content": [{"kind": "text", "text": "my top posts?"}]},
+        {"role": "assistant", "content": [{"kind": "text", "text": answer}]}]}
+    assert past.transcript(payload)[1]["text"] == answer
+    # in a message it's still a line each
+    assert "1. **Oct 20** -- To @Marriott 2. **Jun 27**" in past.reopened(payload, "minder")
+
+
+def test_a_voice_note_is_named_by_what_was_said_not_by_its_wrapping():
+    from dvara import heard
+    asked = heard.said("how cold is it tonight?", "", "voice-note.ogg")
+    payload = {"history": [{"role": "user", "content": [{"kind": "text", "text": asked}]},
+                           {"role": "assistant", "content": [{"kind": "text", "text": "4°C."}]}]}
+    assert past.titled(payload) == "🎤 “how cold is it tonight?”"
+    assert heard.plain(heard.said("this one", "and", "n.ogg")) == "and 🎤 “this one”"
+    assert heard.plain("just typed") == "just typed"
+
+
 def finish(client, auth, text):
     client.post("/web/message", headers=auth,
                 json={"actor": "owner", "agent": "greeter", "text": text})
