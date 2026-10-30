@@ -1584,7 +1584,27 @@ Send /remember with the numbers to keep them (/remember 1 2), or /remember all. 
 
 The conversation is still there: carry on as before. It happens once
 until you write again, and if the look back found nothing, you get no
-message. To wait longer, start with `--quiet-for 120` (minutes); `0`
+message. One exception: if the agent kept something itself while you
+talked (next paragraph), the look back tells you what it already has:
+
+```
+greeter: Looked back over our conversation: nothing new to offer. Already kept while we talked:
+- Lives about a 12-minute drive from RDU airport (Raleigh–Durham), a proximity that shapes airport pickup/timing.
+(/memory lists them with their numbers.)
+```
+
+**On `yolo`, the agent keeps things without asking, and says so.**
+Your permission mode decides whether the agent's `remember` asks first,
+as it does for any other tool. With `permissions = "yolo"` it doesn't
+ask. The answer then ends with a line naming what it kept and how to
+take it back:
+
+```
+(Kept about you: Lives about a 12-minute drive from RDU airport (Raleigh–Durham), a proximity that shapes airport pickup/timing. -- /memory forget 1 to undo.)
+```
+
+Send `/memory forget 1` if it shouldn't have
+([notes/77](notes/77-kept-and-told.md)). To wait longer, start with `--quiet-for 120` (minutes); `0`
 looks back only at `/new`.
 
 **Every sign-in is checked once a day.** A few minutes after it starts,
@@ -2127,6 +2147,7 @@ Each topic, and the note that argues it:
 | `notes/50-every-conversation-kept.md` | every conversation kept as it goes, searched by its words, deleted for good |
 | `notes/71-one-conversation-two-chats.md` | one conversation open on Telegram and the page at once, each taking what the other said before its turn; named and pinned |
 | `notes/72-asked-less-not-never.md` | **approve all for this task** on a question asked only because of a read; `trusted` servers aren't outside text; `--ask` alone asks everything |
+| `notes/77-kept-and-told.md` | on `yolo` the agent keeps a fact unasked: a *Kept about you* line under the answer, and the look back names what was already kept |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |

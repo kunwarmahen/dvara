@@ -39,6 +39,14 @@ under every answer is a chat nobody reads. This is not a yes/no button
 that waits either: a question that waited on a turn would hold the store
 open for as long as it waited, and a fact is no less true tomorrow.
 
+WHAT THE MODEL KEPT ITSELF IS SAID. The model's own ``remember`` tool
+follows the person's permission mode: on ``yolo`` it writes unasked. The
+answer then ends with a ``Kept about you`` line (``kept_line``), and a
+look back that finds nothing new names what was already kept
+(``kept_already``) rather than falling silent on it. A fact the turn
+noticed that is ``about_the_same`` as one it kept is not also offered
+(note 77).
+
 THEIR WORDS, NOT A TURN. Like ``/files`` and ``/new`` these are answered
 here, never by the model, and cost nothing. The store is opened for the
 person exactly as a turn opens it (their name, their own key, note 37)
@@ -258,6 +266,18 @@ def same(a: str, b: str) -> bool:
     return _words(a) == _words(b)
 
 
+def about_the_same(a: str, b: str) -> bool:
+    """Looser than ``same``, for one use: a fact a turn noticed against the
+    one it just KEPT. A model keeps "Lives near RDU -- a 12-minute drive"
+    and notices "Lives about 12 minutes' drive from RDU" in the same turn;
+    the heads differ, half the words don't. Wrongly dropped, a fact is
+    not lost: the look back reads the whole conversation and offers it."""
+    if same(a, b):
+        return True
+    wa, wb = _words(a), _words(b)
+    return bool(wa and wb) and len(wa & wb) * 2 >= min(len(wa), len(wb))
+
+
 def declining(rest: str) -> tuple[bool, str]:
     """Whether ``/remember …`` turns the numbers down (``not 1 2``,
     ``none``), and what is left to read the numbers from."""
@@ -365,6 +385,26 @@ def noticed(new: int) -> str:
     things = "a thing" if new == 1 else f"{new} things"
     return (f"(I noticed {things} about you worth remembering. "
             "Send /remember to see what's waiting.)")
+
+
+def kept_line(kept: list[tuple[str, str]]) -> str:
+    """The line under an answer when the model kept something itself:
+    each as (short id, statement), with the way to take it back."""
+    if len(kept) == 1:
+        short, statement = kept[0]
+        return f"(Kept about you: {statement} -- /memory forget {short} to undo.)"
+    return ("(Kept about you:\n"
+            + "\n".join(f"- {statement} (#{short})" for short, statement in kept)
+            + "\n/memory forget with the number to undo one.)")
+
+
+def kept_already(statements: list[str]) -> str:
+    """A look back that found nothing new over a conversation in which the
+    model kept things itself: it says so, rather than nothing."""
+    return ("Looked back over our conversation: nothing new to offer. "
+            "Already kept while we talked:\n"
+            + "\n".join(f"- {s}" for s in statements)
+            + "\n(/memory lists them with their numbers.)")
 
 
 def declined_words(statements: list[str]) -> str:

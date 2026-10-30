@@ -964,7 +964,9 @@ serving yet, so there is nothing to lose.
 their own ([notes/39](notes/39-while-nobody-is-writing.md)). A
 conversation nobody has written in for 30 minutes is looked back over
 once, for a package that remembers, and the person is sent what it
-noticed for `/remember` (`--quiet-for MINUTES`, `0`: only at `/new`).
+noticed for `/remember` (`--quiet-for MINUTES`, `0`: only at `/new`),
+or, when it found nothing new, what the model kept on its own while
+they talked ([notes/77](notes/77-kept-and-told.md)).
 And once a day every Setu folder Dvara reads is checked with `setu
 check`. A sign-in the site refused is told once to whoever can fix it,
 with the words that do: `Send /connect gmail as work to sign in again`
@@ -1389,7 +1391,13 @@ look back, on the agent's own model and their allowance, recorded as a
 look runs after "Starting fresh" has gone, so starting over is instant
 ([notes/51](notes/51-starting-over-at-once.md)). What
 Yantra notices mid-turn waits on the same list, with a one-line hint.
-Nothing is kept until they send `/remember 1 3` (or `all`); what they
+Nothing is kept until they send `/remember 1 3` (or `all`). The one
+exception is the model's own `remember` tool, which follows the person's
+permission mode like any tool: on `yolo` it keeps a fact unasked. The
+answer then says so in a *Kept about you* line with the `/memory forget`
+that undoes it, and a look back that finds nothing new names what was
+already kept instead of saying nothing
+([notes/77](notes/77-kept-and-told.md)). What they
 turn down with `/remember not 2` (or `none`) is never offered again; and
 `/memory` shows them what is kept, with `/memory forget ID` to take one
 back. The list waits in `<state>/offered.json`, yours alone
@@ -1553,7 +1561,7 @@ reads that person's key from `<state>/memory.json`
 | `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)); `/doctor every morning`, a Samay schedule whose run says only what's new ([notes/75](notes/75-a-check-every-morning.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
-| `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)); `/remember declined` and `/remember undo N`, and the page's `/web/declined`, to see and take back what they turned down ([notes/68](notes/68-what-you-turned-down.md)) |
+| `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)); `/remember declined` and `/remember undo N`, and the page's `/web/declined`, to see and take back what they turned down ([notes/68](notes/68-what-you-turned-down.md)); what the model kept on its own, named under the answer and by the look back ([notes/77](notes/77-kept-and-told.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
 | `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it; **Keep** / **Not now** on a skill offered, a mark per button in place of any key (`POST /push/answer`) ([notes/40](notes/40-a-notice-on-their-phone.md)) |
 | `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |
@@ -1569,7 +1577,7 @@ reads that person's key from `<state>/memory.json`
 | `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)); a yes for the rest of a turn, kept per turn in memory ([notes/72](notes/72-asked-less-not-never.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
-| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), and which way each came in ([notes/36](notes/36-which-way-it-came-in.md)) |
+| `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), which way each came in ([notes/36](notes/36-which-way-it-came-in.md)), and what the model kept about the person ([notes/77](notes/77-kept-and-told.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
 | `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)); `if_late` sends a hung-up caller's answer to its person ([notes/76](notes/76-an-answer-written-to-nobody.md)) |
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |

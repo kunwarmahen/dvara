@@ -112,7 +112,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
            "answered_from, agent_version, waited_seconds, resumes, "
-           "unattended, came_by")
+           "unattended, came_by, kept")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -123,7 +123,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
          ("agent_version", "TEXT"), ("waited_seconds", "REAL"),
          ("resumes", "TEXT"), ("unattended", "INTEGER"),
-         ("came_by", "TEXT"))
+         ("came_by", "TEXT"), ("kept", "TEXT"))
 
 #: The ways a turn can come in, as ``came_by`` writes them. Not enforced
 #: -- an HTTP bridge may name its own -- but these are the ones Dvara's
@@ -224,6 +224,11 @@ class Run:
     #: row older than this field that the migration could not read it
     #: off (``_backfill_came_by``).
     came_by: str | None = None
+    #: What the model's ``remember`` wrote about the person this turn, in
+    #: the words it was kept in -- the ``Kept:`` line under the answer,
+    #: and what a look back finding nothing new says was kept already
+    #: (``kept_since_look_back``). Empty on a row older than this field.
+    kept: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -329,8 +334,8 @@ class RunStore:
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
                 "cost_usd, stop_reason, detail, tools, answered_from, "
-                "agent_version, waited_seconds, resumes, unattended, came_by) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "agent_version, waited_seconds, resumes, unattended, came_by, kept) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
@@ -341,7 +346,7 @@ class RunStore:
                         for step in run.tools]),
                  _dump(list(run.answered_from)), run.agent_version,
                  run.waited_seconds, run.resumes, int(run.unattended),
-                 run.came_by),
+                 run.came_by, _dump(list(run.kept))),
             )
             self._db.commit()
         return run.id
@@ -495,6 +500,23 @@ class RunStore:
         return [(a, g, t, last) for a, g, t, last, stop, unattended in rows
                 if not unattended and stop != "looked_back" and low <= last <= high]
 
+    def kept_since_look_back(self, actor: str, agent: str, thread: str) -> list[str]:
+        """What the model kept in this conversation's turns since its last
+        look back, oldest first, each once: what a look back that found
+        nothing new says it found already kept, and only once -- the next
+        quiet spell starts after this look back."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT kept, stop_reason FROM runs WHERE actor = ? AND agent = ? "
+                "AND thread = ? ORDER BY ended_at DESC, rowid DESC",
+                (actor, agent, thread)).fetchall()
+        out: list[str] = []
+        for kept, stop in rows:
+            if stop == "looked_back":
+                break
+            out = [k for k in _load(kept) if isinstance(k, str)] + out
+        return list(dict.fromkeys(out))
+
     def last_stop(self, actor: str, agent: str, thread: str) -> str | None:
         """How the newest run in this conversation ended, or None."""
         with self._lock:
@@ -565,6 +587,7 @@ def _row_to_run(row: tuple) -> Run:
         resumes=row[20],
         unattended=bool(row[21]),
         came_by=row[22],
+        kept=[k for k in _load(row[23]) if isinstance(k, str)],
     )
 
 

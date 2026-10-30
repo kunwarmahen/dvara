@@ -4,7 +4,9 @@ schedules moved when their time zone changes.
 
 The bias these tests encode: AN UNASKED MESSAGE THAT IS NOT NEWS. Both
 chores write to a person nobody asked to hear from, so a look back that
-found nothing must say nothing, a conversation looked back over must not
+found nothing must say nothing -- unless the model kept something itself
+while they talked, which the look back then names once instead of
+falling silent on it -- a conversation looked back over must not
 be looked back over again until they write, a refused sign-in is
 told once, to whoever can fix it -- never to somebody who can't, never
 twice, and a first look at someone's zone is not a move. The other bias
@@ -22,8 +24,9 @@ import pytest
 
 from dvara import signins
 from dvara.actors import ActorBook
+from dvara.gate import Policy
 from dvara.keys import session_key
-from tests.conftest import says
+from tests.conftest import calls, says
 
 REMEMBERING = ('[agent]\nname = "greeter"\nprompt = "prompt.md"\n'
                '[memory]\nvia = "local"\n')
@@ -159,6 +162,38 @@ def test_new_after_a_quiet_look_back_lists_without_asking_again(make_service, ag
                                         text="/new"))
     assert "1. Lives in Pune" in reply.text
     assert len(service.scripted.requests) == 2          # the turn and one look back
+
+
+def test_what_the_model_kept_unasked_is_said_under_the_answer_and_at_the_look_back(
+        make_service, agents_root):
+    (agents_root / "greeter" / "agent.toml").write_text(
+        REMEMBERING + '[permissions]\nmode = "yolo"\n')
+    service = make_service([calls("remember", {"statement": "Lives in Cary, NC"}),
+                            says("Saved."), says("Nothing new here.")],
+                           actors=people(permissions="yolo"),
+                           policy=Policy(mode="yolo"))
+    got = listening(service)
+    reply = asyncio.run(service.deliver(actor="owner", agent="greeter", thread="chat",
+                                        text="I live in Cary"))
+    assert "(Kept about you: Lives in Cary, NC -- /memory forget " in reply.text
+    assert "I noticed" not in reply.text
+    assert service.runs.kept_since_look_back("owner", "greeter", "chat") == [
+        "Lives in Cary, NC"]
+    assert asyncio.run(service.look_back_quiet(later(31))) == 1
+    assert len(got) == 1 and "Already kept while we talked:\n- Lives in Cary, NC" in got[0]
+    # told once: the look back is the line the next quiet spell starts after
+    assert service.runs.kept_since_look_back("owner", "greeter", "chat") == []
+
+
+def test_a_look_back_with_nothing_new_and_nothing_kept_still_says_nothing(
+        make_service, agents_root):
+    (agents_root / "greeter" / "agent.toml").write_text(REMEMBERING)
+    service = make_service([says("ok"), says("Nothing new here.")], actors=people())
+    got = listening(service)
+    asyncio.run(service.deliver(actor="owner", agent="greeter", thread="chat",
+                                text="hello"))
+    assert asyncio.run(service.look_back_quiet(later(31))) == 1
+    assert got == []
 
 
 class TestANoticeOnAPhone:

@@ -366,3 +366,44 @@ def test_the_page_sees_and_undoes_only_their_own(make_service, remembers):
         assert client.post("/web/declined", headers=auth,
                            json={"actor": "guest", "undo": "Lives"}).status_code == 400
     assert kept("guest") == []
+
+
+def test_what_the_model_kept_itself_is_named_with_the_way_to_undo_it():
+    one = remembering.kept_line([("2ad6b855", "Lives in Cary, NC")])
+    assert one == "(Kept about you: Lives in Cary, NC -- /memory forget 2ad6b855 to undo.)"
+    two = remembering.kept_line([("1", "Lives in Cary, NC"), ("2", "Drives 12 min to RDU")])
+    assert "- Lives in Cary, NC (#1)\n- Drives 12 min to RDU (#2)" in two
+
+
+def test_a_fact_the_turn_kept_is_not_also_offered(make_service, remembers):
+    from datetime import UTC, datetime
+
+    from yantra.memory.reflect import Candidate
+
+    from dvara.runs import Run
+
+    service = make_service([])
+
+    class Memory:
+        pending = [Candidate("Lives a 12-minute drive from RDU, in the Raleigh area"),
+                   Candidate("Has a daughter at college in Detroit")]
+
+    class Agent:
+        memory = Memory()
+
+    run = Run(actor="guest", agent="greeter", thread="t", message="m",
+              started_at=datetime.now(UTC), cost_usd=0.0,
+              kept=["Lives about a 12-minute drive from RDU airport"])
+    assert service._noticed(Agent(), run).startswith("(I noticed a thing about you")
+    assert [o.statement for o in service.offered.get("guest")] == [
+        "Has a daughter at college in Detroit"]
+
+
+def test_a_fact_kept_and_noticed_in_other_words_is_one_fact():
+    kept = ("Lives near RDU (Raleigh-Durham airport) -- the drive there is only "
+            "~12 minutes when timing airport pickups/flights.")
+    noticed = ("Lives approximately 12 minutes' drive from RDU (Raleigh-Durham) airport, "
+               "meaning they can reach the terminal quickly and should plan pickups.")
+    assert not remembering.same(noticed, kept)
+    assert remembering.about_the_same(noticed, kept)
+    assert not remembering.about_the_same("Has a daughter at college in Detroit", kept)

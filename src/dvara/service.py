@@ -1816,9 +1816,10 @@ class Service:
             run.reply = waiting_text(held)
         if not run.reply:
             run.reply = _explain(run.stop_reason, run.detail, ceiling)
-        noticed = self._noticed(agent, run)
-        if noticed:
-            run.reply = f"{run.reply}\n\n{noticed}"
+        # what was kept first: a fact the turn kept is not also offered
+        for line in (self._kept(agent, run), self._noticed(agent, run)):
+            if line:
+                run.reply = f"{run.reply}\n\n{line}"
         self.runs.record(run)
         # Behind the answer: learned skills counted, and a look for one to
         # keep (learning.py) -- started now, run after this returns.
@@ -2228,10 +2229,31 @@ class Service:
                 if waiting else "")
         if (quiet or ended) and not found:
             said = ""        # unasked: only news is worth a message
+        already = (self.runs.kept_since_look_back(who.id, run.agent, thread)
+                   if run.stop_reason == "looked_back" and not found else [])
+        if already:
+            # nothing new, but not nothing: what was kept while they talked
+            said = "\n\n".join(p for p in (remembering.kept_already(already), said) if p)
         run.reply = said or ("Looked back; nothing new to remember."
                              if run.stop_reason == "looked_back" else "")
         self.runs.record(run)
         return said
+
+    def _kept(self, agent, run: Run) -> str:
+        """The line under an answer naming what the model's ``remember``
+        wrote this turn. Whether it asked first is the person's permission
+        mode; whether they hear of it is not: a write they let through
+        unasked is still never a silent one."""
+        memory = getattr(agent, "memory", None)
+        kept = list(getattr(memory, "kept", None) or [])
+        if not kept:
+            return ""
+        memory.kept.clear()
+        from yantra.memory import short_id
+
+        run.kept = [statement for _, statement in kept]
+        return remembering.kept_line(
+            [(short_id(memory_id), statement) for memory_id, statement in kept])
 
     def _noticed(self, agent, run: Run) -> str:
         """What Yantra noticed about the person during this turn
@@ -2239,10 +2261,13 @@ class Service:
         learned task's write-up), listed for them to keep; a run nobody
         is at lets it go, since nobody is there to say which."""
         memory = getattr(agent, "memory", None)
-        pending = list(getattr(memory, "pending", None) or [])
+        pending = [c for c in getattr(memory, "pending", None) or []
+                   if not any(remembering.about_the_same(c.statement, k)
+                              for k in run.kept)]
+        if memory is not None and getattr(memory, "pending", None):
+            memory.pending.clear()
         if not pending:
             return ""
-        memory.pending.clear()
         if run.unattended:
             return ""
         new = self.offered.add(run.actor, run.agent,

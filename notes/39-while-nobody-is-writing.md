@@ -40,6 +40,8 @@ Send /remember with the numbers to keep them (/remember 1 2), or /remember all. 
   without asking the model again.
 * **ONLY NEWS IS A MESSAGE.** A look back that found nothing sends
   nothing: an unasked message saying "nothing to remember" is noise.
+  Unless the model kept something itself while they talked: then the
+  look back names what was already kept, once ([note 77](77-kept-and-told.md)).
 * **A PERSON'S CONVERSATION, NOT A PROGRAM'S.** A conversation whose
   last run was a program's (Samay's) is not looked back over, and
   neither is one quiet for more than a day, so a service started for

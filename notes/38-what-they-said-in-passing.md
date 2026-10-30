@@ -183,6 +183,11 @@ offers the two words only where the package remembers.
 
 ## What is not here yet
 
+* ~~**Seeing what the model kept on its own.**~~ On `yolo` the model's
+  `remember` keeps a fact without asking. The answer now says so in a
+  *Kept about you* line, and the look back names it too
+  ([note 77](77-kept-and-told.md)).
+
 * **The owner's page.** It shows who used which agent, never the words,
   and a person's memories are words. Nothing about them is on it.
 * **Kept as it was said.** `/remember` keeps the sentence as the model
