@@ -59,7 +59,7 @@ from pathlib import Path
 
 from yantra import render_case
 
-from dvara import patience, signins, version
+from dvara import patience, remembering, signins, version
 from dvara.actors import ActorBook, Channel
 from dvara.asks import DEFAULT_TIMEOUT, ON_TIMEOUT, Ask, AskDesk
 from dvara.cases import append, case_from_run, unasserted
@@ -912,6 +912,8 @@ def _say(service: Service, args) -> int:
         # banner below is the operator's view of the same turn and says
         # more; this is the person's.
         print(reply.receipt)
+    if reply.kept:
+        print(remembering.kept_line(list(reply.kept)))
     if reply.detail and not reply.ok and reply.held is None:
         # The owner is standing right here. A channel gets the polite
         # sentence; the person who can FIX it gets the reason, because a
@@ -1055,6 +1057,8 @@ def _resume(service: Service, args) -> int:
     print(reply.text)
     if reply.receipt:
         print(reply.receipt)
+    if reply.kept:
+        print(remembering.kept_line(list(reply.kept)))
     tail = f"[{reply.stop_reason}"
     if reply.cost_usd is not None:
         tail += f" · ${reply.cost_usd:.4f}"

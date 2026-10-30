@@ -158,7 +158,7 @@ from typing import Any
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
-from dvara import spoken
+from dvara import remembering, spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.service import works_phone
@@ -638,7 +638,10 @@ class TelegramBot:
         if reply.files and reply.stop_reason == "files":
             await self._answer_with_file(chat, row, reply.text, reply.files[0])
             return
-        parts = self._reply_messages(reply.text, reply.receipt)
+        under = "\n\n".join(x for x in (
+            remembering.kept_line(list(reply.kept)) if reply.kept else "",
+            reply.receipt or "") if x)
+        parts = self._reply_messages(reply.text, under or None)
         if reply.heard:                 # what the voice note was heard as, first
             parts = [f'I heard: "{reply.heard}"', *parts]
         self.outbox.answered(row, parts)

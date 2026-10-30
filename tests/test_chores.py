@@ -175,8 +175,9 @@ def test_what_the_model_kept_unasked_is_said_under_the_answer_and_at_the_look_ba
     got = listening(service)
     reply = asyncio.run(service.deliver(actor="owner", agent="greeter", thread="chat",
                                         text="I live in Cary"))
-    assert "(Kept about you: Lives in Cary, NC -- /memory forget " in reply.text
-    assert "I noticed" not in reply.text
+    # beside the words, not in them: each channel says it its own way
+    assert reply.kept == (("1", "Lives in Cary, NC"),)
+    assert "Kept" not in reply.text and "I noticed" not in reply.text
     assert service.runs.kept_since_look_back("owner", "greeter", "chat") == [
         "Lives in Cary, NC"]
     assert asyncio.run(service.look_back_quiet(later(31))) == 1

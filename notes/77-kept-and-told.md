@@ -33,9 +33,26 @@ line under the answer, with the way to take it back:
 (Kept about you: Lives about a 12-minute drive from RDU airport (Raleigh–Durham), a proximity that shapes airport pickup/timing. -- /memory forget 1 to undo.)
 ```
 
-The line goes everywhere the answer goes: Telegram, Sarathi's page,
-and the puck through Vaani. The run records it too (`Run.kept`, a new
-column in `runs.sqlite3`).
+**BESIDE THE WORDS, NOT IN THEM.** What was kept travels as its own
+field (`Reply.kept`, `kept` in every `/message` answer, as `[{id,
+statement}]`), for the same reason the cost receipt does: `run.reply`
+is the record of what the agent *said*, and each channel says the rest
+its own way.
+
+* **Telegram** and `dvara say` print the line above under the answer.
+* **Sarathi's home page** draws each fact as a chip, *🔖 Kept about
+  you: …*, with an **Undo**. Undo calls `POST /web/forget {actor, agent,
+  id, line}`, which runs the same code as `/memory forget ID`, for that
+  person only. It marks the fact forgotten on the line, so the chat
+  drawn again shows *Forgotten: …* with no button.
+* **Vaani** says one short sentence after the answer: *"I've also kept
+  that about you."* A memory number read aloud is no use to anybody.
+  The facts and the Undo are in the chat.
+* **A run nobody is watching** (Samay's) has the line in its words,
+  because the program reading it knows nothing about the field.
+
+The run records what was kept too (`Run.kept`, a new column in
+`runs.sqlite3`).
 
 **At the look back.** The quiet look back (note 39) and the one at
 `/new` (note 38) used to fall silent when they found nothing new. Now,
@@ -99,11 +116,21 @@ answer, for the same fact.
 * A look back with nothing new and nothing kept still sends nothing.
 * A noticed candidate worded differently from a kept fact is dropped;
   one about something else is still offered.
+* What was kept is in `kept`, not in the words, and Telegram puts the
+  line under the answer. A run nobody watches has it in its words.
+* The page's Undo forgets only the asker's own memory, and marks the
+  line, so a chat drawn again shows it forgotten.
+
+Telegram's test harness used to stop the bot after 500 empty polls. A
+mock answers those at once, so a turn whose tool ran in a thread was
+cancelled before it answered; `test_a_file_the_agent_sent_follows_its_answer`
+had been failing that way. The wait is now ten seconds.
 
 ## What is not here yet
 
-* **The page drawing the line as its own row.** Sarathi's chat shows
-  it as part of the answer text. A chip beside the tools would be
-  tidier, with **Undo** as a button.
-* **Vaani reading it more briefly.** The puck speaks the whole line,
-  memory number included.
+* ~~**The page drawing the line as its own row.**~~ A chip with
+  **Undo**, above.
+* ~~**Vaani reading it more briefly.**~~ One sentence, above.
+* **A conversation read again.** `/chats N` and the page's list redraw
+  a past conversation from its messages, which never held the line. The
+  run (`Run.kept`) still has it.

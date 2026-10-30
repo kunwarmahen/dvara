@@ -407,3 +407,61 @@ def test_a_fact_kept_and_noticed_in_other_words_is_one_fact():
     assert not remembering.same(noticed, kept)
     assert remembering.about_the_same(noticed, kept)
     assert not remembering.about_the_same("Has a daughter at college in Detroit", kept)
+
+
+def test_what_a_turn_kept_reaches_the_page_and_its_undo_forgets_only_theirs(
+        make_service, remembers):
+    from fastapi.testclient import TestClient
+
+    from dvara.gate import Policy
+    from dvara.http import create_app
+    from tests.conftest import calls
+
+    (remembers / "greeter" / "agent.toml").write_text(
+        REMEMBERING + '[permissions]\nmode = "yolo"\n')
+    service = make_service([calls("remember", {"statement": "Lives in Cary, NC"}),
+                            says("Saved.")], web=True, policy=Policy(mode="yolo"),
+                           actors=ActorBook.from_dict({"actor": {
+                               "owner": {"permissions": "yolo"},
+                               "guest": {"agents": ["greeter"]}}}))
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    reply = asyncio.run(service.deliver(actor="owner", agent="greeter", thread="web:chat",
+                                        text="I live in Cary"))
+    from dvara.http import answer_of
+    assert answer_of(reply)["text"] == "Saved."
+    assert answer_of(reply)["kept"] == [{"id": "1", "statement": "Lives in Cary, NC"}]
+    service.web.answered("owner", "greeter", reply)      # as the page's turn writes it
+    with TestClient(create_app(service, token=token)) as client:
+        # the guest's Undo reaches the guest's own memories, never the owner's
+        theirs = client.post("/web/forget", headers=auth, json={
+            "actor": "guest", "agent": "greeter", "id": "1"}).json()
+        assert theirs["forgot"] is False and kept("owner") == ["Lives in Cary, NC"]
+        line = service.web.book.after("owner")[-1]
+        assert line.as_dict()["kept"] == [{"id": "1", "statement": "Lives in Cary, NC"}]
+        mine = client.post("/web/forget", headers=auth, json={
+            "actor": "owner", "agent": "greeter", "id": "1", "line": line.id}).json()
+        assert mine == {"said": "Forgot #1.", "forgot": True}
+        # drawn again, the page shows it forgotten, with no Undo
+        assert service.web.book.get("owner", line.id).as_dict()["kept"] == [
+            {"id": "1", "statement": "Lives in Cary, NC", "forgot": True}]
+        assert client.post("/web/forget", headers=auth, json={
+            "actor": "owner", "agent": "greeter"}).status_code == 400
+    assert kept("owner") == []
+
+
+def test_a_program_reads_what_was_kept_in_the_words(make_service, remembers):
+    from dvara.gate import Policy
+    from tests.conftest import calls
+
+    (remembers / "greeter" / "agent.toml").write_text(
+        REMEMBERING + '[permissions]\nmode = "yolo"\n')
+    service = make_service([calls("remember", {"statement": "Lives in Cary, NC"}),
+                            says("Saved.")], policy=Policy(mode="yolo"),
+                           actors=ActorBook.from_dict({"actor": {
+                               "owner": {"permissions": "yolo"}}}))
+    reply = asyncio.run(service.deliver(actor="owner", agent="greeter", thread="samay-x",
+                                        text="brief", unattended=True))
+    assert reply.kept == ()
+    assert reply.text.endswith("(Kept about you: Lives in Cary, NC -- /memory forget 1 "
+                               "to undo.)")

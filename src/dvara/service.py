@@ -261,6 +261,11 @@ class Reply:
     speak: bool = False
     #: Whose voice by name, for that (their own, or None for the house's).
     voice: str | None = None
+    #: What the model's ``remember`` kept this turn, as (short id,
+    #: statement). NOT PART OF ``text``, for ``receipt``'s reason: each
+    #: channel says it its own way -- a line on Telegram, a chip with Undo
+    #: on the page, one short sentence at the puck (remembering.kept_line).
+    kept: tuple[tuple[str, str], ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -1817,9 +1822,13 @@ class Service:
         if not run.reply:
             run.reply = _explain(run.stop_reason, run.detail, ceiling)
         # what was kept first: a fact the turn kept is not also offered
-        for line in (self._kept(agent, run), self._noticed(agent, run)):
-            if line:
-                run.reply = f"{run.reply}\n\n{line}"
+        kept = self._kept(agent, run)
+        if kept and run.unattended:
+            # a program reads only the words: the line goes in them
+            run.reply = f"{run.reply}\n\n{remembering.kept_line(kept)}"
+            kept = []
+        if noticed := self._noticed(agent, run):
+            run.reply = f"{run.reply}\n\n{noticed}"
         self.runs.record(run)
         # Behind the answer: learned skills counted, and a look for one to
         # keep (learning.py) -- started now, run after this returns.
@@ -1831,7 +1840,8 @@ class Service:
                      usage=run.usage,
                      receipt=self._receipt(who, run, provider_name),
                      held=held,
-                     refused=_refused(wait.lapsed, run.tools))
+                     refused=_refused(wait.lapsed, run.tools),
+                     kept=tuple(kept))
 
     def _keep(self, agent, key: str, run: Run,
               decisions: Decisions) -> Hold:
@@ -2239,21 +2249,30 @@ class Service:
         self.runs.record(run)
         return said
 
-    def _kept(self, agent, run: Run) -> str:
-        """The line under an answer naming what the model's ``remember``
-        wrote this turn. Whether it asked first is the person's permission
-        mode; whether they hear of it is not: a write they let through
-        unasked is still never a silent one."""
+    def _kept(self, agent, run: Run) -> list[tuple[str, str]]:
+        """What the model's ``remember`` wrote this turn, as (short id,
+        statement), for the answer to name. Whether it asked first is the
+        person's permission mode; whether they hear of it is not: a write
+        they let through unasked is still never a silent one."""
         memory = getattr(agent, "memory", None)
         kept = list(getattr(memory, "kept", None) or [])
         if not kept:
-            return ""
+            return []
         memory.kept.clear()
         from yantra.memory import short_id
 
         run.kept = [statement for _, statement in kept]
-        return remembering.kept_line(
-            [(short_id(memory_id), statement) for memory_id, statement in kept])
+        return [(short_id(memory_id), statement) for memory_id, statement in kept]
+
+    async def forget(self, actor: str, agent: str, memory_id: str) -> str:
+        """One memory forgotten by its id, as ``/memory forget ID`` does:
+        the page's Undo beside what a turn kept (note 77)."""
+        self.refresh()
+        who = self.actors.may(actor, agent)
+        spec = self.roster.spec(agent)
+        key = session_key(actor, agent, "web:chat")
+        return await self._memory_words(spec, who, key,
+                                        f"/memory forget {memory_id.strip()}")
 
     def _noticed(self, agent, run: Run) -> str:
         """What Yantra noticed about the person during this turn

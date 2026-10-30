@@ -1064,6 +1064,7 @@ POST /push/answer {actor, agent, offer, word, mark} -> {said}  (Keep / Not now o
 POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts page)
 GET  /web/declined?actor=                        -> {declined: [newest first], waiting}
 POST /web/declined {actor, undo: [fact, ...]}    -> {back, declined, waiting}  (not kept)
+POST /web/forget {actor, agent, id, line?}       -> {said, forgot}  (as /memory forget ID; the line marks it forgotten)
 GET  /web/chats/ID/export?actor=&as=pdf          -> that conversation as a PDF (503: no browser)
 POST /web/chats/ID/rename {actor, title}         -> {renamed}  (empty title: its first words)
 POST /web/chats/ID/pin    {actor, pinned}        -> {pinned}
@@ -1080,6 +1081,11 @@ switch and not the front door — and one that doesn't read as a grant is
 a 400. They grant only what the person could have been asked about (a
 deny rule still refuses), the call is recorded as `[ahead]` in `dvara
 runs`, and the reply carries `needs_person`, `busy` and `refused`.
+Every reply also carries `kept`: what the model kept about the person
+this turn, as `[{id, statement}]`, beside the words and not in them, so
+a page can draw it with an Undo and the puck can say it briefly. An
+unattended turn has it in its words instead, for a program that reads
+only those ([notes/77](notes/77-kept-and-told.md)).
 A caller may name itself with `"came_by"`, one short lowercase word
 (Samay sends `"samay"`); the page labels the turn with it, and a turn
 that names nothing is `http` ([notes/36](notes/36-which-way-it-came-in.md)).
@@ -1579,7 +1585,7 @@ reads that person's key from `<state>/memory.json`
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), which way each came in ([notes/36](notes/36-which-way-it-came-in.md)), and what the model kept about the person ([notes/77](notes/77-kept-and-told.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)); `if_late` sends a hung-up caller's answer to its person ([notes/76](notes/76-an-answer-written-to-nobody.md)) |
+| `http.py` | thirty-seven endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)); `if_late` sends a hung-up caller's answer to its person ([notes/76](notes/76-an-answer-written-to-nobody.md)) |
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
 | `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/learn start|watch|done|stop|clear`, a lesson kept on disk per person per agent, no look halfway ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's, Prahari's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |

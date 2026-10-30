@@ -77,7 +77,7 @@ class FakeTelegram:
         self.calls: list[tuple[str, dict]] = []
         self.status: dict[str, list[httpx.Response]] = {}
         self.bot: TelegramBot | None = None
-        self.idle = 0
+        self.idle: float | None = None
 
     # ---- the transport -----------------------------------------------------
 
@@ -127,11 +127,17 @@ class FakeTelegram:
             # the instant the batches run out would cancel the very turn
             # the test is waiting for. `run` cancels what is in flight on
             # the way out, and that is correct for a Ctrl-C and wrong for
-            # a harness.
-            self.idle += 1
+            # a harness. A WAIT IN SECONDS, NOT POLLS: a mock answers
+            # instantly, so five hundred polls were over before a turn
+            # whose tool ran in a thread had finished, and it was cancelled.
+            # And a pause per empty poll, as a real long poll waits: a loop
+            # spinning flat out starved that thread of the interpreter.
+            if self.idle is None:
+                self.idle = time.monotonic()
             if self.bot is not None and (not self.bot._turns
-                                         or self.idle > 500):
+                                         or time.monotonic() - self.idle > 30):
                 self.bot.stop()
+            time.sleep(0.005)
             return _ok([])
         return _ok({"message_id": len(self.calls)})
 
@@ -1140,3 +1146,22 @@ def test_marks_refused_send_the_words_as_written(make_bot):
     asyncio.run(bot.run())
     assert fake.texts() == ["see here", "see [here](https://x.example/)"]
     assert "entities" not in fake.sent()[-1]
+
+
+def test_what_the_model_kept_rides_under_the_answer(make_bot, make_service, agents_root,
+                                                    tmp_path, monkeypatch):
+    from dvara.gate import Policy
+    from tests.conftest import calls
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    (agents_root / "greeter" / "agent.toml").write_text(
+        '[agent]\nname = "greeter"\nprompt = "prompt.md"\n[memory]\nvia = "local"\n'
+        '[permissions]\nmode = "yolo"\n')
+    book = ActorBook.from_dict({"actor": {"mahen": {
+        "permissions": "yolo", "channel": [{"kind": "telegram", "id": KNOWN}]}}})
+    service = make_service([calls("remember", {"statement": "Lives in Cary, NC"}),
+                            says("Saved.")], actors=book, policy=Policy(mode="yolo"))
+    fake = FakeTelegram([message("I live in Cary")])
+    asyncio.run(make_bot(fake, service=service).run())
+    assert fake.texts()[-1:] == ["Saved.\n\n(Kept about you: Lives in Cary, NC -- "
+                                 "/memory forget 1 to undo.)"]

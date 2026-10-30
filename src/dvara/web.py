@@ -132,7 +132,7 @@ class Line:
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
         for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent",
-                     "transcript", "heard", "speak", "fresh"):
+                     "transcript", "heard", "speak", "fresh", "kept"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         # its turn can be read step by step (``steps``); asked for by line,
@@ -391,6 +391,8 @@ class WebChannel:
             # the run, for its steps (``steps``); a word's answer has none
             "run": reply.run_id,
             "receipt": reply.receipt,
+            # what the model kept on its own: a chip with Undo (note 77)
+            "kept": [{"id": i, "statement": s} for i, s in reply.kept],
             "files": [str(f) for f in reply.files],
             "held": reply.held.id if reply.held else None,
             "stop_reason": reply.stop_reason if not reply.ok else None,

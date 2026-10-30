@@ -1603,8 +1603,10 @@ take it back:
 (Kept about you: Lives about a 12-minute drive from RDU airport (Raleigh–Durham), a proximity that shapes airport pickup/timing. -- /memory forget 1 to undo.)
 ```
 
-Send `/memory forget 1` if it shouldn't have
-([notes/77](notes/77-kept-and-told.md)). To wait longer, start with `--quiet-for 120` (minutes); `0`
+Send `/memory forget 1` if it shouldn't have. On Sarathi's home page
+the same thing is a chip under the answer, *🔖 Kept about you: …*, with
+an **Undo** button, and at the puck the agent just adds *"I've also
+kept that about you."* ([notes/77](notes/77-kept-and-told.md)). To wait longer, start with `--quiet-for 120` (minutes); `0`
 looks back only at `/new`.
 
 **Every sign-in is checked once a day.** A few minutes after it starts,

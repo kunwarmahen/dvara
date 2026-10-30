@@ -80,6 +80,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from yantra import parse_grant
 
 from dvara.actors import PHONE_NAME, Channel
+from dvara import remembering
 from dvara.asks import NotYours
 from dvara.errors import ConfigProblem, Refused
 from dvara.holds import NoSuchHold, NotYourHold
@@ -790,6 +791,33 @@ def create_app(service: Service, *, token: str,
         return {"back": back, "declined": service.offered.declined(actor)[::-1],
                 "waiting": len(service.offered.get(actor))}
 
+    @app.post("/web/forget")
+    async def web_forget(request: Request,
+                         authorization: str | None = Header(default=None)) -> dict:
+        """``{actor, agent, id}``: one memory forgotten, as ``/memory forget
+        ID`` -- the Undo beside what a turn kept on its own (note 77)."""
+        check(authorization)
+        body = await request.json()
+        actor, agent, memory_id = body.get("actor"), body.get("agent"), body.get("id")
+        web_for(actor)
+        if not isinstance(agent, str) or not isinstance(memory_id, str) or not memory_id:
+            raise HTTPException(status_code=400, detail="agent and id are needed")
+        try:
+            said = await service.forget(actor, agent, memory_id)
+        except (Refused, ConfigProblem) as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from None
+        forgot = said.startswith("Forgot ")
+        line = body.get("line")
+        if forgot and isinstance(line, int):
+            # the line remembers it, so a page drawn again shows no Undo
+            book = service.web.book
+            shown = book.get(actor, line)
+            if shown is not None and shown.extra.get("kept"):
+                book.stamp(actor, line, {"kept": [
+                    {**k, "forgot": True} if k.get("id") == memory_id.lstrip("#") else k
+                    for k in shown.extra["kept"]]})
+        return {"said": said, "forgot": forgot}
+
     @app.get("/web/file")
     async def web_file(actor: str = "", line: int = 0, n: int = 0,
                        authorization: str | None = Header(default=None)) -> Any:
@@ -1002,7 +1030,8 @@ def create_app(service: Service, *, token: str,
                 "agent": reply.agent, "actor": reply.actor,
                 "stop_reason": reply.stop_reason, "detail": reply.detail,
                 "cost_usd": reply.cost_usd, "receipt": reply.receipt,
-                "held": reply.held.as_dict() if reply.held else None}
+                "held": reply.held.as_dict() if reply.held else None,
+                "kept": kept_of(reply)}
 
     return app
 
@@ -1011,6 +1040,8 @@ async def _send_late(service, reply, came_by: str) -> None:
     """A finished answer whose caller hung up, to its person's channels."""
     said = (f"Finished after {came_by.capitalize()} had stopped waiting "
             f"({reply.agent}):\n\n{reply.text}")
+    if reply.kept:
+        said = f"{said}\n\n{remembering.kept_line(list(reply.kept))}"
     try:
         await service.notify(text=said, actor=reply.actor, via=None)
     except Refused:
@@ -1050,7 +1081,14 @@ def answer_of(reply) -> dict:
         # Named, not sent -- a bridge that wants the bytes is here and
         # can read it (files.py).
         "files": [str(f) for f in reply.files],
+        # What the model kept about the person this turn, each with the
+        # id ``/memory forget`` (or POST /web/forget) takes back (note 77).
+        "kept": kept_of(reply),
     }
+
+
+def kept_of(reply) -> list[dict]:
+    return [{"id": short, "statement": statement} for short, statement in reply.kept]
 
 
 def _streamed(service: Service, turn: dict) -> StreamingResponse:
