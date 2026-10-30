@@ -75,6 +75,9 @@ The last two, and each row's `roads` and `pinned`, are
 
 A page carries one on by saying `/chats open ID` as a message, so the
 answer is a line like any other, with its transcript drawn in place.
+Each answer in the transcript keeps its own lines (note 71). A page
+that already shows the conversation read from `/web/chats/ID`, as
+Sarathi's does, goes on from that and draws nothing from the transcript.
 Sarathi's home page used all of this behind a **History** button; it
 is now the list of conversations beside its chat (Sarathi's notes/33).
 

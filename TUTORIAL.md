@@ -1630,6 +1630,12 @@ type any of this: with Sarathi, `sarathi dvara --ntfy` starts the server,
 and each person finds their server and topic under **Notices on this
 phone** on the home page.
 
+With `--ntfy-click` set to the home page's address, a skill offered
+(§24) arrives with **Keep** and **Not now** under it. Press one on the
+phone: the notification goes, and the chat on the home page shows the
+answer. The button carries no password, only a mark made for that one
+offer, so anyone reading the notice can do no more than press it.
+
 The phone hears notices while it can reach your house, which means home
 Wi-Fi, or anywhere your own Tailscale reaches. An iPhone shows them when
 the app is opened ([notes/40](notes/40-a-notice-on-their-phone.md)).
@@ -1704,7 +1710,8 @@ Test: passed
 Send /skills keep 080a to keep it, or /skills drop 080a.
 ```
 
-Telegram and a page show **Keep** and **Not now** buttons too. A kept
+Telegram, a page's chat, the home page's 🔔 **Notices** and the ntfy
+notice on a phone show **Keep** and **Not now** buttons too. A kept
 skill is saved in that person's own folder for that agent, so nobody
 else's agent changes. Ask for the same job again and the agent uses it.
 A shorter job isn't looked at by itself; send `/learn` after it and the

@@ -966,8 +966,12 @@ with the words that do: `Send /connect gmail as work to sign in again`
 own topic on an ntfy server in your house, for the ntfy app on their
 phone. `--ntfy-click URL` is where tapping one opens. A topic is
 `dvara-<id>-<16 hex>`, which nobody can guess, and `GET /web/push` gives
-it to that person's page. Sarathi starts the server with `[dvara] ntfy =
-true` ([notes/40](notes/40-a-notice-on-their-phone.md)).
+it to that person's page. A skill offered comes with **Keep** and **Not
+now** on the notification, pressed on the phone: each button carries a
+mark made for that one offer and word, never a token, and goes to the
+home page at `--ntfy-click`'s address, which hands it to `POST
+/push/answer`. Sarathi starts the server with `[dvara] ntfy = true`
+([notes/40](notes/40-a-notice-on-their-phone.md)).
 
 ### The owner's page
 
@@ -1044,6 +1048,7 @@ GET  /web/spoken?actor=&line=                    -> that answer read aloud (WAV)
 GET  /web/steps?actor=&line=                     -> yantra.steps.v1 of that answer's own run, + said
 GET  /web/steps/export?actor=&line=              -> the same, as a file for a bug report (Markdown)
 GET  /web/push?actor=                            -> {topic}  (their ntfy topic, or null)
+POST /push/answer {actor, agent, offer, word, mark} -> {said}  (Keep / Not now on a phone; 403 unless the mark is that offer's)
 POST /web/accounts-page  {actor}                 -> {url, said}  (as /accounts page)
 GET  /web/declined?actor=                        -> {declined: [newest first], waiting}
 POST /web/declined {actor, undo: [fact, ...]}    -> {back, declined, waiting}  (not kept)
