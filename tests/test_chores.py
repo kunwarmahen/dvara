@@ -1,13 +1,15 @@
 """What happens with nobody writing (Service.chores): a look back over a
-conversation gone quiet, and a daily check of every sign-in.
+conversation gone quiet, a daily check of every sign-in, and a person's
+schedules moved when their time zone changes.
 
 The bias these tests encode: AN UNASKED MESSAGE THAT IS NOT NEWS. Both
 chores write to a person nobody asked to hear from, so a look back that
 found nothing must say nothing, a conversation looked back over must not
-be looked back over again until they write, and a refused sign-in is
+be looked back over again until they write, a refused sign-in is
 told once, to whoever can fix it -- never to somebody who can't, never
-twice. The other bias is a look back that ENDS the conversation: unlike
-/new, the quiet one keeps it.
+twice, and a first look at someone's zone is not a move. The other bias
+is a look back that ENDS the conversation: unlike /new, the quiet one
+keeps it.
 """
 
 from __future__ import annotations
@@ -258,3 +260,66 @@ class TestANoticeOnAPhone:
             assert ok.status_code == 200
             lines = client.get("/web?actor=owner", headers=auth).json()["lines"]
             assert lines[0]["text"] == "/skills keep 4638"
+
+
+SAMAY = """#!/bin/sh
+echo "$@" >> "$(dirname "$0")/asked"
+[ -f "$(dirname "$0")/down" ] && { echo "error: the clock is busy" >&2; exit 2; }
+echo '{"moved": [{"prompt": "the weather",' \\
+     '"sentence": "every day at 08:00 -- next: ... (Europe/London)"}]}'
+"""
+
+
+class TestMoving:
+    """Their zone changes in the actors file while the service runs."""
+
+    @staticmethod
+    def zoned(tmp_path, zone):
+        path = tmp_path / "actors.toml"
+        line = f'zone = "{zone}"\n' if zone else ""
+        path.write_text('[actor.owner]\n' + line +
+                        '[[actor.owner.channel]]\nkind = "telegram"\nid = "42"\n')
+        return path
+
+    @pytest.fixture
+    def samay(self, tmp_path):
+        program = tmp_path / "bin" / "samay"
+        program.parent.mkdir()
+        program.write_text(SAMAY)
+        program.chmod(0o755)
+        return program
+
+    def test_a_move_takes_their_schedules_and_tells_them_once(self, make_service, tmp_path,
+                                                              samay):
+        path = self.zoned(tmp_path, "America/New_York")
+        service = make_service(actors=ActorBook.from_toml(path), samay=str(samay))
+        got = listening(service)
+        assert asyncio.run(service.follow_zones()) == 0             # first look: written down
+        assert not (samay.parent / "asked").exists() and got == []
+        self.zoned(tmp_path, "Europe/London")
+        assert asyncio.run(service.follow_zones()) == 1
+        assert (samay.parent / "asked").read_text().split() == [
+            "zone", "owner", "--from", "America/New_York", "--to", "Europe/London", "--json"]
+        assert got == ["Your time zone is now Europe/London, so your schedules moved with "
+                       "you:\n• the weather: every day at 08:00 -- next: ... (Europe/London)\n"
+                       "Any schedule you set in another time zone on purpose stays where it is."]
+        assert asyncio.run(service.follow_zones()) == 0             # not twice
+
+    def test_no_zone_is_this_machines_and_a_failed_move_is_tried_again(
+            self, make_service, tmp_path, samay, capsys):
+        path = self.zoned(tmp_path, "")
+        service = make_service(actors=ActorBook.from_toml(path), samay=str(samay))
+        asyncio.run(service.follow_zones())
+        (samay.parent / "down").write_text("")
+        self.zoned(tmp_path, "Asia/Tokyo")
+        assert asyncio.run(service.follow_zones()) == 0
+        assert "didn't move -- error: the clock is busy" in capsys.readouterr().err
+        (samay.parent / "down").unlink()
+        assert asyncio.run(service.follow_zones()) == 1             # the next tick
+        asked = (samay.parent / "asked").read_text().splitlines()
+        assert asked[-1].split() == ["zone", "owner", "--from", "--to", "Asia/Tokyo", "--json"]
+
+    def test_with_schedules_off_nothing_is_asked(self, make_service, tmp_path):
+        service = make_service(actors=people(zone="Asia/Tokyo"))
+        assert asyncio.run(service.follow_zones()) == 0
+        assert not (service.state / "zones.json").exists()

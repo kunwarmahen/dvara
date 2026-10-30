@@ -339,9 +339,11 @@ zone, by its IANA name (`Europe/London`, `Asia/Kolkata`). Their agent is
 told the time on their clock with each message (when its package has
 `[env] context`), their schedules are made on it (their Samay server
 gets `SAMAY_TZ`, so "every day at 7" is their 7), and their `hours`
-open and close on it. A name that isn't a zone (`IST`, `+05:30`, a typo)
-stops the file loading. The day for money and messages stays UTC's
-([notes/66](notes/66-their-own-clock.md)).
+open and close on it. Change it and their schedules follow: the ones
+in the zone they left move to the new one, and they're told which
+([notes/74](notes/74-their-schedules-move-with-them.md)). A name that
+isn't a zone (`IST`, `+05:30`, a typo) stops the file loading. The day
+for money and messages stays UTC's ([notes/66](notes/66-their-own-clock.md)).
 
 **How long they may be kept waiting.** `max_wait_per_day` is seconds a
 day the service may spend waiting on this person's answers. What is
@@ -1572,6 +1574,7 @@ reads that person's key from `<state>/memory.json`
 | `version.py` | `dvara --version` and status's `"version"`: the day of the last commit and that day's count (2026.10.25.3), with the commit; from git, else the VERSION file `sarathi image` writes |
 | `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches, the folder's lock and the page's answers read aloud (`voice-cache`) left out, nothing opened |
 | `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
+| `moved.py` | a person's `zone` changed: their schedules in the zone they left moved by Samay (`samay zone`), and they're told ([notes/74](notes/74-their-schedules-move-with-them.md)) |
 | `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--sparsh` and `--memory` checked at the start |

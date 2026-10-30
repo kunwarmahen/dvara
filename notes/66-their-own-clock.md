@@ -83,10 +83,13 @@ $ dvara … say --actor away --agent minder "Use preview_schedule … 'every day
 
 ## Not here
 
-- **Moving schedules when a zone changes.** A schedule keeps the zone it
+- ~~**Moving schedules when a zone changes.** A schedule keeps the zone it
   was made in; "every day at 7" made in London stays London's 7 after
   they fly home. Changing it means making it again, which is a yes on a
-  card, and that is where a person sees the new time.
+  card, and that is where a person sees the new time.~~ They move by
+  themselves, and the person is told: the 7 they said yes to was on
+  their clock, and their clock moved
+  ([74](74-their-schedules-move-with-them.md)).
 - **A zone the person sets from the chat.** The owner sets it, as every
   other key in the file: it moves a child's bedtime.
 - **Guessing a zone** from a phone's language or a Telegram account. A

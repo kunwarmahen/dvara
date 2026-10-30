@@ -85,6 +85,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import subprocess
 import sys
 from contextlib import asynccontextmanager, nullcontext
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
@@ -119,7 +120,7 @@ from yantra.unattended import is_unattended
 from yantra.unattended import scope as unattended_scope
 
 from dvara import (attached, carrying, checkup, files, fresh, heard, household, learning, limits,
-                   money, past, patience, phoneview, printed, ready, remembering, seen,
+                   money, moved, past, patience, phoneview, printed, ready, remembering, seen,
                    signins, spoken)
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
@@ -363,6 +364,9 @@ class Service:
         self.past = past.PastBook(self.state / "past")
         self.past.bring_in(self.state / "past.sqlite3")
         self.runs = RunStore(self.state / "runs.sqlite3")
+        #: Each person's zone as last seen, so a move takes their
+        #: schedules with them (moved.py).
+        self.zones = moved.Zones(self.state)
         # Always open, even when nothing is configured to hold: a turn
         # held yesterday by a service started with --on-timeout hold can
         # still be answered today by one started without it. Whether
@@ -2394,6 +2398,7 @@ class Service:
         await self._chore(self.tell_stopped)
         while True:
             await self._chore(self.look_back_quiet)
+            await self._chore(self.follow_zones)
             if self.check_every and loop.time() - checked >= self.check_every:
                 checked = loop.time()
                 await self._chore(self.check_sign_ins)
@@ -2406,6 +2411,41 @@ class Service:
             raise
         except Exception as exc:  # noqa: BLE001 -- the next tick tries again
             self._note(f"dvara: {job.__name__} failed -- {type(exc).__name__}: {exc}")
+
+    async def follow_zones(self) -> int:
+        """Each person whose ``zone`` changed since it was last seen: their
+        schedules moved to it by Samay, and they're told which (moved.py).
+        Returns how many people's schedules moved."""
+        if not self.samay:
+            return 0
+        self.refresh()                     # the actors file as it is now
+        seen = self.zones.read()
+        first = not seen and not self.zones.path.exists()
+        told = 0
+        for actor_id in self.actors.ids():
+            now = self.actors.get(actor_id).zone or ""
+            if actor_id not in seen or first:
+                seen[actor_id] = now       # nothing to compare with: not a move
+                continue
+            was = seen[actor_id]
+            if was == now:
+                continue
+            try:
+                went = await moved.move(self.samay, actor_id, was, now)
+            except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
+                self._note(f"dvara: {actor_id}'s zone is now {now or 'this machine'}, "
+                           f"but their schedules didn't move -- {exc}")
+                continue                   # not written down: the next tick tries again
+            seen[actor_id] = now
+            if went:
+                told += 1
+                try:
+                    await self.notify(text=moved.message(went, now), actor=actor_id)
+                except Exception as exc:  # noqa: BLE001 -- they moved; the line is extra
+                    self._note(f"dvara: couldn't tell {actor_id} their schedules moved -- "
+                               f"{exc}")
+        self.zones.keep(seen)
+        return told
 
     async def look_back_quiet(self, now: datetime | None = None) -> int:
         """A look back over every conversation nobody has written in for
