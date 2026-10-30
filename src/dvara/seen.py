@@ -155,7 +155,7 @@ class Seen:
         program = prahari or shutil.which("prahari")
         if not program:
             return "I can't find Prahari on this computer just now."
-        cards, trouble = await _ask_json([program, "list", "--json"])
+        cards, trouble = await ask_json([program, "list", "--json"])
         if trouble or not isinstance(cards, list):
             return trouble or "Prahari didn't list its watches. Try again soon."
         names = {actor} | ({LOCAL} if is_owner else set())
@@ -198,7 +198,7 @@ class Seen:
         if not card.get("every"):
             return (f"\"{card.get('name')}\" doesn't look on a clock: it hears when "
                     f"something is sent to it, so there's no how often to change.")
-        changed, trouble = await _ask_json([program, "edit", str(card["id"]),
+        changed, trouble = await ask_json([program, "edit", str(card["id"]),
                                             "--every", every, "--json"])
         if trouble or not isinstance(changed, dict):
             return trouble or "Prahari didn't change it. Try again soon."
@@ -209,13 +209,15 @@ class Seen:
 EVERY_HOW = "To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d)."
 
 
-async def _ask_json(argv: list[str]) -> tuple[Any, str]:
+async def ask_json(argv: list[str], env: dict[str, str] | None = None) -> tuple[Any, str]:
     """A program's ``--json`` answer, or what went wrong in words a person
-    can read (its own ``error:`` line when it said one)."""
+    can read (its own ``error:`` line when it said one). ``env``: added to
+    this process's own."""
     name = Path(argv[0]).name.capitalize()
     try:
         done = await asyncio.to_thread(subprocess.run, argv, capture_output=True,
-                                       text=True, timeout=30)
+                                       text=True, timeout=30,
+                                       env={**os.environ, **env} if env else None)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return None, f"{name} didn't answer ({type(exc).__name__}). Try again soon."
     if done.returncode != 0:

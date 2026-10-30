@@ -995,10 +995,20 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
-        if not unattended and checkup.is_word(text):
+        if checkup.is_word(text):
             # what's wrong with what is theirs, in plain words: not a turn
-            return Reply(text=await self._checkup(who), run_id=None, agent=agent,
-                         actor=actor, stop_reason="doctor")
+            if unattended:
+                # their morning check (a schedule): only what's new
+                said = await self._checkup(who, news=True)
+            elif (when := checkup.morning_word(text)) is not None:
+                said = await checkup.morning(who, agent, when == "on", self.samay)
+            else:
+                said = await self._checkup(who)
+                if self.samay:
+                    said += (f"\n\nSend /doctor {checkup.MORNING} to have this checked "
+                             f"each morning, told only when something is new.")
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="doctor")
         if not unattended and text.strip().lower().split()[:1] == ["/steps"]:
             # what their last turn (or turn N) did, step by step: not a turn
             return Reply(text=self._steps_words(key, text), run_id=None, agent=agent,
@@ -1473,9 +1483,10 @@ class Service:
             narrowed=who.setu_accounts, needs=needs_allow(spec.connections),
             may_lock=who.setu == OWN_SETU)
 
-    async def _checkup(self, who: Actor) -> str:
+    async def _checkup(self, who: Actor, *, news: bool = False) -> str:
         """``/doctor``: this person's own lines (checkup.py) -- their
-        accounts, schedules, watches, phones and limits -- red first."""
+        accounts, schedules, watches, phones and limits -- red first.
+        ``news``: their morning check, only lines not said last time."""
         day = money.day_start()
         lines = await checkup.examine(
             who, programs=checkup.Programs(
@@ -1486,6 +1497,11 @@ class Service:
             setu_home=self.setu_home(who), setu_key=self.accounts.keys.key_for(who.id),
             spent=self.runs.spent_since(who.id, day),
             sent=self.runs.asked_since(who.id, day), owner=self.owner)
+        if news:
+            lines = checkup.Told(self.state).news(who.id, lines)
+            if not lines:
+                return checkup.NOTHING_NEW
+            return checkup.said(lines, is_owner=False)
         return checkup.said(lines, is_owner=self.owner is not None and who.id == self.owner)
 
     def setu_home(self, who: Actor) -> Path | None:

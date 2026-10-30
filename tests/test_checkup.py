@@ -10,7 +10,8 @@ wrong are the two a shared house makes easy:
   running when they have schedules, a day's allowance spent;
 
 plus the fix being words they can't use (``setu connect`` at a
-terminal, ``/connect`` on a folder the owner looks after).
+terminal, ``/connect`` on a folder the owner looks after), and a morning
+check that says the same trouble every morning until it's ignored.
 """
 
 from __future__ import annotations
@@ -195,3 +196,74 @@ def test_the_owner_of_a_shared_folder_is_given_the_computers_words():
     lines = checkup.accounts(data, narrowed=None, own=False, owner="mahen",
                              now=NOW.timestamp(), is_owner=True)
     assert lines[0].fix.startswith("setu connect gmail --as personal")
+
+
+def test_the_morning_check_says_what_is_new_once(make_service, tmp_path):
+    runs = [{"schedule": "s1", "outcome": "timed_out", "ended_at": iso(NOW)}]
+    samay = tmp_path / "samay"
+    samay.write_text(f"#!{sys.executable}\n" + textwrap.dedent(FAKE_SAMAY).format(
+        schedules=json.dumps(SCHEDULES), runs=json.dumps(runs)))
+    samay.chmod(0o755)
+    book = ActorBook.from_dict({"actor": {"kid": {}}})
+    service = make_service([], actors=book, samay=str(samay))
+
+    def morning():
+        return asyncio.run(service.deliver(actor="kid", agent="greeter", thread="samay-x",
+                                           text="/doctor", unattended=True)).text
+    first = morning()
+    assert "ran out of time" in first and "every morning" not in first
+    assert morning() == checkup.NOTHING_NEW                      # said once, not daily
+    assert json.dumps(service.scripted.requests) == "[]"         # no model, either time
+
+
+MORNING_SAMAY = """\
+    import json, os, sys
+    here = os.path.dirname(sys.argv[0])
+    args = sys.argv[1:]
+    with open(os.path.join(here, "asked"), "a") as out:
+        out.write(json.dumps([args, os.environ.get("SAMAY_TZ", "")]) + "\\n")
+    made = os.path.join(here, "made.json")
+    if args[:1] == ["list"]:
+        print(open(made).read() if os.path.exists(made) else "[]")
+    elif args[:1] == ["add"]:
+        card = {"id": "d1", "owner": "kid", "runner": "dvara", "prompt": "/doctor",
+                "tz": os.environ.get("SAMAY_TZ") or "UTC", "sentence": "every day at 07:30"}
+        open(made, "w").write(json.dumps([card]))
+        print(json.dumps(card))
+    elif args[:1] == ["rm"]:
+        os.remove(made)
+        print(json.dumps({"removed": args[1]}))
+"""
+
+
+def test_every_morning_is_a_schedule_on_their_clock_and_off_removes_it(make_service,
+                                                                        tmp_path):
+    samay = tmp_path / "samay"
+    samay.write_text(f"#!{sys.executable}\n" + textwrap.dedent(MORNING_SAMAY))
+    samay.chmod(0o755)
+    book = ActorBook.from_dict({"actor": {"kid": {"zone": "Asia/Kolkata"}}})
+    service = make_service([], actors=book, samay=str(samay))
+
+    def say(text):
+        return asyncio.run(service.deliver(actor="kid", agent="greeter", thread="t",
+                                           text=text)).text
+    assert say("/doctor every morning").startswith("Done: I'll check what's yours every "
+                                                   "day at 07:30 (Asia/Kolkata)")
+    added = [json.loads(line) for line in (tmp_path / "asked").read_text().splitlines()
+             if '"add"' in line][0]
+    assert added == [["add", "/doctor", "--when", "at 07:30", "--runner", "dvara", "--as",
+                      "kid", "--agent", "greeter", "--notify", "when_new", "--json"],
+                     "Asia/Kolkata"]
+    assert say("/doctor every morning").startswith("Already: every day at 07:30")
+    assert say("/doctor every morning off") == "Stopped: no more morning checks."
+    assert say("/doctor every morning off") == "There's no morning check to stop."
+    assert "Send /doctor every morning" in say("/doctor")
+
+
+def test_every_morning_with_schedules_off_says_so(make_service):
+    service = make_service([], actors=ActorBook.from_dict({"actor": {"kid": {}}}))
+    reply = asyncio.run(service.deliver(actor="kid", agent="greeter", thread="t",
+                                        text="/doctor every morning"))
+    assert reply.text == "Schedules aren't switched on here, so I can't check every morning."
+    assert "every morning" not in asyncio.run(service.deliver(
+        actor="kid", agent="greeter", thread="t", text="/doctor")).text

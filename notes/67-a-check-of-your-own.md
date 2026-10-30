@@ -57,8 +57,8 @@ Dvara can't see the image or the firewall from inside a container, and
 doesn't pretend to. Times are on the person's clock (note 66).
 
 It's a word, not a turn: no model is asked, nothing is recorded as a
-run, and Telegram's `/` menu lists it as *What's wrong with what's
-yours, and the fix*.
+run, and Telegram's `/` menu lists it as *What's wrong with
+yours; /doctor every morning*.
 
 ## Live receipt
 
@@ -88,10 +88,12 @@ Your check: 2 amber
 
 ## Not here
 
-- **Every morning, unasked.** Samay's morning doctor runs the house's
+- ~~**Every morning, unasked.** Samay's morning doctor runs the house's
   check for the owner. A person's own check on a schedule is a schedule
   they can make ("every morning at 8, run /doctor" isn't one: a chat word
-  isn't a turn), so it waits for somebody to want it.
+  isn't a turn), so it waits for somebody to want it.~~ `/doctor every
+  morning`: the word is sent as a word, and only what's new is told
+  ([75](75-a-check-every-morning.md)).
 - **Fixing anything.** Each line says the fix; none is pressed for them.
   A sign-in needs the person; a start needs the computer.
 - **The house's lines for a person.** The image, the firewall and the

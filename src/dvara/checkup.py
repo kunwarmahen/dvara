@@ -29,6 +29,15 @@ their own lines too, and one more: the whole house is Settings → Check
 on the home page, or ``sarathi doctor``. Dvara can't see the image or
 the firewall from here, and doesn't pretend to.
 
+EVERY MORNING, ONLY WHAT'S NEW. ``/doctor every morning`` makes them a
+schedule in Samay, at 07:30 on their own clock, that sends ``/doctor`` here
+as them with nobody watching (``/doctor every morning off`` removes it).
+That run is answered with only the red and amber lines not said on an
+earlier morning, and ``NOTHING NEW`` when there are none, which Samay
+keeps and doesn't send: a phone left unplugged all week is said once, as
+the house doctor's morning check says it (Samay's doctor road). It is
+still not a turn: no model, no allowance.
+
 A PROGRAM THAT DOESN'T ANSWER IS SAID, NOT HIDDEN. Samay not running is
 red for someone with schedules (nothing of theirs runs); a Setu that
 won't read their folder is amber with what it said.
@@ -47,6 +56,13 @@ from pathlib import Path
 from typing import Any
 
 WORDS = ("/doctor",)
+#: The morning check: when, on their clock, and the word that stops it.
+MORNING_AT = "07:30"
+MORNING = "every morning"
+#: What a scheduled check says with nothing new (Samay's quiet words).
+NOTHING_NEW = "NOTHING NEW"
+#: Where what each person's morning check said last is kept.
+TOLD_FILE = "doctor-told.json"
 LEVELS = ("red", "amber", "green")
 MARK = {"red": "🔴", "amber": "🟠", "green": "🟢"}
 #: A Google sign-in this close to its end is worth a look (as at the computer).
@@ -72,6 +88,74 @@ OWNER_STARTS = "`sarathi up` at the computer (or Apply on the home page)"
 def is_word(text: str) -> bool:
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].split("@")[0].lower() in WORDS
+
+
+def morning_word(text: str) -> str | None:
+    """"on" for ``/doctor every morning``, "off" with ``off`` after it;
+    None for anything else."""
+    rest = " ".join(text.strip().lower().split()[1:])
+    if rest == MORNING:
+        return "on"
+    if rest in (f"{MORNING} off", f"{MORNING} stop"):
+        return "off"
+    return None
+
+
+class Told:
+    """What each person's morning check said last, so only news is sent."""
+
+    def __init__(self, state: Path) -> None:
+        self.path = Path(state) / TOLD_FILE
+
+    def news(self, actor: str, lines: list[Line]) -> list[Line]:
+        """The red and amber lines not said last time; what is said now
+        is kept, so a line that went away and came back is news again."""
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        before = set(data.get(actor) or []) if isinstance(data, dict) else set()
+        now = [line for line in lines if line.level != "green"]
+        data = data if isinstance(data, dict) else {}
+        data[actor] = sorted({line.said for line in now})
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(self.path)
+        return [line for line in now if line.said not in before]
+
+
+async def morning(who: Any, agent: str, on: bool, samay: str | None) -> str:
+    """``/doctor every morning`` (or ``off``): a Samay schedule that sends
+    ``/doctor`` here as them at 07:30 their time, told only when new."""
+    from dvara.seen import ask_json
+
+    if not samay:
+        return "Schedules aren't switched on here, so I can't check every morning."
+    cards, trouble = await ask_json([samay, "list", "--json"])
+    if trouble or not isinstance(cards, list):
+        return trouble or "Samay didn't list its schedules. Try again soon."
+    mine = [c for c in cards if isinstance(c, dict) and c.get("owner") == who.id
+            and c.get("runner") == "dvara" and (c.get("prompt") or "").strip() == WORDS[0]]
+    if not on:
+        for card in mine:
+            _, trouble = await ask_json([samay, "rm", str(card["id"]), "--json"])
+            if trouble:
+                return trouble
+        return ("Stopped: no more morning checks." if mine
+                else "There's no morning check to stop.")
+    if mine:
+        return (f"Already: {mine[0].get('sentence') or 'every morning'}. "
+                f"/doctor {MORNING} off stops it.")
+    made, trouble = await ask_json(
+        [samay, "add", WORDS[0], "--when", f"at {MORNING_AT}", "--runner", "dvara",
+         "--as", who.id, "--agent", agent, "--notify", "when_new", "--json"],
+        env={"SAMAY_TZ": who.zone} if who.zone else None)
+    if trouble or not isinstance(made, dict):
+        return trouble or "Samay didn't make it. Try again soon."
+    return (f"Done: I'll check what's yours every day at {MORNING_AT} "
+            f"({made.get('tz') or 'your time'}) and tell you only when something new "
+            f"is wrong. /doctor {MORNING} off stops it.")
 
 
 @dataclass

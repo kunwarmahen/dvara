@@ -1311,7 +1311,7 @@ def _menu(spec, *, schedules: bool = False, watches: bool = False,
              ("steps", "What my last answer did, step by step"),
              ("chats", "Our conversations: find, open, delete"),
              ("tests", "Answers kept as tests, and how each did"),
-             ("doctor", "What's wrong with what's yours, and the fix")]
+             ("doctor", "What's wrong with yours; /doctor every morning")]
     if _writes_files(spec):
         words += [("files", "What I keep for you"),
                   ("file", "Send one of them: /file NAME")]
