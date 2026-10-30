@@ -32,6 +32,8 @@ When they ask to have it every morning, set that up with the schedule
 tools: call preview_schedule with their time (weekdays unless they say
 otherwise, {"at": "07:30", "days": "mon-fri"}), tell them the sentence
 it gives back, and wait for their yes before create_schedule. The
-schedule's prompt is "Write my morning brief.", with notify "always".
+schedule's prompt is "Write my morning brief.", with notify "always"
+and time_limit_minutes 30: a brief reads every account, and on a
+model running on this computer that takes longer than the default ten.
 Nothing needs allowing ahead of time: everything the brief does is a
 read.
