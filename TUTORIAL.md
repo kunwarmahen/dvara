@@ -1362,6 +1362,11 @@ ends with where the rest of the house is: Settings → Check on the home
 page, or `sarathi doctor`
 ([notes/67](notes/67-a-check-of-your-own.md)).
 
+To have it checked for you every morning, send `/doctor every morning`.
+At 07:30 on your clock it looks, and you hear from it only when
+something new is wrong; a quiet morning sends nothing. `/doctor every
+morning off` stops it ([notes/75](notes/75-a-check-every-morning.md)).
+
 ### Old conversations, found again
 
 Every conversation is kept as it goes, on every channel, in a file of
@@ -1823,12 +1828,19 @@ that's still empty. `/new` and `/chats N` drop an open lesson, since
 the conversation that told the agent it was being taught is gone.
 `/learn stop` drops one too ([notes/49](notes/49-a-job-taught-step-by-step.md)).
 
-**`/tools` and `/schedules`.** `/tools` lists what the agent could use
-on your last message, grouped by where each tool came from. `/schedules`
-lists your schedules from Samay (with `--samay`). Neither is a turn, so
-they cost nothing. To change a schedule, ask the agent; to change what
-an agent may use, change its package
-([notes/42](notes/42-seeing-the-work.md)).
+**`/tools`, `/schedules` and `/watches`.** `/tools` lists what the agent
+could use on your last message, grouped by where each tool came from.
+`/schedules` lists your schedules from Samay (with `--samay`), and
+`/watches` your watches from Prahari (with `--prahari`), numbered. None
+is a turn, so they cost nothing. `/watches every 2 6h` changes how often
+your second watch looks (Prahari won't go under 5 minutes). Anything
+else about a schedule or a watch, ask the agent; to change what an agent
+may use, change its package ([notes/42](notes/42-seeing-the-work.md)).
+
+If the owner changes your `zone` because you moved, your schedules move
+with you: "every day at 8" is 8 where you are now, and you get a line
+saying which ones moved
+([notes/74](notes/74-their-schedules-move-with-them.md)).
 
 ## 25 · A watch asked for in the chat
 
