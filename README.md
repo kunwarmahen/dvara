@@ -1050,7 +1050,8 @@ POST /web/declined {actor, undo: [fact, ...]}    -> {back, declined, waiting}  (
 GET  /web/chats/ID/export?actor=&as=pdf          -> that conversation as a PDF (503: no browser)
 POST /web/chats/ID/rename {actor, title}         -> {renamed}  (empty title: its first words)
 POST /web/chats/ID/pin    {actor, pinned}        -> {pinned}
-GET  /web/notices?actor=                         -> {notices: [newest first]}  (what was sent unasked, kept whatever /new cleared)
+GET  /web/notices?actor=                         -> {notices: [newest first], read}  (what was sent unasked, kept whatever /new cleared; how far they've read)
+POST /web/notices/read    {actor, upto}          -> {read}  (read up to that line on every page; never moves back)
 ```
 
 A program that runs turns for people who are not there — a scheduler —

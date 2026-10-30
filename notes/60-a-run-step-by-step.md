@@ -19,7 +19,10 @@ notes under that tag, so `runsteps.timeline` opens a run's own turn by
 its id, never by position in the conversation. A run from before the
 tags is found by its message. If its conversation is gone, the run says
 so: a schedule's thread is let go a week after it ran (`tidy`), and a
-person's is gone after `/chats delete`.
+person's is gone after `/chats delete`. One whose chat only moved on
+(`/new`, another conversation opened) is still in the person's kept
+conversations under its run id, and the page's **Steps** find it there
+([notes/71](71-one-conversation-two-chats.md)).
 
 ## Who sees what
 

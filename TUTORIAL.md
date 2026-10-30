@@ -1670,7 +1670,10 @@ agent a job of several steps and watch:
 
 * **On a page** (Sarathi's home page, through `serve --web`): each step
   appears as a line under the agent's name, `✓ bash: $ wc -l people.csv`,
-  and then the answer word by word.
+  and then the answer word by word. Once it's answered, each tool sits
+  folded above the answer, with what it was given and what came back. A
+  voice note's words show on the person's own message as soon as they're
+  heard.
 * **On Telegram**: a *Working…* message lists the last few steps, is
   updated every few seconds, and goes away when the answer arrives.
 * **Over HTTP**: add `"stream": true` to `POST /message` and the answer
