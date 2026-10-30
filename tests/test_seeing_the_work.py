@@ -14,6 +14,9 @@ Designed against:
   counted, never looked at.
 * **``/tools`` starting every server to answer.** It reads what the last
   turn was given.
+* **``/watches every`` reaching somebody else's watch.** A number or an id
+  is looked up among the person's own; the owner's also counts what was
+  made at the computer (``local``), nobody else's does.
 """
 
 from __future__ import annotations
@@ -263,6 +266,104 @@ class TestToolsAndSchedules:
         reply, = run(service, say(service, "/schedules", agent="greeter"))
         assert "the weather" in reply.text and "every day at 08:00" in reply.text
         assert "Last time: ok" in reply.text and "maya's own" not in reply.text
+
+
+def fake_prahari(tmp_path, cards) -> str:
+    """A prahari that lists ``cards``, and on ``edit ID --every X`` writes
+    down what it was asked and answers like Prahari (``1m`` too often)."""
+    (tmp_path / "watches.json").write_text(json.dumps(cards))
+    program = tmp_path / "prahari"
+    program.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = list ]; then cat {tmp_path}/watches.json; exit 0; fi\n"
+        f"echo \"$@\" >> {tmp_path}/asked\n"
+        "if [ \"$4\" = 1m ]; then echo 'error: nothing is looked at more often than "
+        "every 5 minutes; '\\''1m'\\'' is too often' >&2; exit 1; fi\n"
+        "echo '{\"name\": \"ALAB under $50\", "
+        "\"sentence\": \"every 6 hours, looks with web_fetch\"}'\n")
+    program.chmod(program.stat().st_mode | stat.S_IEXEC)
+    return str(program)
+
+
+WATCH_CARDS = [
+    {"id": "w1aa", "owner": "maya", "name": "ALAB under $50", "every": "3h",
+     "sentence": "every 3 hours, looks with web_fetch", "state": "active",
+     "last_look": {"outcome": "quiet", "ended_at": "2026-10-14T08:00:05+00:00"}},
+    {"id": "w2bb", "owner": "maya", "name": "Mum on WhatsApp", "every": "",
+     "listen": "whatsapp", "sentence": "hears whatsapp at the inlet", "state": "active"},
+    {"id": "w3cc", "owner": "owner", "name": "the owner's own", "every": "1h",
+     "sentence": "every hour, looks with web_fetch", "state": "active"},
+    {"id": "w4dd", "owner": "local", "name": "made at the computer", "every": "1d",
+     "sentence": "every day, looks with web_fetch", "state": "paused",
+     "paused_because": "broke twice"},
+]
+
+
+class TestWatches:
+    def test_watches_off_says_so(self, make_service):
+        service = make_service([], actors=PEOPLE)
+        reply, = run(service, say(service, "/watches", agent="greeter"))
+        assert reply.text == "Watches aren't switched on here."
+
+    def test_only_your_own_watches_numbered(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS),
+                               owner="owner")
+        reply, = run(service, say(service, "/watches", actor="maya", agent="greeter"))
+        assert reply.stop_reason == "seen"
+        assert "1. ALAB under $50" in reply.text and "2. Mum on WhatsApp" in reply.text
+        assert "Last look: quiet" in reply.text
+        assert "owner's own" not in reply.text and "the computer" not in reply.text
+
+    def test_the_owner_also_sees_what_was_made_at_the_computer(self, make_service,
+                                                                  tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS),
+                               owner="owner")
+        reply, = run(service, say(service, "/watches", agent="greeter"))
+        assert "1. the owner's own" in reply.text
+        assert "2. made at the computer" in reply.text and "paused: broke twice" in reply.text
+        assert "ALAB" not in reply.text
+
+    def test_every_changes_how_often_by_number(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches every 1 6h", actor="maya",
+                                  agent="greeter"))
+        assert reply.text == "Done. \"ALAB under $50\": every 6 hours, looks with web_fetch."
+        assert (tmp_path / "asked").read_text().split() == [
+            "edit", "w1aa", "--every", "6h", "--json"]
+
+    def test_a_number_from_someone_elses_list_finds_nothing(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        for which in ("3", "w3cc"):
+            reply, = run(service, say(service, f"/watches every {which} 6h", actor="maya",
+                                      agent="greeter"))
+            assert reply.text.startswith(f"You have no watch {which}.")
+        assert not (tmp_path / "asked").exists()
+
+    def test_a_watch_that_listens_has_no_how_often(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches every 2 6h", actor="maya",
+                                  agent="greeter"))
+        assert "doesn't look on a clock" in reply.text
+        assert not (tmp_path / "asked").exists()
+
+    def test_prahari_saying_no_is_passed_on(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches every w1 1m", actor="maya",
+                                  agent="greeter"))
+        assert reply.text == ("Prahari said: nothing is looked at more often than "
+                              "every 5 minutes; '1m' is too often")
+
+    def test_the_only_watch_needs_no_number(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE,
+                               prahari=fake_prahari(tmp_path, WATCH_CARDS[2:3]))
+        reply, = run(service, say(service, "/watches every 6h", agent="greeter"))
+        assert reply.text.startswith("Done.")
+        assert "w3cc" in (tmp_path / "asked").read_text()
+
+    def test_a_word_it_doesnt_know_says_how(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches pause 1", actor="maya", agent="greeter"))
+        assert "/watches every NUMBER 6h" in reply.text
 
 
 class TestWhichSkills:

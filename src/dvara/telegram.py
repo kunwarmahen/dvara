@@ -757,6 +757,7 @@ class TelegramBot:
                 {"command": word, "description": said}
                 for word, said in _menu(self.spec,
                                         schedules=self.service.samay is not None,
+                                        watches=self.service.prahari is not None,
                                         phone=self.service.sparsh is not None
                                         and works_phone(self.spec))])
         except Exception as exc:  # noqa: BLE001 -- the bot still answers
@@ -781,8 +782,11 @@ class TelegramBot:
         if _remembers(self.spec):
             lines.append("Send /memory to see what I remember about you.")
         lines.append("Send /tools to see what I can use"
-                     + (", and /schedules for your schedules."
-                        if self.service.samay is not None else "."))
+                     + (", /schedules for your schedules"
+                        if self.service.samay is not None else "")
+                     + (", /watches for what I keep an eye on for you"
+                        if self.service.prahari is not None else "")
+                     + ".")
         if getattr(self.spec, "skills", None):
             lines.append("When a job takes several steps, I may offer to keep how it "
                          "was done as a skill. Send /learn to ask for one now, and "
@@ -1299,7 +1303,8 @@ def ending(answer: Answer | None) -> str:
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
 
 
-def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[str, str]]:
+def _menu(spec, *, schedules: bool = False, watches: bool = False,
+          phone: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over"),
              ("carry", "Carry on a job a restart stopped"),
@@ -1330,6 +1335,8 @@ def _menu(spec, *, schedules: bool = False, phone: bool = False) -> list[tuple[s
         words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
     if schedules:
         words += [("schedules", "Your schedules")]
+    if watches:
+        words += [("watches", "What I watch for you; /watches every N 6h")]
     return words
 
 

@@ -5,8 +5,9 @@ person behind this service had no way to see either: "what can you do?"
 got the model's own guess, and a schedule made last month was found only
 by asking the agent to list it, in words it chose.
 
-``/tools`` and ``/schedules`` answer from the record instead, on every
-channel, and neither is a turn: no model, no allowance spent.
+``/tools``, ``/schedules`` and ``/watches`` answer from the record
+instead, on every channel, and none is a turn: no model, no allowance
+spent.
 
 TOOLS AS THEY WERE ON YOUR LAST TURN. What an agent may use depends on
 the package, the owner's rules, the person's accounts, the phone, and
@@ -21,6 +22,15 @@ files (and on Sarathi's settings); a chat word that widened it would be
 a way around them. A schedule is paused or removed by asking the agent,
 which asks the person on their channel first (Samay's tools), so there
 is one way to change one.
+
+HOW OFTEN IS THE ONE CHANGE. ``/watches every 2 6h`` changes how often
+their second watch looks, through ``prahari edit``, the same change
+Prahari's page and Yantra's panel make with their Every box. It is the
+person's own watch and only its pace: what it checks, and what the agent
+may do when it fires, still go through the agent, which asks. A watch is
+found among THEIR OWN first (Prahari files them under the person's name,
+and the owner's made at the computer under ``local``), so a number or an
+id from somebody else's list finds nothing.
 """
 
 from __future__ import annotations
@@ -37,6 +47,9 @@ from typing import Any
 
 TOOLS = "/tools"
 SCHEDULES = "/schedules"
+WATCHES = "/watches"
+#: What the owner made at the computer is filed under this (checkup.py).
+LOCAL = "local"
 #: Longest description line shown for a tool.
 SAID_AT_MOST = 110
 
@@ -44,7 +57,7 @@ SAID_AT_MOST = 110
 def word_of(text: str) -> str | None:
     first = text.strip().split(maxsplit=1)[:1]
     word = first[0].lower().split("@")[0] if first else ""
-    return word if word in (TOOLS, SCHEDULES) else None
+    return word if word in (TOOLS, SCHEDULES, WATCHES) else None
 
 
 class Seen:
@@ -132,6 +145,95 @@ class Seen:
         out.append("")
         out.append("To pause, change or remove one, just ask me.")
         return "\n".join(out)
+
+    async def watches(self, actor: str, text: str, prahari: str | None, *,
+                      enabled: bool, is_owner: bool = False) -> str:
+        """Their watches, as Prahari says them; ``/watches every N 6h``
+        changes how often one looks."""
+        if not enabled:
+            return "Watches aren't switched on here."
+        program = prahari or shutil.which("prahari")
+        if not program:
+            return "I can't find Prahari on this computer just now."
+        cards, trouble = await _ask_json([program, "list", "--json"])
+        if trouble or not isinstance(cards, list):
+            return trouble or "Prahari didn't list its watches. Try again soon."
+        names = {actor} | ({LOCAL} if is_owner else set())
+        mine = [c for c in cards if isinstance(c, dict) and c.get("owner") in names]
+        rest = text.strip().split()[1:]
+        if rest and rest[0].lower() == "every":
+            return await self._every(program, mine, rest[1:])
+        if rest:
+            return (f"I don't know \"/watches {' '.join(rest)}\". "
+                    + EVERY_HOW)
+        if not mine:
+            return ("You have no watches. Ask me to tell you when something happens — "
+                    "\"tell me when ALAB drops below $50\" — and I'll set one up.")
+        out = ["Your watches:"]
+        for n, card in enumerate(mine, 1):
+            state = card.get("state") or ""
+            paused = (f" — paused: {card.get('paused_because')}" if state != "active"
+                      and card.get("paused_because") else
+                      " — paused" if state != "active" else "")
+            last = card.get("last_look") or {}
+            at = last.get("ended_at") or last.get("started_at")
+            how = (f" Last look: {last.get('outcome')}{_when(at)}."
+                   if last.get("outcome") else "")
+            out.append(f"{n}. {card.get('name') or '(no name)'} (id {card.get('id')})")
+            out.append(f"  {card.get('sentence') or ''}{paused}.{how}")
+        out.append("")
+        out.append(EVERY_HOW + " To pause, mend or remove one, just ask me.")
+        return "\n".join(out)
+
+    async def _every(self, program: str, mine: list[dict], words: list[str]) -> str:
+        if len(words) == 1 and len(mine) == 1:
+            words = ["1", *words]         # the one watch they have
+        if len(words) != 2:
+            return EVERY_HOW
+        which, every = words
+        card = _which(mine, which)
+        if card is None:
+            return (f"You have no watch {which}. Send /watches to see their numbers."
+                    if mine else "You have no watches.")
+        if not card.get("every"):
+            return (f"\"{card.get('name')}\" doesn't look on a clock: it hears when "
+                    f"something is sent to it, so there's no how often to change.")
+        changed, trouble = await _ask_json([program, "edit", str(card["id"]),
+                                            "--every", every, "--json"])
+        if trouble or not isinstance(changed, dict):
+            return trouble or "Prahari didn't change it. Try again soon."
+        return f"Done. \"{changed.get('name')}\": {changed.get('sentence') or ''}."
+
+
+#: How to change how often, said wherever it helps.
+EVERY_HOW = "To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d)."
+
+
+async def _ask_json(argv: list[str]) -> tuple[Any, str]:
+    """A program's ``--json`` answer, or what went wrong in words a person
+    can read (its own ``error:`` line when it said one)."""
+    name = Path(argv[0]).name.capitalize()
+    try:
+        done = await asyncio.to_thread(subprocess.run, argv, capture_output=True,
+                                       text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"{name} didn't answer ({type(exc).__name__}). Try again soon."
+    if done.returncode != 0:
+        said = " ".join(done.stderr.split()).removeprefix("error: ")
+        return None, (f"{name} said: {said}" if said else
+                      f"{name} didn't answer. Try again soon.")
+    try:
+        return json.loads(done.stdout), ""
+    except ValueError:
+        return None, f"{name} said something I couldn't read. Try again soon."
+
+
+def _which(mine: list[dict], which: str) -> dict | None:
+    """Their watch by its number in ``/watches``, or by the start of its id."""
+    if which.isdigit() and 1 <= int(which) <= len(mine):
+        return mine[int(which) - 1]
+    found = [c for c in mine if str(c.get("id") or "").startswith(which)]
+    return found[0] if len(found) == 1 and which else None
 
 
 def _row(tool: Any) -> dict:

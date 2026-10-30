@@ -375,7 +375,7 @@ class Service:
         self.voices = spoken.Choices(self.state)
         #: Skills offered after an answer and kept on the person's word
         #: (learning.py); the tools each turn was given, and schedules,
-        #: for ``/tools`` and ``/schedules`` (seen.py).
+        #: for ``/tools``, ``/schedules`` and ``/watches`` (seen.py).
         self.learning = Learning(self)
         self.seen = Seen(self.state)
         #: Each refused sign-in told, so none is told twice (signins.py).
@@ -958,6 +958,10 @@ class Service:
         if not unattended and (word := seen.word_of(text)):
             # What it can use, and what they scheduled: read, not a turn.
             said = (self.seen.tools(actor, agent) if word == seen.TOOLS else
+                    await self.seen.watches(actor, text, self.prahari,
+                                            enabled=self.watches_for(actor),
+                                            is_owner=actor == self.owner)
+                    if word == seen.WATCHES else
                     await self.seen.schedules(actor, self.samay,
                                               enabled=self.samay is not None))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,

@@ -91,9 +91,9 @@ What waits is kept on disk in Yantra's own tray format,
 folder, so a restart loses nothing. `YANTRA_LEARN=off` stops the looks;
 uses are still counted.
 
-## Tools and schedules, by asking
+## Tools, schedules and watches, by asking
 
-`/tools` and `/schedules` are not turns: no model, no allowance spent
+`/tools`, `/schedules` and `/watches` are not turns: no model, no allowance spent
 (`seen.py`).
 
 **TOOLS AS THEY WERE ON YOUR LAST TURN.** What an agent may use depends
@@ -109,14 +109,32 @@ would be a way around them. A schedule is paused or removed by asking
 the agent, which asks the person first (Samay's tools), so there is one
 way to change one. `/schedules` lists theirs from `samay list`.
 
+**HOW OFTEN IS THE ONE CHANGE.** `/watches` lists the person's watches
+from `prahari list`, numbered, each with its sentence and its last look.
+`/watches every 2 6h` changes how often the second one looks, through
+`prahari edit ID --every 6h`: the same change Prahari's page and Yantra's
+panel make with their Every box, and the only one a chat word makes. It
+is the person's own watch and only its pace; what it checks and what the
+agent may do when it fires still go through the agent, which asks. With
+one watch the number can be left out. A watch that hears (a WhatsApp
+message, mail pushed to the inlet) has no pace, and says so. Prahari's
+own refusal is passed on as it said it ("nothing is looked at more often
+than every 5 minutes").
+
+**THEIR OWN, FIRST.** The number and the id are looked up among the
+person's own watches (Prahari files them under the person's name), so a
+number from somebody else's list, or their id, finds nothing and nothing
+is changed. The owner's list also has what they made at the computer,
+filed as `local`, as `/doctor` counts it.
+
 ## The words are the way in
 
 `/skills`, `/skills keep N`, `/skills drop N`, `/skills forget NAME`,
-`/learn`, `/tools`, `/schedules`. They are answered the same on Telegram, a page
+`/learn`, `/tools`, `/schedules`, `/watches`. They are answered the same on Telegram, a page
 and HTTP, as `/memory` is. A page's buttons send these words, so there is
 one implementation, and three channels can't drift. Telegram's `/` menu
 offers them where they mean something: `/skills` for a package with
-skills, `/schedules` with Samay on.
+skills, `/schedules` with Samay on, `/watches` with Prahari on.
 
 ## Asked for now
 
@@ -190,6 +208,25 @@ csv-people-report skill script to regenerate the report"*. `/tools`
 listed `bash`, `load_skill`, `read_file` and `write_file` under *built
 in*. `/schedules` said *"Schedules aren't switched on here."*, because
 this scratch Dvara had no Samay.
+
+`/watches`, with a real Dvara service and the real `prahari` program
+over a scratch state holding one of Maya's watches (no model: none of
+it is a turn):
+
+```
+--- maya: /watches
+Your watches:
+1. ALAB under $50 (id 759486e5)
+  every 6 hours, looks with web_fetch; tells you when the number is below 50 (once each time it becomes true).
+
+To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d). To pause, mend or remove one, just ask me.
+--- maya: /watches every 1 2m
+Prahari said: nothing is looked at more often than every 5 minutes; '2m' is too often
+--- maya: /watches every 1 6h
+Done. "ALAB under $50": every 6 hours, looks with web_fetch; tells you when the number is below 50 (once each time it becomes true).
+--- owner: /watches
+You have no watches. Ask me to tell you when something happens — "tell me when ALAB drops below $50" — and I'll set one up.
+```
 
 ## Found by the run
 
