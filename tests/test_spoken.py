@@ -3,8 +3,9 @@
 The bias is A VOICE THAT GETS IN THE WAY: an answer read to someone who
 chose silence, a voice note sent INSTEAD of the words (or before them,
 so the person waits on it), code and web addresses read out letter by
-letter, and a machine with no voice that loses the answer rather than
-the voice. Piper is stood in for except in the one test that needs the
+letter, a machine with no voice that loses the answer rather than
+the voice, and Hindi typed in Latin letters handed to a voice that
+can't read it. Piper is stood in for except in the one test that needs the
 real thing, which is skipped where Piper or a voice isn't installed.
 """
 
@@ -292,6 +293,39 @@ def test_the_answers_language_is_told_by_its_script_or_its_small_words():
     # an English name inside a Hindi answer doesn't make it English
     assert spoken.languages_of("आपका Wi-Fi पासवर्ड फ्रिज पर लिखा है।")[0] == "hi"
     assert spoken.languages_of("OK.") is None and spoken.languages_of("Tuesday") is None
+
+
+def test_hindi_typed_in_latin_letters_is_told_as_hindi():
+    assert spoken.languages_of("kal kya hai?") == ("hi",)
+    assert spoken.languages_of("Aaj mausam bahut accha hai, aap kaise hain?") == ("hi",)
+    # English that shares a few of its spellings stays English
+    assert spoken.languages_of("The main thing is to go to the shop with them.") == ("en",)
+
+
+def test_romanised_hindi_is_spelt_as_its_said():
+    from dvara.romanised import devanagari
+    assert devanagari("kal kya hai?") == "कल क्या है?"
+    assert devanagari("Aaj mausam bahut accha hai, aap kaise hain?") == \
+        "आज मौसम बहुत अच्छा है, आप कैसे हैं?"
+    assert devanagari("Kal subah 9 baje aapki meeting hai.") == "कल सुबह 9 बजे आपकी मीटिंग है."
+    # by rule: a long final a and i, an a before a vowel, n before a consonant
+    assert devanagari("rahi gaadi chalao pankha Ravi") == "रही गादी चलाओ पंखा रवी"
+    assert devanagari("आज 9 baje — ठीक?") == "आज 9 बजे — ठीक?"     # the rest as it was
+
+
+def test_a_hindi_voice_is_handed_devanagari_and_english_is_left_alone(shelf, tmp_path,
+                                                                       monkeypatch):
+    piper = tmp_path / "piper"
+    piper.write_text("#!/bin/sh\ncat >> \"$(dirname \"$0\")/read.txt\"\n"
+                     "echo '---' >> \"$(dirname \"$0\")/read.txt\"\n"
+                     "while [ $# -gt 0 ]; do [ \"$1\" = -f ] && echo RIFF > \"$2\"; shift; done\n")
+    piper.chmod(0o755)
+    monkeypatch.setattr(spoken, "piper", lambda: [str(piper)])
+    spoken.make("Kal subah aapki meeting hai.", tmp_path / "a.wav", voice="en_US-lessac-medium")
+    spoken.make("The bins go out on Tuesday, and that is all.", tmp_path / "b.wav")
+    read = (tmp_path / "read.txt").read_text().split("---\n")
+    assert read[0].strip() == "कल सुबह आपकी मीटिंग है."
+    assert read[1].strip() == "The bins go out on Tuesday, and that is all."
 
 
 def test_the_house_voice_is_english_and_each_voice_knows_its_language(shelf):

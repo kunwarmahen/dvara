@@ -144,8 +144,10 @@ note; a notice on the page playing by itself.
 
 ## What is not here yet
 
-* **Romanised Hindi.** "kal kya hai?" is Latin letters with no small
+* ~~**Romanised Hindi.** "kal kya hai?" is Latin letters with no small
   words this knows, so it is read in their own voice. Piper's Hindi
-  voices read Devanagari.
+  voices read Devanagari.~~ Told by Hindi's own small words, and
+  written in Devanagari for the Hindi voice
+  ([notes/73](73-hindi-in-latin-letters.md)).
 * **Two languages in one answer, each in its own voice.** The answer's
   main language picks one voice for all of it.

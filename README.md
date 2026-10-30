@@ -499,9 +499,10 @@ voice note after the words, when they spoke (the default), always, or
 never, as each person chooses with `/voice`; the page has ▶ Listen on
 every answer ([notes/64](notes/64-an-answer-read-aloud.md)). Each person
 may have a voice of their own, an answer in Hindi (or any language with
-a voice here) is read in a voice for it, and under "always" a
-schedule's answer is read aloud too
-([notes/65](notes/65-whose-voice-and-which-language.md)).
+a voice here) is read in a voice for it, Hindi typed in Latin letters
+("kal kya hai") too, and under "always" a schedule's answer is read
+aloud too ([notes/65](notes/65-whose-voice-and-which-language.md),
+[notes/73](notes/73-hindi-in-latin-letters.md)).
 
 And anyone can start their conversation with an agent over:
 
@@ -1526,6 +1527,7 @@ reads that person's key from `<state>/memory.json`
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a Whisper server when `$DVARA_WHISPER` gives one (the OpenAI transcription road), else a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
 | `spoken.py` | an answer read aloud by Piper on this machine, sent after the words: a Telegram voice note (OGG Opus by ffmpeg), the page's ▶ Listen (WAV, made once per voice); code, links and tables left out, long answers cut at a sentence; `speak` per person (off, when-spoken, always: notices too) and their own `/voice`; every voice here, each person's own (`voice =`, `/voice use`), the answer's language told by script or small words and read in a voice for it, never in one that can't ([notes/64](notes/64-an-answer-read-aloud.md), [notes/65](notes/65-whose-voice-and-which-language.md)) |
+| `romanised.py` | Hindi typed in Latin letters ("kal kya hai") written in Devanagari for the Hindi voice: the commonest words from a list, the rest by rule ([notes/73](notes/73-hindi-in-latin-letters.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document, the original), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |

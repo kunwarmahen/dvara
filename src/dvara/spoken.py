@@ -50,11 +50,17 @@ THE ANSWER'S LANGUAGE PICKS THE VOICE WHEN IT HAS TO. An English voice
 reading Hindi reads nothing a person can follow, so the answer's
 language is looked at first: by its script (Devanagari, Arabic,
 Cyrillic, ...), and for the Latin alphabet by its commonest small words
-(the, und, le, el, ...). Their own voice reads it when it speaks that
+(the, und, le, el, ...), Hindi typed in Latin letters among them (hai,
+kya, nahi). Their own voice reads it when it speaks that
 language, or when the language can't be told; otherwise the first voice
 here that does. With none here for that language, nothing is read --
 never a voice that can't say the words -- and the owner is told which
 voice to add.
+
+HINDI IN LATIN LETTERS IS WRITTEN IN DEVANAGARI FIRST. Piper's Hindi
+voice reads only Devanagari, so "kal kya hai" goes to it as "कल क्या है"
+(romanised.py); read as typed, by either voice, it was heard back as
+nonsense.
 """
 
 from __future__ import annotations
@@ -69,6 +75,8 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from dvara import romanised
 
 #: The house's voice, by name or file, or ``off``.
 ENV = "DVARA_VOICE"
@@ -221,6 +229,7 @@ _WORDS = {
     "it": "il la che di è un una per non con sono del della gli lo si ho",
     "pt": "o a os as e é que de um uma para não com em do da você está",
     "nl": "de het een en is van niet ik je dat op met voor zijn er ook",
+    "hi": romanised.VOTES,
 }
 _VOTES = {lang: set(words.split()) for lang, words in _WORDS.items()}
 
@@ -251,6 +260,12 @@ def languages_of(text: str) -> tuple[str, ...] | None:
     if best >= 2 and best >= 1.5 * second:
         return (lang,)
     return None
+
+
+def _latin(text: str) -> bool:
+    """Mostly Latin letters: Hindi typed as it is on a phone."""
+    letters = [ch for ch in text if ch.isalpha()]
+    return sum(ord(ch) < 0x0250 for ch in letters) * 2 > len(letters)
 
 
 def pick(text: str, preferred: str | None = None) -> Voice:
@@ -334,6 +349,8 @@ def make(text: str, out: Path, *, telegram: bool = False,
         raise Unspoken("there were no words in it to read")
     if not isinstance(voice, Voice):
         voice = pick(words, voice)
+    if voice.family == "hi" and _latin(words):
+        words = romanised.devanagari(words)
     command = piper()
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dvara-spoken-") as tmp:
