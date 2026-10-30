@@ -82,6 +82,25 @@ from the page. `GET /web/notices?actor=A` gives the person's notices,
 newest first, whatever `/new` cleared, from the same kept lines (they
 age out with the rest). Sarathi's bell counts and lists them.
 
+HOW FAR THEY'VE READ IS DVARA'S, NOT A BROWSER'S. A browser keeps what
+it stores per address, so the phone, this computer and the same page
+opened as `localhost` each counted every notice unread again. The mark
+is kept beside the lines (the `seen` table in `web.sqlite3`), one per
+person, and only moves forward, so a page a step behind can't unread
+what another page read:
+
+```
+GET  /web/notices?actor=A           {"notices": [...], "read": 242}
+POST /web/notices/read              {"actor": A, "upto": 266}  ->  {"read": 266}
+```
+
+STEPS OUTLIVE THE CHAT. An answer's **Steps** read its turn from the
+chat's saved copy (Sessions), and `/new` or opening another conversation
+moves the chat on, so they said *"its conversation is no longer kept"*
+while the list still showed every tool of it. Each turn is kept in the
+conversation's row under its run id, so the web channel looks there
+next (`PastBook.with_run`), and **Steps** show what the list shows.
+
 ## Live receipt
 
 A scratch Dvara from `examples/`, `qwen3.8:latest`, the `greeter` agent,
@@ -116,7 +135,10 @@ before it ran. `/chats` then listed one conversation of three messages.
 row of three turns on both roads; a chat that is not behind keeps its
 own copy; `/new` on one chat leaves the other in it; another chat
 speaking sets a waiting question aside; a puck's road is named by its
-puck; the page renames and pins only the person's own. Yantra's
+puck; the page renames and pins only the person's own. `tests/test_web.py`:
+notices read on one page are read on every page, never moved back, and
+the mark survives a restart; a voice note's words are on the person's
+own line. `tests/test_run_steps.py`: an answer's steps outlive `/new`. Yantra's
 `tests/test_history.py`: a name shows and is searched, survives the next
 turn, and an empty one gives the first words back; a pin stays above
 newer rows; an older file gains the columns.

@@ -99,6 +99,12 @@ CREATE TABLE IF NOT EXISTS lines (
     extra   TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS lines_actor ON lines (actor, id);
+-- how far each person has read their notices: kept here, not in a
+-- browser, so the phone, this computer and any address agree
+CREATE TABLE IF NOT EXISTS seen (
+    actor   TEXT PRIMARY KEY,
+    upto    INTEGER NOT NULL
+);
 """
 
 
@@ -182,6 +188,41 @@ class WebBook:
                     "WHERE actor = ? AND id >= ? ORDER BY id DESC LIMIT ?",
                     (actor, since, limit)).fetchall()[::-1]
         return [_line(row) for row in rows]
+
+    def stamp(self, actor: str, line_id: int, values: dict) -> None:
+        """Add to a line's extra after it was written (what a voice note
+        on it was heard as, once heard)."""
+        with self._lock:
+            row = self._db.execute("SELECT extra FROM lines WHERE actor = ? AND id = ?",
+                                   (actor, line_id)).fetchone()
+            if row is None:
+                return
+            try:
+                extra = json.loads(row[0])
+            except ValueError:
+                extra = {}
+            extra.update({k: v for k, v in values.items() if v})
+            self._db.execute("UPDATE lines SET extra = ? WHERE actor = ? AND id = ?",
+                             (json.dumps(extra), actor, line_id))
+            self._db.commit()
+
+    def read_upto(self, actor: str) -> int:
+        """The newest notice this person has read, on any page."""
+        with self._lock:
+            row = self._db.execute("SELECT upto FROM seen WHERE actor = ?",
+                                   (actor,)).fetchone()
+        return int(row[0]) if row else 0
+
+    def mark_read(self, actor: str, upto: int) -> int:
+        """Read up to ``upto``; never back (two pages, one behind)."""
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO seen (actor, upto) VALUES (?, ?) ON CONFLICT(actor) "
+                "DO UPDATE SET upto = MAX(upto, excluded.upto)", (actor, max(0, upto)))
+            self._db.commit()
+            row = self._db.execute("SELECT upto FROM seen WHERE actor = ?",
+                                   (actor,)).fetchone()
+        return int(row[0])
 
     def notices(self, actor: str, limit: int = PAGE) -> list[Line]:
         """What was sent to a person without their asking (a schedule's
@@ -282,9 +323,16 @@ class WebChannel:
         line = self.book.add(actor, "you", text, agent=agent,
                              extra={"sent": sent})
         live = Live()
+
+        def watch(event: dict) -> None:
+            # a voice note's words go on their own line, where they were said
+            if event.get("kind") == "heard":
+                self.book.stamp(actor, line.id, {"heard": event.get("text")})
+            live(event)
+
         self._start(actor, agent, self.service.deliver(
             actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND,
-            watch=live, attachments=attachments or ()), live,
+            watch=watch, attachments=attachments or ()), live,
             new=not attachments and fresh.is_new_word(text))
         return line
 
@@ -354,6 +402,8 @@ class WebChannel:
         the owner's own. Pictures are said as a count -- the page shows
         them nowhere, and their bytes would be most of the answer. None
         when the line has no run, or the run isn't theirs."""
+        from yantra import steps
+
         from dvara import runsteps
 
         line = self.book.get(actor, line_id)
@@ -361,7 +411,15 @@ class WebChannel:
         run = self.service.runs.get(run_id) if run_id else None
         if run is None or run.actor != actor:
             return None
-        view = runsteps.timeline(self.service.sessions, run)
+        try:
+            view = runsteps.timeline(self.service.sessions, run)
+        except runsteps.NoSteps:
+            # its chat moved on (/new, another conversation opened), but
+            # the conversation is kept, as the list shows it (past.py)
+            kept = self.service.past.with_run(actor, run.agent, run.id)
+            if kept is None:
+                raise
+            view = {**steps.timeline(kept, run.id), "run": run.id}
         for step in view.get("steps") or []:
             step["pictures"] = [{"media_type": p.get("media_type")}
                                 for p in step.get("pictures") or []]

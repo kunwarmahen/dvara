@@ -503,7 +503,24 @@ def create_app(service: Service, *, token: str,
         """What was sent to this person without their asking, newest first,
         including what ``/new`` cleared from the chat (web.py)."""
         check(authorization)
-        return {"notices": [ln.as_dict() for ln in web_for(actor).book.notices(actor)]}
+        book = web_for(actor).book
+        return {"notices": [ln.as_dict() for ln in book.notices(actor)],
+                # how far they've read, on any page or address (the bell)
+                "read": book.read_upto(actor)}
+
+    @app.post("/web/notices/read")
+    async def web_notices_read(request: Request,
+                               authorization: str | None = Header(default=None)) -> dict:
+        """``{actor, upto}``: their notices read up to that line, for every
+        page they open; never moves back."""
+        check(authorization)
+        body = await request.json()
+        actor = body.get("actor")
+        book = web_for(actor).book
+        upto = body.get("upto")
+        if not isinstance(upto, int) or isinstance(upto, bool):
+            raise HTTPException(status_code=400, detail="upto must be a line number")
+        return {"read": book.mark_read(actor, upto)}
 
     @app.post("/web/message")
     async def web_say(request: Request,

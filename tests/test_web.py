@@ -224,3 +224,53 @@ def test_a_new_word_that_isnt_new_marks_nothing(page):
         "actor": "owner", "agent": "greeter", "text": "/newsletter please"})
     seen = settled(page)
     assert not any(ln.get("fresh") for ln in seen["lines"])
+
+
+# ---- the bell's read mark, and a voice note's words on its own line --------
+
+def test_notices_read_on_one_page_are_read_on_every_page(page):
+    for text in ("2 new mails", "the parcel is out"):
+        page.post("/notify", headers=AUTH, json={"actor": "owner", "text": text})
+    got = page.get("/web/notices?actor=owner", headers=AUTH).json()
+    assert got["read"] == 0
+    newest = got["notices"][0]["id"]
+    marked = page.post("/web/notices/read", headers=AUTH,
+                       json={"actor": "owner", "upto": newest}).json()
+    assert marked["read"] == newest
+    # a page a step behind can't move it back
+    page.post("/web/notices/read", headers=AUTH, json={"actor": "owner", "upto": 1})
+    assert page.get("/web/notices?actor=owner", headers=AUTH).json()["read"] == newest
+    assert page.get("/web/notices?actor=guest", headers=AUTH).json()["read"] == 0
+    assert page.post("/web/notices/read", headers=AUTH,
+                     json={"actor": "owner", "upto": "all"}).status_code == 400
+    assert page.post("/web/notices/read", json={"actor": "owner", "upto": 1}).status_code == 401
+
+
+def test_the_read_mark_survives_a_restart(make_service):
+    first = make_service(web=True)
+    with TestClient(create_app(first, token=TOKEN)) as client:
+        client.post("/notify", headers=AUTH, json={"actor": "owner", "text": "kept"})
+        n = client.get("/web/notices?actor=owner", headers=AUTH).json()["notices"][0]["id"]
+        client.post("/web/notices/read", headers=AUTH, json={"actor": "owner", "upto": n})
+    again = make_service(web=True)
+    with TestClient(create_app(again, token=TOKEN)) as client:
+        assert client.get("/web/notices?actor=owner", headers=AUTH).json()["read"] == n
+
+
+def test_a_voice_note_from_the_page_shows_its_words_on_your_own_line(make_service,
+                                                                      monkeypatch):
+    import base64
+
+    from dvara import heard
+
+    monkeypatch.setattr(heard, "_hear", lambda path: "what's the weather outside")
+    service = make_service([says("Clear and 68°F.")], web=True)
+    note = base64.b64encode(b"not really webm").decode()
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        client.post("/web/message", headers=AUTH, json={
+            "actor": "owner", "agent": "greeter", "text": "",
+            "files": [{"name": "voice-note.webm", "data": note}]})
+        lines = settled(client)["lines"]
+        mine, answer = lines
+        assert mine["who"] == "you" and mine["heard"] == "what's the weather outside"
+        assert answer["text"] == "Clear and 68°F."

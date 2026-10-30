@@ -16,7 +16,9 @@ what they read, the pictures, or the answer.
 
 A run whose conversation is gone (a schedule's is let go a week after,
 ``tidy``; a person's after ``/chats delete``) has no steps to show, and
-says so. A run from before the tags is found by its message.
+says so. One whose chat merely moved on (``/new``) is still in the
+person's kept conversations, where the web channel looks next (web.py,
+past.py). A run from before the tags is found by its message.
 """
 
 from __future__ import annotations

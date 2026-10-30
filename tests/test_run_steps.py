@@ -130,3 +130,26 @@ def test_a_page_answer_opens_its_own_steps_and_nobody_elses(make_service):
                           headers=AUTH).status_code == 404
         assert client.get(f"/web/steps?actor=guest&line={answer['id']}",
                           headers=AUTH).status_code == 404
+
+
+def test_an_answers_steps_outlive_new_from_the_kept_conversation(make_service):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+    from tests.test_web import AUTH, TOKEN, settled
+
+    service = make_service([calls("read_file", {"path": "a.txt"}), says("done")],
+                           web=True, actors=people())
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        client.post("/web/message", headers=AUTH,
+                    json={"actor": "owner", "agent": "greeter", "text": "read a.txt"})
+        answer = settled(client, "owner")["lines"][-1]
+        client.post("/web/message", headers=AUTH,
+                    json={"actor": "owner", "agent": "greeter", "text": "/new"})
+        settled(client, "owner")
+        # its chat moved on; the list still has the conversation, and so does Steps
+        got = client.get(f"/web/steps?actor=owner&line={answer['id']}", headers=AUTH)
+        assert got.status_code == 200
+        step = got.json()["steps"][0]
+        assert step["tool"] == "read_file" and step["arguments"] == {"path": "a.txt"}

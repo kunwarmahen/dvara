@@ -882,6 +882,9 @@ class Service:
                 self._note(f"dvara: {actor}: a voice note wasn't heard -- {why}")
             heard_as = words if words is not None else heard_as
             text = heard.said(words, text, note.relative)
+        if heard_as:
+            # shown where they said it while the turn runs (watch.py)
+            Safely(watch)({"kind": "heard", "text": heard_as})
         if not text.strip():
             return Reply(text="say something and I will answer it",
                          run_id=None, agent=agent, actor=actor,

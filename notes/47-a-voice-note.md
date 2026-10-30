@@ -56,6 +56,24 @@ the files for the next message. A browser allows the microphone only on
 this computer or over https, so a phone on the house address
 (`http://192.168…`) uses Telegram for voice.
 
+WHAT WAS HEARD GOES ON THEIR OWN LINE. On Telegram *I heard* is a
+message of its own, before the answer. On a page it belongs where they
+spoke, at the top, not under an answer that may be minutes away. The
+turn tells its watcher `{"kind": "heard", "text": …}` once the note is
+heard and before the model is asked (watch.py), so the running turn's
+`live` carries `heard` and the page writes it on their line at once.
+The web channel also stamps it onto that line (`heard` in its extra),
+so a page opened later draws it there too.
+
+```
+line you voice: to minder · 08:37 PM 🎤 "fetchexample.com and tell me the page title." 📎 voice-note.webm
+```
+
+That was a scratch Dvara on `qwen3.8:latest` with the house Whisper, a
+Piper-made question sent as `voice-note.webm`: the words were on the
+line 2 s in, while minder was still thinking. (*"fetchexample.com"*:
+Whisper ran "example dot com" together.)
+
 ## Receipt
 
 A test note made with espeak-ng ("Please remind me on Monday at nine in

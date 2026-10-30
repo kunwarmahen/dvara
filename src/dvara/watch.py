@@ -24,6 +24,8 @@ gets a small dict:
 * ``{"kind": "using", "tool": ...}`` -- the model has chosen a tool;
 * ``{"kind": "step", "tool", "said", "ok", "refused"}`` -- it ran (or
   was refused: ``refused`` is the gate's code, never a sentence).
+* ``{"kind": "heard", "text": ...}`` -- a voice note sent with the
+  message, heard as these words, before the turn starts.
 
 ``Live`` is that stream kept as a page draws it: text run together,
 steps between.
@@ -103,6 +105,7 @@ class Live:
     def __init__(self) -> None:
         self.items: list[dict] = []
         self.using: str | None = None
+        self.heard: str | None = None
 
     def __call__(self, event: dict) -> None:
         kind = event.get("kind")
@@ -111,6 +114,8 @@ class Live:
                 self.items[-1]["text"] += event["text"]
             else:
                 self.items.append({"text": event["text"]})
+        elif kind == "heard":
+            self.heard = event["text"]
         elif kind == "using":
             self.using = event["tool"]
         elif kind == "step":
@@ -122,4 +127,5 @@ class Live:
                 self.items.remove(steps[0])
 
     def as_dict(self) -> dict:
-        return {"items": [dict(i) for i in self.items], "using": self.using}
+        return {"items": [dict(i) for i in self.items], "using": self.using,
+                "heard": self.heard}

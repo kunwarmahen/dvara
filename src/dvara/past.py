@@ -431,6 +431,15 @@ class PastBook:
             return None
         return self.log(actor).payload(conversation_id)
 
+    def with_run(self, actor: str, agent: str, run_id: str) -> dict | None:
+        """The kept conversation a run's turn is in (each turn is kept
+        under its run id), for its steps once its chat has moved on."""
+        for row in self.listed(actor, agent):
+            payload = self.payload(actor, row.id) or {}
+            if run_id in (payload.get("turns") or {}):
+                return payload
+        return None
+
     def read(self, actor: str, conversation_id: str) -> dict | None:
         """One conversation for a page: its row, its entries (tools and
         all, as Yantra's reading view draws them) and its transcript."""
