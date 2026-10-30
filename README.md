@@ -1034,6 +1034,8 @@ POST /message      {actor, agent, thread, text}  -> {text, ok, run_id, actor, re
                    (+ "stream": true -> NDJSON: text, using, step lines, then {kind: reply, ...})
                    (+ "carry_on": true -> the turn a restart stopped in this thread, from
                     its last step; stop_reason "nothing" when there is none)
+                   (+ "if_late": "send"|"keep" -> a caller that hung up before the
+                    turn ended: its answer sent to the person, or only kept)
 GET  /runs/{id}/steps                            -> yantra.steps.v1: that run, step by step
 GET  /agents                                     -> {agents: [...]}
 GET  /health
@@ -1079,6 +1081,11 @@ runs`, and the reply carries `needs_person`, `busy` and `refused`.
 A caller may name itself with `"came_by"`, one short lowercase word
 (Samay sends `"samay"`); the page labels the turn with it, and a turn
 that names nothing is `http` ([notes/36](notes/36-which-way-it-came-in.md)).
+An unattended caller may also say `"if_late": "send"`: if it has hung up
+by the time the turn ends (a schedule's time limit ran out), the answer
+goes to the person's channels instead of nowhere; Samay sends it for
+every schedule that tells its person anything
+([notes/76](notes/76-an-answer-written-to-nobody.md)).
 `/notify` sends a text to a person's channels from the actors file; a
 channel with no adapter in this process collects from `/notices`, each
 one once, kept in memory ([notes/17](notes/17-nobody-wrote-first.md)).
@@ -1563,7 +1570,7 @@ reads that person's key from `<state>/memory.json`
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), and which way each came in ([notes/36](notes/36-which-way-it-came-in.md)) |
 | `cases.py` | a bad turn -> a `[[case]]` in that package's gate ([notes/04](notes/04-the-failure-loop.md)), asserting the trajectory it took ([notes/08](notes/08-what-the-turn-actually-did.md)) |
-| `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)) |
+| `http.py` | seventeen endpoints and a bearer token (`[http]` extra); `/ask` for a run that isn't Dvara's ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); `/message` streamed as NDJSON when asked ([notes/42](notes/42-seeing-the-work.md)); `if_late` sends a hung-up caller's answer to its person ([notes/76](notes/76-an-answer-written-to-nobody.md)) |
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
 | `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/learn start|watch|done|stop|clear`, a lesson kept on disk per person per agent, no look halfway ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's, Prahari's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |

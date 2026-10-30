@@ -312,9 +312,23 @@ def create_app(service: Service, *, token: str,
                     phone=phone, phone_steps=phone_steps,
                     wait=float(wait) if wait is not None else None, came_by=came_by,
                     carry_on=carry_on)
+        # What to do with the answer if the caller has stopped waiting by
+        # the time the turn ends: "send" it to the person, or "keep" it
+        # (the run's record has it). A schedule's time limit can run out
+        # with the turn still going here, and a brief written to nobody
+        # is a brief lost (Samay's notes/13).
+        if_late = body.get("if_late")
+        if if_late not in (None, "send", "keep"):
+            raise HTTPException(status_code=400, detail="if_late is send or keep")
+        if if_late is not None and not unattended:
+            raise HTTPException(status_code=400,
+                                detail="if_late goes with unattended: true")
         if stream:
             return _streamed(service, turn)
-        return answer_of(await service.deliver(**turn))
+        reply = await service.deliver(**turn)
+        if if_late == "send" and reply.text.strip() and await request.is_disconnected():
+            await _send_late(service, reply, came_by)
+        return answer_of(reply)
 
     @app.get("/runs/{run_id}/steps")
     async def run_steps(run_id: str,
@@ -991,6 +1005,16 @@ def create_app(service: Service, *, token: str,
                 "held": reply.held.as_dict() if reply.held else None}
 
     return app
+
+
+async def _send_late(service, reply, came_by: str) -> None:
+    """A finished answer whose caller hung up, to its person's channels."""
+    said = (f"Finished after {came_by.capitalize()} had stopped waiting "
+            f"({reply.agent}):\n\n{reply.text}")
+    try:
+        await service.notify(text=said, actor=reply.actor, via=None)
+    except Refused:
+        pass        # nobody to tell: the run's record still has it
 
 
 def answer_of(reply) -> dict:
