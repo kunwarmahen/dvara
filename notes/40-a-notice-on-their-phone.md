@@ -46,6 +46,31 @@ Sarathi starts the server and passes both (Sarathi's `[dvara] ntfy`).
 * **A SERVER DOWN IS NOT A CRASH.** A failed post is recorded as failed
   for that notice, and the other channels still get it.
 
+## Keep, pressed on the notification
+
+A skill offered after a job (learning.py) used to reach the phone as
+words: *Send /skills keep 4638 to keep it*. Now it has **Keep** and
+**Not now** under it, ntfy's http actions, pressed from the notification
+without opening anything.
+
+A BUTTON CARRIES A MARK, NEVER A KEY. The ntfy app sends the request
+itself, so what it sends is written in the notification, for anyone who
+can read the topic. Dvara's token or the home page's would be a key to
+everything. Each button carries a mark instead: an HMAC under
+`ntfy.key` of the person, the agent, the offer and the word. `POST
+/push/answer` takes a press only with the mark made for exactly those,
+then sends the word the page's own button sends, into their page chat.
+A copied mark keeps or drops that one offer. Someone who can read the
+topic could already read the offer.
+
+WHERE THE TAP ALREADY GOES. The buttons go to the home page's
+`/api/push/answer` on the same address `--ntfy-click` opens, the one a
+phone in the house reaches. The home page asks for no sign-in there:
+the ntfy app has none of ours, and the page passes the press to Dvara
+as it came. With no click address, there are no buttons, and the words
+still say what to type. A notice with buttons is posted in ntfy's JSON
+form, because the header form can't carry a button's body.
+
 ## Their own Setu page, from the page
 
 The same page now asks for a person's one-time link to their own Setu
@@ -67,6 +92,15 @@ NTFY dvara-priya-630ba828977f2d94: [Your agents] 'Your gmail sign-in (priya@exam
 
 Each notice went to its own person's topic and to no one else's. This
 has not yet been received on a real phone.
+
+Keep on a phone, against the house's ntfy (8793) on a topic nobody
+subscribed to: a skill offer posted as Dvara does, read back from ntfy
+with its two buttons (*Keep*, *Not now*, POST to the home page's
+`/api/push/answer`, clear). Keep pressed the way the app does, with the
+action's own url and body, through a scratch home page to a scratch
+Dvara: `200 {"said": "/skills keep 4638"}`, and the chat had it, then
+minder's answer. The same body with another offer: `403 that button
+isn't one of ours`.
 
 ## What the tests hold
 

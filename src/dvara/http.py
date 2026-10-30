@@ -463,6 +463,29 @@ def create_app(service: Service, *, token: str,
         return {"actor": who, "sent": sent.sent, "kept": sent.kept,
                 "failed": sent.failed, "nowhere": sent.nowhere}
 
+    @app.post("/push/answer")
+    async def push_answer(request: Request,
+                          authorization: str | None = Header(default=None)) -> dict:
+        """Keep or Not now, pressed on a phone's ntfy notification (push.py):
+        ``{actor, agent, offer, word, mark}``. Only a mark made for exactly
+        those is taken; then it is the same word the page's button sends,
+        in the person's page chat."""
+        check(authorization)
+        body = await request.json()
+        if service.push is None or service.web is None:
+            raise HTTPException(status_code=404, detail="no push here")
+        from dvara.push import marked
+        fields = [str(body.get(f) or "") for f in ("actor", "agent", "offer", "word")]
+        if not all(fields) or not marked(service.state, *fields, body.get("mark") or ""):
+            raise HTTPException(status_code=403, detail="that button isn't one of ours")
+        actor, agent, offer, word = fields
+        service.refresh()
+        try:
+            service.web.say(actor, agent, f"/skills {word} {offer}")
+        except Refused as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        return {"said": f"/skills {word} {offer}"}
+
     @app.get("/notices")
     async def notices(channel: str,
                       authorization: str | None = Header(default=None)) -> dict:

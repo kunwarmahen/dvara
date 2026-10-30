@@ -199,3 +199,62 @@ class TestANoticeOnAPhone:
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_a_skill_offered_has_keep_and_not_now_that_carry_no_key(self, make_service):
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        heard = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a):
+                pass
+
+            def do_POST(self):
+                heard.append((self.path, self.rfile.read(int(self.headers["Content-Length"]))))
+                self.send_response(200)
+                self.end_headers()
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            service = make_service(actors=people(), ntfy=f"http://127.0.0.1:"
+                                   f"{server.server_address[1]}",
+                                   ntfy_click="http://house:8760/#chat")
+            offer = {"offer": {"id": "4638", "agent": "minder", "name": "folio", "test": "-"}}
+            asyncio.run(service.notify(actor="owner", text="Keep it?", extra=offer))
+            [(path, raw)] = heard
+            posted = json.loads(raw)
+            assert path == "/" and posted["topic"] == service.push.topic("owner")
+            keep, drop = posted["actions"]
+            assert (keep["label"], drop["label"]) == ("Keep", "Not now")
+            assert keep["url"] == "http://house:8760/api/push/answer"
+            said = json.loads(keep["body"])
+            assert said["word"] == "keep" and said["offer"] == "4638"
+            assert "token" not in raw.decode().lower()
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_a_press_is_taken_only_with_the_mark_made_for_exactly_it(self, make_service):
+        from fastapi.testclient import TestClient
+
+        from dvara import push
+        from dvara.http import create_app
+
+        service = make_service(actors=people(), web=True, ntfy="http://127.0.0.1:9",
+                               ntfy_click="http://house:8760/")
+        token = "a-token-long-enough-to-be-real"
+        auth = {"Authorization": f"Bearer {token}"}
+        good = push.mark(service.state, "owner", "greeter", "4638", "keep")
+        press = {"actor": "owner", "agent": "greeter", "offer": "4638", "word": "keep"}
+        with TestClient(create_app(service, token=token)) as client:
+            for wrong in ({**press, "mark": "0" * 32},
+                          {**press, "offer": "9999", "mark": good},     # another offer
+                          {**press, "word": "drop", "mark": good},      # another word
+                          {**press, "actor": "ravi", "mark": good}):    # another person
+                assert client.post("/push/answer", headers=auth, json=wrong).status_code == 403
+            assert client.post("/push/answer", json={**press, "mark": good}).status_code == 401
+            ok = client.post("/push/answer", headers=auth, json={**press, "mark": good})
+            assert ok.status_code == 200
+            lines = client.get("/web?actor=owner", headers=auth).json()["lines"]
+            assert lines[0]["text"] == "/skills keep 4638"

@@ -27,6 +27,19 @@ reaches a phone that did not subscribe. Only notices go -- a schedule's
 answer, a refused sign-in, what a look back noticed. The answer to
 something they just wrote on the page is on the page.
 
+KEEP AND NOT NOW ON THE PHONE, WITH NO KEY IN THEM. A skill offered
+comes with two buttons (ntfy's http actions), pressed from the
+notification itself. The ntfy app sends the request from the phone, so
+whatever it carries is in the notification for anyone who reads the
+topic. It carries no token: only a mark, an HMAC under ``ntfy.key`` of
+this person, this agent, this offer and this word, which Dvara checks
+(``POST /push/answer``, through the home page's ``/api/push/answer``).
+Copied, it can keep or drop that one offer and nothing else, which is
+what the person reading the notification could do anyway. The buttons
+go where the tap already opens (``--ntfy-click``, the home page's
+address on the house network); without one, the words still say what
+to type.
+
 A SERVER DOWN IS NOT A CRASH. A post that fails is recorded as failed
 for that notice (notices.py), and the other channels still get it.
 """
@@ -36,11 +49,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 #: The channel's kind, in notices.
 KIND = "ntfy"
@@ -70,6 +85,24 @@ def topic(state: Path, actor: str) -> str:
     return f"dvara-{shown}-{mark}"
 
 
+#: The words a button may send, and what each is called on the phone.
+WORDS = {"keep": "Keep", "drop": "Not now"}
+#: Where on the home page a button's press goes.
+ANSWER_PATH = "/api/push/answer"
+
+
+def mark(state: Path, actor: str, agent: str, offer: str, word: str) -> str:
+    """The mark for one button: good for this person, agent, offer and
+    word only."""
+    said = "\n".join((actor, agent, offer, word)).encode()
+    return hmac.new(_key(state), b"answer\n" + said, hashlib.sha256).hexdigest()[:32]
+
+
+def marked(state: Path, actor: str, agent: str, offer: str, word: str, given: str) -> bool:
+    return word in WORDS and hmac.compare_digest(mark(state, actor, agent, offer, word),
+                                                 str(given))
+
+
 class Pusher:
     """Posts a notice's words to the person's topic on ``url``."""
 
@@ -78,21 +111,53 @@ class Pusher:
         self.state = state
         #: Where a tap on the notice opens (the home page), when known.
         self.click = click
+        #: Whose each topic is, as named here: a notice is handed only its
+        #: topic, and a button's mark needs the person.
+        self._whose: dict[str, str] = {}
 
     def topic(self, actor: str) -> str:
-        return topic(self.state, actor)
+        name = topic(self.state, actor)
+        self._whose[name] = actor
+        return name
 
     async def notice(self, address: str, text: str, file: Path | None = None,
                      extra: dict | None = None) -> None:
         words = text if file is None else f"{text}\n(a file came with it: {file.name})"
-        await asyncio.to_thread(self._post, address, words)
+        actor = self._whose.get(address)
+        actions = self.actions(actor, (extra or {}).get("offer")) if actor else []
+        await asyncio.to_thread(self._post, address, words, actions)
 
-    def _post(self, topic_name: str, text: str) -> None:
-        headers = {"Title": "Your agents", "Tags": "speech_balloon"}
-        if self.click:
-            headers["Click"] = self.click
-        request = urllib.request.Request(f"{self.url}/{topic_name}",
-                                         data=text.encode()[:4000], method="POST",
-                                         headers=headers)
+    def actions(self, actor: str, offer: dict | None) -> list[dict]:
+        """Keep and Not now for a skill offered, when a phone can reach the
+        home page; none otherwise."""
+        if not offer or not self.click or not offer.get("id") or not offer.get("agent"):
+            return []
+        place = urlsplit(self.click)
+        url = f"{place.scheme}://{place.netloc}{ANSWER_PATH}"
+        agent, offer_id = str(offer["agent"]), str(offer["id"])
+        return [{"action": "http", "label": label, "url": url, "method": "POST",
+                 "headers": {"Content-Type": "application/json"}, "clear": True,
+                 "body": json.dumps({"actor": actor, "agent": agent, "offer": offer_id,
+                                     "word": word,
+                                     "mark": mark(self.state, actor, agent, offer_id, word)})}
+                for word, label in WORDS.items()]
+
+    def _post(self, topic_name: str, text: str, actions: list[dict] | None = None) -> None:
+        if actions:
+            # buttons need ntfy's JSON form: the header form can't carry a body
+            body = {"topic": topic_name, "message": text[:4000], "title": "Your agents",
+                    "tags": ["speech_balloon"], "actions": actions}
+            if self.click:
+                body["click"] = self.click
+            request = urllib.request.Request(self.url, data=json.dumps(body).encode(),
+                                             method="POST",
+                                             headers={"Content-Type": "application/json"})
+        else:
+            headers = {"Title": "Your agents", "Tags": "speech_balloon"}
+            if self.click:
+                headers["Click"] = self.click
+            request = urllib.request.Request(f"{self.url}/{topic_name}",
+                                             data=text.encode()[:4000], method="POST",
+                                             headers=headers)
         with urllib.request.urlopen(request, timeout=WITHIN) as answer:
             answer.read()
