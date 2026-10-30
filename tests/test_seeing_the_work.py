@@ -297,6 +297,9 @@ WATCH_CARDS = [
     {"id": "w4dd", "owner": "local", "name": "made at the computer", "every": "1d",
      "sentence": "every day, looks with web_fetch", "state": "paused",
      "paused_because": "broke twice"},
+    {"id": "w5ee", "owner": "owner", "name": "Phoenix fare", "every": "6h",
+     "sentence": "every 6 hours, looks at google.com/travel/flights; ended Sat 31 Oct",
+     "state": "ended"},
 ]
 
 
@@ -326,6 +329,10 @@ class TestWatches:
         reply, = run(service, say(service, "/watches", agent="greeter"))
         assert "1. the owner's own" in reply.text
         assert "2. made at the computer" in reply.text and "paused: broke twice" in reply.text
+        # an ended watch is said as ended, never as paused
+        assert ("3. Phoenix fare (id w5ee)\n  every 6 hours, looks at google.com/travel/"
+                "flights; ended Sat 31 Oct — kept 30 days, then removed (ask me to keep it "
+                "going).") in reply.text
         assert "ALAB" not in reply.text
 
     def test_every_changes_how_often_by_number(self, make_service, tmp_path):

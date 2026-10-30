@@ -112,7 +112,8 @@ way to change one. `/schedules` lists theirs from `samay list`.
 **HOW OFTEN IS THE ONE CHANGE.** `/watches` lists the person's watches
 from `prahari list`, numbered, each with what the person asked for in
 their own words (when the watch kept them), its sentence and its last
-look.
+look; one whose days are over is said as ended, kept 30 days, never as
+paused.
 `/watches every 2 6h` changes how often the second one looks, through
 `prahari edit ID --every 6h`: the same change Prahari's page and Yantra's
 panel make with their Every box, and the only one a chat word makes. It

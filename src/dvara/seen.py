@@ -172,7 +172,10 @@ class Seen:
         out = ["Your watches:"]
         for n, card in enumerate(mine, 1):
             state = card.get("state") or ""
-            paused = (f" — paused: {card.get('paused_because')}" if state != "active"
+            # Prahari's sentence already says when it ended
+            paused = (" — kept 30 days, then removed (ask me to keep it going)"
+                      if state == "ended" else
+                      f" — paused: {card.get('paused_because')}" if state != "active"
                       and card.get("paused_because") else
                       " — paused" if state != "active" else "")
             last = card.get("last_look") or {}
