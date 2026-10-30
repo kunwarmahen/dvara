@@ -1831,7 +1831,8 @@ the conversation that told the agent it was being taught is gone.
 **`/tools`, `/schedules` and `/watches`.** `/tools` lists what the agent
 could use on your last message, grouped by where each tool came from.
 `/schedules` lists your schedules from Samay (with `--samay`), and
-`/watches` your watches from Prahari (with `--prahari`), numbered. None
+`/watches` your watches from Prahari (with `--prahari`), numbered, each
+under its name with what you asked for, in your words. None
 is a turn, so they cost nothing. `/watches every 2 6h` changes how often
 your second watch looks (Prahari won't go under 5 minutes). Anything
 else about a schedule or a watch, ask the agent; to change what an agent

@@ -180,6 +180,9 @@ class Seen:
             how = (f" Last look: {last.get('outcome')}{_when(at)}."
                    if last.get("outcome") else "")
             out.append(f"{n}. {card.get('name') or '(no name)'} (id {card.get('id')})")
+            # Their own words first: a recipe alone doesn't say what it's for.
+            if card.get("asked"):
+                out.append(f"  You asked: \"{card['asked']}\"")
             out.append(f"  {card.get('sentence') or ''}{paused}.{how}")
         out.append("")
         out.append(EVERY_HOW + " To pause, mend or remove one, just ask me.")

@@ -287,6 +287,7 @@ def fake_prahari(tmp_path, cards) -> str:
 
 WATCH_CARDS = [
     {"id": "w1aa", "owner": "maya", "name": "ALAB under $50", "every": "3h",
+     "asked": "tell me if ALAB gets cheap",
      "sentence": "every 3 hours, looks with web_fetch", "state": "active",
      "last_look": {"outcome": "quiet", "ended_at": "2026-10-14T08:00:05+00:00"}},
     {"id": "w2bb", "owner": "maya", "name": "Mum on WhatsApp", "every": "",
@@ -312,6 +313,10 @@ class TestWatches:
         assert reply.stop_reason == "seen"
         assert "1. ALAB under $50" in reply.text and "2. Mum on WhatsApp" in reply.text
         assert "Last look: quiet" in reply.text
+        # what it is for, in their words, under its name; none for one made without
+        assert ('1. ALAB under $50 (id w1aa)\n  You asked: "tell me if ALAB gets cheap"\n'
+                '  every 3 hours') in reply.text
+        assert reply.text.count("You asked") == 1
         assert "owner's own" not in reply.text and "the computer" not in reply.text
 
     def test_the_owner_also_sees_what_was_made_at_the_computer(self, make_service,
