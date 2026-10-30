@@ -67,5 +67,11 @@ the guest's run as a file: 403 "only your own runs make one"
   opened to `1 step · 19s · end_turn`, `1. web_fetch 18:37:08 · refused
   (unattended)`, and its file began *"This file holds what the agent's
   tools were given and what they read"*.
+
+  A step's pictures (a screenshot, the phone's screen) come too: the
+  steps say each one's kind, and the page fetches each by its line,
+  step and number (`GET /web/steps/picture?actor=&line=&step=&n=`), for
+  that line's person only and only as a PNG, JPEG, GIF or WebP. A step
+  folded shut fetches none.
 * **A step's pictures on Telegram.** `/steps` is words, and a picture
   per step would be a burst of photos in a chat.

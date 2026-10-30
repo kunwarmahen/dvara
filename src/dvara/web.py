@@ -46,7 +46,9 @@ newest ``KEEP_PER_PERSON`` lines a person has are kept; older ones go.
 AN ANSWER'S STEPS, BY ITS LINE. Each answer's line keeps its run's id,
 and the page asks for what that turn did by the line, as it asks for a
 file: the run id stays here, and a line opens only for its own person
-(``steps``). Pictures are said as a count; the bytes stay in the run.
+(``steps``). Pictures are said as a count in the steps and fetched one
+at a time by line, step and number (``picture``), as a file is: a
+screenshot is most of a turn's bytes, and a step folded shut needs none.
 
 ON WHEN ASKED FOR. ``dvara serve --web`` turns it on, and then every
 person on the roster has it, with no line in ``actors.toml``: the page
@@ -106,6 +108,10 @@ CREATE TABLE IF NOT EXISTS seen (
     upto    INTEGER NOT NULL
 );
 """
+
+
+#: The kinds of picture a step's picture is served as; anything else isn't.
+PICTURE_KINDS = ("image/png", "image/jpeg", "image/gif", "image/webp")
 
 
 @dataclass(frozen=True)
@@ -399,9 +405,38 @@ class WebChannel:
     def steps(self, actor: str, line_id: int) -> dict | None:
         """What an answer's own turn did, step by step (runsteps.py), by
         its line: the person's own run, whole, as on the owner's page for
-        the owner's own. Pictures are said as a count -- the page shows
-        them nowhere, and their bytes would be most of the answer. None
-        when the line has no run, or the run isn't theirs."""
+        the owner's own. Each picture is its kind only; ``picture`` gives
+        its bytes. None when the line has no run, or the run isn't theirs."""
+        view = self._whole(actor, line_id)
+        if view is None:
+            return None
+        for step in view.get("steps") or []:
+            step["pictures"] = [{"media_type": p.get("media_type")}
+                                for p in step.get("pictures") or []]
+        return view
+
+    def picture(self, actor: str, line_id: int, step: int, n: int) -> tuple[bytes, str] | None:
+        """Picture ``n`` of step ``step`` (both from 0) of a line's turn, and
+        its kind; None when there's no such picture, or it isn't an image a
+        page should draw."""
+        import base64
+
+        view = self._whole(actor, line_id)
+        steps_ = (view or {}).get("steps") or []
+        if not 0 <= step < len(steps_):
+            return None
+        shown = steps_[step].get("pictures") or []
+        if not 0 <= n < len(shown):
+            return None
+        kind = str(shown[n].get("media_type") or "")
+        if kind not in PICTURE_KINDS:
+            return None
+        try:
+            return base64.b64decode(shown[n].get("data") or "", validate=True), kind
+        except ValueError:
+            return None
+
+    def _whole(self, actor: str, line_id: int) -> dict | None:
         from yantra import steps
 
         from dvara import runsteps
@@ -420,9 +455,6 @@ class WebChannel:
             if kept is None:
                 raise
             view = {**steps.timeline(kept, run.id), "run": run.id}
-        for step in view.get("steps") or []:
-            step["pictures"] = [{"media_type": p.get("media_type")}
-                                for p in step.get("pictures") or []]
         return view
 
     def file(self, actor: str, line_id: int, n: int) -> Path | None:

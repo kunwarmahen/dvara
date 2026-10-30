@@ -7,7 +7,9 @@ the same thing (what the tools were given, what they read, the phone's
 screen). So the owner sees anybody else's run as its shape only, and a
 file for a bug report is made of their own runs only. The other bias is
 a run that finds SOMEBODY ELSE'S steps: each run opens its own turn,
-found by its run id, never by position.
+found by its run id, never by position. A step's picture (a screenshot)
+comes the same way: by its own line, for its own person, and only as an
+image.
 """
 
 from __future__ import annotations
@@ -130,6 +132,42 @@ def test_a_page_answer_opens_its_own_steps_and_nobody_elses(make_service):
                           headers=AUTH).status_code == 404
         assert client.get(f"/web/steps?actor=guest&line={answer['id']}",
                           headers=AUTH).status_code == 404
+
+
+#: The smallest PNG there is: one transparent pixel.
+PIXEL = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+                      "1f15c4890000000d49444154789c63000100000500010d0a2db40000000049454e44ae426082")
+
+
+def test_a_steps_picture_is_its_own_image_for_its_own_person(make_service):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+    from dvara.keys import session_key
+    from tests.test_web import AUTH, TOKEN, settled
+
+    service = make_service([calls("read_image", {"path": "shot.png"}), says("I see it")],
+                           web=True, actors=people())
+    folder = service._workspace(session_key("owner", "greeter", "chat"))
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "shot.png").write_bytes(PIXEL)
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        client.post("/web/message", headers=AUTH,
+                    json={"actor": "owner", "agent": "greeter", "text": "look at shot.png"})
+        answer = settled(client, "owner")["lines"][-1]
+        view = client.get(f"/web/steps?actor=owner&line={answer['id']}", headers=AUTH).json()
+        assert view["steps"][0]["pictures"] == [{"media_type": "image/png"}]   # no bytes
+        got = client.get(f"/web/steps/picture?actor=owner&line={answer['id']}&step=0&n=0",
+                         headers=AUTH)
+        assert got.status_code == 200 and got.content == PIXEL
+        assert got.headers["content-type"] == "image/png"
+        for wrong in ("actor=guest&step=0&n=0", "actor=owner&step=0&n=1",
+                      "actor=owner&step=3&n=0"):
+            assert client.get(f"/web/steps/picture?{wrong}&line={answer['id']}",
+                              headers=AUTH).status_code == 404
+        assert client.get(f"/web/steps/picture?actor=owner&line={answer['id']}"
+                          "&step=0&n=0").status_code == 401
 
 
 def test_an_answers_steps_outlive_new_from_the_kept_conversation(make_service):

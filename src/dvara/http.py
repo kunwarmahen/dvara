@@ -803,6 +803,21 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=404, detail="that answer has no steps")
         return {**view, "said": [steps.step_line(s) for s in view["steps"]]}
 
+    @app.get("/web/steps/picture")
+    async def web_steps_picture(actor: str = "", line: int = 0, step: int = 0, n: int = 0,
+                                authorization: str | None = Header(default=None)) -> Any:
+        """A picture a step's tool returned (a screenshot), by line, step and
+        number, as its own image."""
+        check(authorization)
+        from dvara.runsteps import NoSteps
+        try:
+            got = web_for(actor).picture(actor, line, step, n)
+        except NoSteps as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        if got is None:
+            raise HTTPException(status_code=404, detail="no such picture")
+        return Response(got[0], media_type=got[1], headers={"Cache-Control": "no-store"})
+
     @app.get("/web/steps/export")
     async def web_steps_export(actor: str = "", line: int = 0,
                                authorization: str | None = Header(default=None)) -> Any:
