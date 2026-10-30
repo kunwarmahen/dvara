@@ -8,6 +8,9 @@ the LOCK while the file stays exactly where it was.
 
 And asking must not start anything: no state directory made, no ledger
 opened, no claim taken that would refuse the next `dvara serve`.
+
+Whether it can speak is said with the reason when it can't, so a voice
+note that never comes has an answer before anyone waits for it.
 """
 
 from __future__ import annotations
@@ -70,6 +73,24 @@ def test_a_broken_file_is_a_problem_in_words_not_a_failed_status(tmp_path):
     data = report(root=tmp_path / "nowhere", actors=bad, state=tmp_path / "s")
     assert data["serving"] is False
     assert len(data["problems"]) == 2
+
+
+def test_whether_it_can_speak_is_said_with_why_not(tmp_path, monkeypatch):
+    from dvara import spoken
+    monkeypatch.setenv(spoken.ENV, "off")
+    voice = report(root=tmp_path, actors=_actors(tmp_path), state=tmp_path / "s")["voice"]
+    assert voice == {"speaks": False, "why": "DVARA_VOICE is off", "voices": []}
+    folder = tmp_path / "voices"
+    folder.mkdir()
+    (folder / "hi_IN-pratham-medium.onnx").write_bytes(b"x")
+    (folder / "hi_IN-pratham-medium.onnx.json").write_text(
+        json.dumps({"language": {"code": "hi_IN", "family": "hi", "name_english": "Hindi"}}))
+    monkeypatch.delenv(spoken.ENV)
+    monkeypatch.setenv("PIPER_VOICES", str(folder))
+    monkeypatch.setattr(spoken, "VOICES", ())
+    monkeypatch.setattr(spoken, "piper", lambda: ["piper"])
+    voice = report(root=tmp_path, actors=_actors(tmp_path), state=tmp_path / "s")["voice"]
+    assert voice == {"speaks": True, "why": None, "voices": ["hi_IN-pratham-medium"]}
 
 
 def test_asking_makes_nothing_and_claims_nothing(tmp_path, agents_root, capsys):

@@ -18,6 +18,12 @@ says what it could not read as a problem in words instead of exiting:
 "the actors file does not parse" is something the owner wants to see
 from ``status``, not a reason for ``status`` to fail.
 
+AND WHETHER IT CAN SPEAK. ``voice`` says whether an answer can be read
+aloud here (Piper and a voice found, as ``spoken.can_speak`` sees it),
+why not when it can't, and the voices it would use, so ``sarathi
+doctor`` can say a voice the owner asked for is missing before anyone
+waits for a voice note that never comes.
+
 NO SECRET IS IN IT. Not the token, not the bot's token, not a name of a
 person -- a count of them.
 """
@@ -80,7 +86,15 @@ def report(*, root: Path, actors: Path, state: Path) -> dict:
         "agents": agents,
         "people": people,
         "problems": problems,
+        "voice": _voice(),
     }
+
+
+def _voice() -> dict:
+    from dvara import spoken
+    why = spoken.can_speak()
+    return {"speaks": why is None, "why": why,
+            "voices": [v.name for v in spoken.voices()]}
 
 
 def lines(data: dict) -> list[str]:
