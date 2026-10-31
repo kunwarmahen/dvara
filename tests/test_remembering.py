@@ -140,6 +140,26 @@ def test_remember_keeps_the_chosen_ones_under_their_own_name(make_service, remem
     assert "1. Has a cat called Biscuit" in say(service, "/remember", actor="guest").text
 
 
+def test_a_new_city_in_the_same_place_replaces_the_old_and_says_so(make_service, remembers):
+    service = make_service([says("ok"), says("fact [home/city]: Lives in Pune (Asia/Kolkata time)"),
+                            says("ok"), says("fact [home/city]: Lives in Mumbai (Asia/Kolkata time)")])
+    say(service, "I live in Pune", actor="guest")
+    start_over(service, actor="guest")
+    say(service, "/remember 1", actor="guest")
+    say(service, "I moved to Mumbai", actor="guest")
+    start_over(service, actor="guest")
+    reply = say(service, "/remember 1", actor="guest")
+    assert reply.text == ("Kept:\n- Lives in Mumbai (Asia/Kolkata time) "
+                          "(instead of: Lives in Pune (Asia/Kolkata time))")
+    assert kept("guest") == ["Lives in Mumbai (Asia/Kolkata time)"]
+
+
+def test_an_offers_topic_and_key_wait_with_it(tmp_path):
+    offered = remembering.Offered(tmp_path)
+    offered.add("guest", "greeter", [remembering.Offer("Lives in Pune", "fact", "home", "city")])
+    assert offered.get("guest") == [remembering.Offer("Lives in Pune", "fact", "home", "city")]
+
+
 def test_remember_all_and_numbers_that_were_never_listed(make_service, remembers):
     service = make_service([says("ok"), says(LOOKED)])
     say(service, "hello")

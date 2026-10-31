@@ -133,6 +133,8 @@ class Offer:
 
     statement: str
     kind: str = "fact"
+    topic: str | None = None      # where Yantra files it (home, account, …)
+    key: str | None = None        # the one thing it names: a later one replaces it
 
 
 class Offered:
@@ -189,7 +191,9 @@ class Offered:
         if agent is not None:
             entry["agent"] = agent
             entry["at"] = datetime.now(UTC).isoformat(timespec="seconds")
-        entry["items"] = [{"statement": o.statement, "kind": o.kind} for o in items]
+        entry["items"] = [{"statement": o.statement, "kind": o.kind,
+                           **({"topic": o.topic} if o.topic else {}),
+                           **({"key": o.key} if o.key else {})} for o in items]
         if declined:
             entry["declined"] = declined[-DECLINED:]
         else:
@@ -198,7 +202,8 @@ class Offered:
 
     def get(self, actor: str) -> list[Offer]:
         entry = self._read().get(actor) or {}
-        return [Offer(i["statement"], i.get("kind") or "fact")
+        return [Offer(i["statement"], i.get("kind") or "fact", i.get("topic") or None,
+                      i.get("key") or None)
                 for i in entry.get("items", []) if i.get("statement")]
 
     def declined(self, actor: str) -> list[str]:

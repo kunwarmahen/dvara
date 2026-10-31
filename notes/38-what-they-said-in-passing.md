@@ -188,6 +188,11 @@ offers the two words only where the package remembers.
   *Kept about you* line, and the look back names it too
   ([note 77](77-kept-and-told.md)).
 
+* ~~**A new fact beside the old one.**~~ "Moved to Austin" kept beside
+  "Lives in Cary" left both. Each fact now carries Yantra's topic and
+  key, and one kept in the same place replaces the old, saying so:
+  *Kept: … (instead of: …)* (Yantra's note 150).
+
 * **The owner's page.** It shows who used which agent, never the words,
   and a person's memories are words. Nothing about them is on it.
 * **Kept as it was said.** `/remember` keeps the sentence as the model

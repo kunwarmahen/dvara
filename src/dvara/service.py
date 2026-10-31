@@ -2232,7 +2232,7 @@ class Service:
         if found:
             # the whole conversation, read once: it replaces its parts
             self.offered.add(who.id, run.agent,
-                             [remembering.Offer(c.statement, c.kind) for c in found],
+                             [remembering.Offer(c.statement, c.kind, c.topic, c.key) for c in found],
                              replace=True)
         waiting = self.offered.get(who.id)
         said = (remembering.looked_back(waiting, quiet=quiet, ended=ended)
@@ -2290,7 +2290,7 @@ class Service:
         if run.unattended:
             return ""
         new = self.offered.add(run.actor, run.agent,
-                               [remembering.Offer(c.statement, c.kind) for c in pending])
+                               [remembering.Offer(c.statement, c.kind, c.topic, c.key) for c in pending])
         return remembering.noticed(new) if new else ""
 
     @asynccontextmanager
@@ -2377,7 +2377,7 @@ class Service:
     async def _memory_words(self, spec: AgentSpec, who: Actor, key: str, text: str) -> str:
         """``/memory``, ``/memory forget ID``, ``/remember …`` (remembering.py)."""
         from yantra.memory import MemoryStoreError, short_id
-        from yantra.memory.reflect import Candidate, keep
+        from yantra.memory.reflect import Candidate, keep_lines
 
         name = workspace_parts(key)[1]
         if spec.memory in (None, "off"):
@@ -2411,10 +2411,12 @@ class Service:
             try:
                 if picked:
                     chosen = [offers[n - 1] for n in picked]
-                    await asyncio.to_thread(
-                        keep, memory, [Candidate(o.statement, o.kind) for o in chosen])
+                    kept = await asyncio.to_thread(
+                        keep_lines, memory,
+                        [Candidate(o.statement, o.kind, o.topic, o.key) for o in chosen])
                     self.offered.take(who.id, picked)
-                    return remembering.kept_words([o.statement for o in chosen])
+                    # a new home names the one it replaced: "… (instead of: …)"
+                    return remembering.kept_words([line for _, line in kept])
                 if forget is not None:
                     if "forget" in memory.cannot():
                         return "Where your memories are kept, I can't remove one from here."

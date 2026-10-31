@@ -1416,6 +1416,11 @@ same list under **Turned down**, with an Undo beside each
 drew on says when, `(used 2026-10-23)`, and stays among the newest: Yantra
 tells the store at the end of each turn, so a fact someone relies on
 doesn't age out of what their conversations start with (Yantra's note 143).
+Each offered fact carries Yantra's topic and key (`home/city`), kept in
+`offered.json` beside it, and one kept in the same place as an old one
+replaces it: `/remember 1` answers *Kept: Lives in Austin, TX (instead
+of: Lives in Cary, NC)*, and the *Kept about you* line says the same
+(Yantra's note 150).
 
 **What everyone in the house knows.** Facts that are true for everybody
 (the wifi, bin day) are the owner's to keep: `/remember for everyone …`
