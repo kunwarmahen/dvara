@@ -1671,7 +1671,9 @@ class Service:
             assert found is not None
             link = Prahari(mode="on", data=found[0], program=found[1], person=who.id,
                            agent=run.agent, runner="dvara", seen_at=WATCHES_HERE,
-                           off=WATCH_OFF)
+                           off=WATCH_OFF,
+                           # "until Saturday 6pm" is 6pm on their clock (actors.py)
+                           zone=who.zone or "")
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, PrahariLinkError) as exc:
             self._note(f"dvara: watches are off for this turn -- prahari: {exc}")

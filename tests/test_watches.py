@@ -100,6 +100,16 @@ class TestEachPersonsOwn:
         started = [a for a in logged(prahari[1]) if "mcp" in a][0]
         assert started[-6:] == ["--for", "asha", "--agent", "greeter", "--runner", "dvara"]
 
+    def test_someone_in_another_zone_has_their_watches_on_their_clock(self, make_service,
+                                                                      prahari):
+        from dvara.actors import ActorBook
+        house = ActorBook.from_dict({"actor": {"owner": {},
+                                               "asha": {"zone": "Europe/London"}}})
+        service = make_service([says("ok")], prahari=str(prahari[0]), actors=house)
+        asyncio.run(service.deliver(actor="asha", agent="greeter", thread="t", text="hi"))
+        started = [a for a in logged(prahari[1]) if "mcp" in a][0]
+        assert started[-2:] == ["--zone", "Europe/London"]
+
     def test_with_people_named_anybody_else_gets_none(self, make_service, prahari):
         service = make_service([says("ok")], prahari=str(prahari[0]), prahari_for="owner")
         asyncio.run(service.deliver(actor="guest", agent="greeter", thread="t", text="hi"))

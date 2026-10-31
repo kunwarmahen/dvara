@@ -338,7 +338,8 @@ there is a question at all, so pair it with `"ask"`
 zone, by its IANA name (`Europe/London`, `Asia/Kolkata`). Their agent is
 told the time on their clock with each message (when its package has
 `[env] context`), their schedules are made on it (their Samay server
-gets `SAMAY_TZ`, so "every day at 7" is their 7), and their `hours`
+gets `SAMAY_TZ`, so "every day at 7" is their 7), their watches'
+days are said on it (`prahari mcp --zone`), and their `hours`
 open and close on it. Change it and their schedules follow: the ones
 in the zone they left move to the new one, and they're told which
 ([notes/74](notes/74-their-schedules-move-with-them.md)). A name that
@@ -1269,7 +1270,8 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
   ([notes/56](notes/56-a-look-as-them.md)). `--prahari-for asha,mahen`
   (or `DVARA_PRAHARI_FOR`) narrows the watches to the people named.
 * Each of their turns starts `prahari mcp --for <them> --agent <this
-  agent> --runner dvara` and stops it when the turn ends; a scheduled
+  agent> --runner dvara` (with `--zone` when they have one, so a watch's
+  days are on their clock) and stops it when the turn ends; a scheduled
   turn gets none.
 * A package with `[tools] allow` must list `mcp__prahari__*` (*Watches
   (Prahari)* in the tool picker).
