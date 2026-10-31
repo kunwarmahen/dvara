@@ -118,6 +118,18 @@ Not run live here: the set-up conversation that makes the schedule
 minder's), and a brief over real Gmail, Calendar, Robinhood and Notion
 sign-ins.
 
+## Every account, by its own number
+
+Over a real Robinhood sign-in the brief read two accounts and missed
+the money: one answered $0 and one 404, while the morning before had
+found about $471k in two others. `get_accounts` lists every account,
+but its answer is long, and the model picked numbers from the part it
+kept -- or from an earlier run. The prompt now says it: ask for the
+accounts first, read every one that lets an agent in (`agentic_allowed`)
+by its own number, add them all up, and leave an empty one unnamed.
+The same run took 30.5 of its 30 minutes on `qwen3.8-64k`, so the
+schedule it makes now gives a run 45.
+
 ## What was deliberately not built
 
 * **A brief written by Dvara rather than by an agent.** What is worth

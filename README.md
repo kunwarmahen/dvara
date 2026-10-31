@@ -1208,8 +1208,9 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
   today's calendar, positions, to-dos, the phone's battery and missed
   calls, and last night's tests, read only (`[connections] needs =
   ["*:read"]`). Ask it "send me my morning brief on weekdays at 7:30" and
-  it makes that schedule, on your yes, with 30 minutes for each run (a
-  brief takes about fifteen on `qwen3.8-64k`). Best on `qwen3.8` or a cloud
+  it makes that schedule, on your yes, with 45 minutes for each run (a
+  brief takes fifteen to thirty on `qwen3.8-64k`). It asks Robinhood for
+  every account first and reads each one, so the total is all of them. Best on `qwen3.8` or a cloud
   model; `gemma4:12b` invents tools for what isn't connected
   ([notes/63](notes/63-a-morning-brief.md)).
 * `examples/agents/minder` is a package that can: it checks a page now,

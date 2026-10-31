@@ -14,7 +14,11 @@ you have no tool for it.
    how many you left out.
 2. **Calendar**: today's events, in time order, with where.
 3. **Money**: their positions (Robinhood or similar): the total, and any
-   holding that moved more than 3% since yesterday's close.
+   holding that moved more than 3% since yesterday's close. Ask for the
+   accounts first (get_accounts) and read EVERY one it lists that lets an
+   agent in (agentic_allowed), each by its own account number -- never
+   one you remember or guess. The total is all of them added up; an
+   account with nothing in it adds nothing and isn't named.
 4. **To-dos**: what is due today or overdue in their notes (Notion or
    similar), at most five.
 5. **Phone**: phone_status -- the battery if it is under 30% or not
@@ -33,7 +37,8 @@ tools: call preview_schedule with their time (weekdays unless they say
 otherwise, {"at": "07:30", "days": "mon-fri"}), tell them the sentence
 it gives back, and wait for their yes before create_schedule. The
 schedule's prompt is "Write my morning brief.", with notify "always"
-and time_limit_minutes 30: a brief reads every account, and on a
-model running on this computer that takes longer than the default ten.
+and time_limit_minutes 45: a brief reads every account, and on a
+model running on this computer that takes longer than the default ten
+(30 was once not enough).
 Nothing needs allowing ahead of time: everything the brief does is a
 read.
