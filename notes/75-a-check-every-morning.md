@@ -21,6 +21,12 @@ as them, with the agent they're talking to, at 07:30 on their own clock
 it, and saying it twice says *Already*. A plain `/doctor` ends by saying
 the word exists, where schedules are on.
 
+**A TIME AFTER IT IS THEIRS.** `/doctor every morning 6:45` (or `7am`,
+`6.30 pm`, `at 18:30`) makes it then, on their clock, or moves the one
+they have. Samay has no edit for a schedule's time, so a move is the
+old schedule removed and a new one made, said as *Moved*. The same time
+again is *Already*; a time it can't read says so and how to write one.
+
 **A WORD IS SENT AS A WORD.** Samay frames a scheduled prompt for a
 model (*"(A scheduled run -- every day at 07:30. Nobody is watching
 …)"*). For a schedule whose prompt is a slash word it sends the word
@@ -67,20 +73,37 @@ Stopped: no more morning checks.
 
 The red line is true: this scratch Samay wasn't serving.
 
+A time of their own, the real Samay over a scratch state (a stand-in
+answering for Dvara on 8798, which Samay asks after before it makes a
+Dvara-road schedule), `asha` on `Europe/London`:
+
+```
+> /doctor every morning
+Done: I'll check what's yours every day at 07:30 (Europe/London) and tell you only when something new is wrong. /doctor every morning off stops it.
+> /doctor every morning 6:45am
+Moved: I'll check what's yours every day at 06:45 (Europe/London) and tell you only when something new is wrong. /doctor every morning off stops it.
+> /doctor every morning
+Already: every day at 06:45 -- next: Sun 1 Nov 06:45, Mon 2 Nov 06:45, Tue 3 Nov 06:45 (Europe/London). /doctor every morning off stops it; a time after it (7am) moves it.
+> /doctor every morning off
+Stopped: no more morning checks.
+```
+
 ## Tests
 
 `tests/test_checkup.py`: a scheduled `/doctor` says its trouble once and
 `NOTHING NEW` the next time, with no model either time; `/doctor every
 morning` asks Samay for exactly the Dvara-road schedule, as them, on
 their zone (`SAMAY_TZ`), says *Already* the second time, and `off`
-removes it; with schedules off it says so and `/doctor` doesn't offer
-it. Samay's `tests/test_dvara.py`: a slash word goes alone, and a word
+removes it; a time after it moves it (the old one removed, one made at
+the new time), the same time is *Already*, a time it can't read says
+so; times read as people write them (*6:45*, *7am*, *6.30 pm*, *12am*)
+and nonsense (*25:00*, *13pm*) refused; with schedules off it says so
+and `/doctor` doesn't offer it. Samay's `tests/test_dvara.py`: a slash word goes alone, and a word
 answered is ok unless refused.
 
 ## What is not here yet
 
-* **A time of their own.** 07:30 on their clock; another time is
-  `/schedules` and asking the agent to change it.
+* ~~**A time of their own.**~~ `/doctor every morning 6:45` (above).
 * **What's still wrong, said again.** Only new lines come. A sign-in
   that stays ended is said the morning it ended, and `/doctor` shows it
   any time.

@@ -226,14 +226,24 @@ MORNING_SAMAY = """\
     if args[:1] == ["list"]:
         print(open(made).read() if os.path.exists(made) else "[]")
     elif args[:1] == ["add"]:
+        at = args[args.index("--when") + 1].split()[-1]
         card = {"id": "d1", "owner": "kid", "runner": "dvara", "prompt": "/doctor",
-                "tz": os.environ.get("SAMAY_TZ") or "UTC", "sentence": "every day at 07:30"}
+                "tz": os.environ.get("SAMAY_TZ") or "UTC", "when": {"at": at},
+                "sentence": "every day at " + at}
         open(made, "w").write(json.dumps([card]))
         print(json.dumps(card))
     elif args[:1] == ["rm"]:
         os.remove(made)
         print(json.dumps({"removed": args[1]}))
 """
+
+
+def test_a_time_is_read_the_ways_people_write_it():
+    from dvara.checkup import clock_time
+    assert [clock_time(w) for w in ("6:45", "06:45", "7am", "6.30 pm", "at 18:30",
+                                    "12am", "12 pm", "7")] == \
+        ["06:45", "06:45", "07:00", "18:30", "18:30", "00:00", "12:00", "07:00"]
+    assert [clock_time(w) for w in ("25:00", "13pm", "6:75", "noon")] == [None] * 4
 
 
 def test_every_morning_is_a_schedule_on_their_clock_and_off_removes_it(make_service,
@@ -255,6 +265,13 @@ def test_every_morning_is_a_schedule_on_their_clock_and_off_removes_it(make_serv
                       "kid", "--agent", "greeter", "--notify", "when_new", "--json"],
                      "Asia/Kolkata"]
     assert say("/doctor every morning").startswith("Already: every day at 07:30")
+    assert say("/doctor every morning 7:30").startswith("Already: every day at 07:30")
+    assert say("/doctor every morning 6:45am").startswith(
+        "Moved: I'll check what's yours every day at 06:45 (Asia/Kolkata)")
+    asked = (tmp_path / "asked").read_text()
+    assert '["rm", "d1", "--json"]' in asked and '"at 06:45"' in asked
+    assert say("/doctor every morning noonish").startswith(
+        "I can't read \"noonish\" as a time.")
     assert say("/doctor every morning off") == "Stopped: no more morning checks."
     assert say("/doctor every morning off") == "There's no morning check to stop."
     assert "Send /doctor every morning" in say("/doctor")

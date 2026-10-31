@@ -103,9 +103,15 @@ espeak's robot voice is hard to hear: "Ravi" came back as "Ramu" and
 "nine" once as "8". A person's voice does better, and either way the
 heard line shows it before anyone relies on it.
 
+On the owner's page the runs list shows the owner's own voice question
+the same way, as 🎤 *"…"* after *You:*, not the line the agent was
+given (*(a voice note, heard as: "…")*): `heard.plain`, which names a
+conversation in the lists and writes Telegram's line too.
+
 ## What the tests hold
 
-`tests/test_heard.py`: the agent reads that it was a voice note; a named
+`tests/test_page.py`: a voice question in the runs list is 🎤 and the
+words. `tests/test_heard.py`: the agent reads that it was a voice note; a named
 model is used as named; without ffmpeg it says so; on Telegram a voice
 note is heard, shown first and kept; a note nothing can hear is said
 plainly, with no "I heard". The hearing model is stood in for; the

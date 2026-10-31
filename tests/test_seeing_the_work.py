@@ -374,8 +374,31 @@ class TestWatches:
 
     def test_a_word_it_doesnt_know_says_how(self, make_service, tmp_path):
         service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
-        reply, = run(service, say(service, "/watches pause 1", actor="maya", agent="greeter"))
+        reply, = run(service, say(service, "/watches stop 1", actor="maya", agent="greeter"))
         assert "/watches every NUMBER 6h" in reply.text
+        assert "/watches pause NUMBER" in reply.text
+
+    def test_pause_and_resume_their_own_watch_by_number(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches pause 1", actor="maya", agent="greeter"))
+        assert reply.text == ("Paused. \"ALAB under $50\" stops looking and is kept; "
+                              "/watches resume 1 starts it again.")
+        assert (tmp_path / "asked").read_text().split() == ["pause", "w1aa", "--json"]
+
+    def test_resume_starts_a_paused_one_and_says_how_often(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS),
+                               owner="owner")
+        reply, = run(service, say(service, "/watches resume 2", agent="greeter"))
+        assert reply.text.startswith("Looking again. \"ALAB under $50\": every 6 hours")
+        assert (tmp_path / "asked").read_text().split()[:2] == ["resume", "w4dd"]
+
+    def test_pausing_whats_already_paused_asks_prahari_nothing(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches resume 1", actor="maya", agent="greeter"))
+        assert reply.text == "\"ALAB under $50\" is already looking."
+        reply, = run(service, say(service, "/watches pause w3", actor="maya", agent="greeter"))
+        assert reply.text.startswith("You have no watch w3.")        # the owner's, not maya's
+        assert not (tmp_path / "asked").exists()
 
 
 class TestWhichSkills:

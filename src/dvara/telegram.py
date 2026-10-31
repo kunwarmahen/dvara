@@ -1339,7 +1339,7 @@ def _menu(spec, *, schedules: bool = False, watches: bool = False,
     if schedules:
         words += [("schedules", "Your schedules")]
     if watches:
-        words += [("watches", "What I watch for you; /watches every N 6h")]
+        words += [("watches", "What I watch for you; /watches every N 6h, pause N, resume N")]
     return words
 
 

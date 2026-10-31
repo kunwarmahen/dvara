@@ -118,14 +118,23 @@ class Voice:
         return f"{self.name} ({self.language})"
 
 
+#: What a voice's card may call its phonemes for Piper to read it. One in
+#: Piper's own catalogue says "PhonemeType.ESPEAK" (es_MX-ald-medium), and
+#: Piper refuses it at the first answer; such a voice is not counted here.
+_READABLE = ("espeak", "text")
+
+
 def _voice(path: Path) -> Voice | None:
     card = path.with_name(path.name + ".json")
     if not card.is_file():
         return None
     try:
-        lang = json.loads(card.read_text()).get("language") or {}
+        data = json.loads(card.read_text())
+        lang = data.get("language") or {}
     except (OSError, ValueError, AttributeError):
-        lang = {}
+        data, lang = {}, {}
+    if data.get("phoneme_type", "espeak") not in _READABLE:
+        return None
     name = path.name.removesuffix(".onnx")
     family = (lang.get("family") or name.split("_")[0].split("-")[0]).lower()
     return Voice(name=name, path=path, family=family,
@@ -349,8 +358,11 @@ def make(text: str, out: Path, *, telegram: bool = False,
         raise Unspoken("there were no words in it to read")
     if not isinstance(voice, Voice):
         voice = pick(words, voice)
-    if voice.family == "hi" and _latin(words):
-        words = romanised.devanagari(words)
+    if voice.family == "hi":
+        latin = _latin(words)
+        words = romanised.numbers(words)
+        if latin:
+            words = romanised.devanagari(words)
     command = piper()
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dvara-spoken-") as tmp:

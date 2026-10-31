@@ -141,8 +141,9 @@ def test_remember_keeps_the_chosen_ones_under_their_own_name(make_service, remem
 
 
 def test_a_new_city_in_the_same_place_replaces_the_old_and_says_so(make_service, remembers):
-    service = make_service([says("ok"), says("fact [home/city]: Lives in Pune (Asia/Kolkata time)"),
-                            says("ok"), says("fact [home/city]: Lives in Mumbai (Asia/Kolkata time)")])
+    service = make_service([
+        says("ok"), says("fact [home/city]: Lives in Pune (Asia/Kolkata time)"),
+        says("ok"), says("fact [home/city]: Lives in Mumbai (Asia/Kolkata time)")])
     say(service, "I live in Pune", actor="guest")
     start_over(service, actor="guest")
     say(service, "/remember 1", actor="guest")

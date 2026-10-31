@@ -68,6 +68,8 @@ def door(tmp_path, agents_root):
                       tools=[ToolStep("send_message", "user")]))
     store.record(_run("priya", "unpriced turn", "ok", cost=None))
     store.record(_run("priya", "yesterday", "ok", when=NOW - timedelta(days=1)))
+    store.record(_run("owner", '(a voice note, heard as: "is the porch light on")',
+                      "it is off", when=NOW - timedelta(minutes=5)))
     store.record(_run("owner", "check the garden", "all watered"))
     store.close()
     return {"root": agents_root, "actors": actors, "state": state}
@@ -103,6 +105,11 @@ def test_somebody_elses_words_are_never_on_the_page(served):
 def test_the_owners_own_words_are(api):
     mine = api.recent("owner", None, 10)[0]
     assert mine["message"] == "check the garden" and mine["reply"] == "all watered"
+
+
+def test_a_voice_note_is_your_words_with_a_mic_not_the_agents_line(api):
+    spoken = api.recent("owner", None, 10)[1]
+    assert spoken["message"] == "🎤 “is the porch light on”"
 
 
 def test_somebody_elses_run_keeps_its_shape(api):

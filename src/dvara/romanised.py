@@ -164,5 +164,66 @@ def _consonant_at(word: str, i: int) -> bool:
 
 def devanagari(text: str) -> str:
     """``text``, known to be romanised Hindi, with each Latin word in
-    Devanagari; numbers, marks and anything else as they were."""
+    Devanagari; marks and anything else as they were."""
     return _WORD.sub(lambda m: spell(m.group(0)), text)
+
+
+# ---- numbers -----------------------------------------------------------------
+
+#: 0 to 99, each its own word.
+_UNDER_100 = (
+    "शून्य एक दो तीन चार पाँच छह सात आठ नौ "
+    "दस ग्यारह बारह तेरह चौदह पंद्रह सोलह सत्रह अठारह उन्नीस "
+    "बीस इक्कीस बाईस तेईस चौबीस पच्चीस छब्बीस सत्ताईस अट्ठाईस उनतीस "
+    "तीस इकतीस बत्तीस तैंतीस चौंतीस पैंतीस छत्तीस सैंतीस अड़तीस उनतालीस "
+    "चालीस इकतालीस बयालीस तैंतालीस चवालीस पैंतालीस छियालीस सैंतालीस अड़तालीस उनचास "
+    "पचास इक्यावन बावन तिरपन चौवन पचपन छप्पन सत्तावन अट्ठावन उनसठ "
+    "साठ इकसठ बासठ तिरसठ चौंसठ पैंसठ छियासठ सड़सठ अड़सठ उनहत्तर "
+    "सत्तर इकहत्तर बहत्तर तिहत्तर चौहत्तर पचहत्तर छिहत्तर सतहत्तर अठहत्तर उन्यासी "
+    "अस्सी इक्यासी बयासी तिरासी चौरासी पचासी छियासी सत्तासी अट्ठासी नवासी "
+    "नब्बे इक्यानवे बानवे तिरानवे चौरानवे पंचानवे छियानवे सत्तानवे अट्ठानवे निन्यानवे"
+).split()
+#: The steps above a hundred, largest first, the Indian way.
+_STEPS = ((10_000_000, "करोड़"), (100_000, "लाख"), (1_000, "हज़ार"), (100, "सौ"))
+#: Longer than this is said a digit at a time (a phone number, an id).
+_LONGEST_SAID = 999_999_999
+
+_NUMBER = re.compile(r"(?<![\w.])(\d{1,2}):(\d{2})(?!\d)"            # 9:30
+                     r"|(?<![\w.])(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.(\d+))?(?![\w])")
+
+
+def hindi_number(n: int) -> str:
+    """``n`` as Hindi says it: 39 उनतालीस, 1500 एक हज़ार पाँच सौ."""
+    if n < 100:
+        return _UNDER_100[n]
+    if n > _LONGEST_SAID:
+        return " ".join(_UNDER_100[int(d)] for d in str(n))
+    words = []
+    for size, name in _STEPS:
+        if n >= size:
+            words += [hindi_number(n // size), name]
+            n %= size
+    if n:
+        words.append(_UNDER_100[n])
+    return " ".join(words)
+
+
+def _said(match: re.Match) -> str:
+    hour, minute, whole, fraction = match.groups()
+    if hour is not None:
+        said = hindi_number(int(hour))
+        return said if minute == "00" else f"{said} {hindi_number(int(minute))}"
+    digits = whole.replace(",", "")
+    if len(digits) > 1 and digits.startswith("0"):       # 007, a code: digit by digit
+        said = " ".join(_UNDER_100[int(d)] for d in digits)
+    else:
+        said = hindi_number(int(digits))
+    if fraction:
+        said += " दशमलव " + " ".join(_UNDER_100[int(d)] for d in fraction)
+    return said
+
+
+def numbers(text: str) -> str:
+    """``text`` with each number written as Hindi says it, for the Hindi
+    voice: "subah 9 baje" -> "subah नौ baje", 5.49 -> पाँच दशमलव चार नौ."""
+    return _NUMBER.sub(_said, text)

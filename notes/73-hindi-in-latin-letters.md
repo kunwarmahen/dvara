@@ -82,10 +82,34 @@ The same two answers as they were read before, by the English voice:
 
 ## What the run found
 
-The *9* in *"subah 9 baje"* is read by the Hindi voice as something
-Whisper couldn't place (*सुबहनाबर्या*). Numbers are left as digits, and
-Piper's Hindi voice says them its own way. Writing them as Hindi words
-(नौ) would be the next step.
+The *9* in *"subah 9 baje"* was read by the Hindi voice as something
+Whisper couldn't place (*सुबहनाबर्या*): Piper's Hindi voice said the
+digit its own way.
+
+## Numbers, as Hindi says them
+
+**NUMBERS ARE WRITTEN AS WORDS BEFORE THE HINDI VOICE READS.** Every
+answer the Hindi voice reads, in Devanagari or in Latin letters, has its
+numbers written out first (`romanised.numbers`). Hindi's numbers to a
+hundred are each their own word (उनतालीस is 39, उन्यासी 79), so they come
+from a table; above it सौ, हज़ार, लाख and करोड़ build the rest the Indian
+way (1,50,000 is एक लाख पचास हज़ार). A time (9:30) is said as its two
+numbers, a decimal (5.49) with दशमलव and then a digit at a time, and a
+code that starts with 0 or a figure past 99 crore (a phone number) a
+digit at a time. A number inside a word (*4th*, *Wi-Fi2*) is left alone.
+
+Receipt, the same Piper voice heard back by the house's
+`faster-whisper-small` server:
+
+```
+Kal subah 9 baje aapki meeting hai.            | heard: कल सुबहन नाव बजे आपकी मीटिंग है
+Aapka bill 1,500 rupaye hai, 25 tareekh tak.   | heard: आपका भिल्ले एक हाजार पाथ सो रुबाय है, पक चीस तरीक तक
+Doodh 5.49 dollar ka hai.                      | heard: दूद पांच दशम्लव चार नोद दोलर का है
+```
+
+The time is now heard as a time (*नाव बजे*, a soft नौ), and the bill as
+*one thousand five hundred*. What is left is the voice's own accent, not
+a number it couldn't say.
 
 ## Tests
 
@@ -94,11 +118,13 @@ sentence sharing its spellings still English; the list's words and the
 rules' (long final *a* and *i*, *a* before a vowel, *n* before a
 consonant) spelt as said, a number and Devanagari left as they were; a
 Hindi voice handed Devanagari by `make`, an English answer handed to its
-voice as written.
+voice as written; numbers to a hundred from the table, lakh and crore,
+a time, a decimal and a code; the Hindi voice handed *नौ* for *9*.
 
 ## What is not here yet
 
-* **Numbers said in Hindi.** Above.
+* ~~**Numbers said in Hindi.**~~ Written as words first (above).
+* **Ordinals and money in Hindi** (*4th*, *₹*): left as typed.
 * **Romanised Hindi heard.** This is the voice. A voice note *spoken*
   in Hindi is heard as the hearing model writes it, in Devanagari
   ([notes/47](47-a-voice-note.md)).

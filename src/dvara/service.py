@@ -1037,7 +1037,10 @@ class Service:
                 # their morning check (a schedule): only what's new
                 said = await self._checkup(who, news=True)
             elif (when := checkup.morning_word(text)) is not None:
-                said = await checkup.morning(who, agent, when == "on", self.samay)
+                said = (f"I can't read \"{when[1]}\" as a time. Try /doctor "
+                        f"{checkup.MORNING} 6:45 (or 7am, 18:30)." if when[0] == "bad"
+                        else await checkup.morning(who, agent, when[0] == "on", self.samay,
+                                                   at=when[1]))
             else:
                 said = await self._checkup(who)
                 if self.samay:
@@ -2265,7 +2268,8 @@ class Service:
         if found:
             # the whole conversation, read once: it replaces its parts
             self.offered.add(who.id, run.agent,
-                             [remembering.Offer(c.statement, c.kind, c.topic, c.key) for c in found],
+                             [remembering.Offer(c.statement, c.kind, c.topic, c.key)
+                              for c in found],
                              replace=True)
         waiting = self.offered.get(who.id)
         said = (remembering.looked_back(waiting, quiet=quiet, ended=ended)
@@ -2323,7 +2327,8 @@ class Service:
         if run.unattended:
             return ""
         new = self.offered.add(run.actor, run.agent,
-                               [remembering.Offer(c.statement, c.kind, c.topic, c.key) for c in pending])
+                               [remembering.Offer(c.statement, c.kind, c.topic, c.key)
+                                for c in pending])
         return remembering.noticed(new) if new else ""
 
     @asynccontextmanager

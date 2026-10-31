@@ -23,11 +23,14 @@ a way around them. A schedule is paused or removed by asking the agent,
 which asks the person on their channel first (Samay's tools), so there
 is one way to change one.
 
-HOW OFTEN IS THE ONE CHANGE. ``/watches every 2 6h`` changes how often
-their second watch looks, through ``prahari edit``, the same change
-Prahari's page and Yantra's panel make with their Every box. It is the
-person's own watch and only its pace: what it checks, and what the agent
-may do when it fires, still go through the agent, which asks. A watch is
+HOW OFTEN, AND WHETHER, ARE THE ONLY CHANGES. ``/watches every 2 6h``
+changes how often their second watch looks, through ``prahari edit``,
+the same change Prahari's page and Yantra's panel make with their Every
+box; ``/watches pause 2`` and ``/watches resume 2`` stop it looking and
+start it again (``prahari pause|resume``), both undone by the other. It
+is the person's own watch and only its pace: what it checks, what the
+agent may do when it fires, and removing it still go through the agent,
+which asks. A watch is
 found among THEIR OWN first (Prahari files them under the person's name,
 and the owner's made at the computer under ``local``), so a number or an
 id from somebody else's list finds nothing.
@@ -149,7 +152,7 @@ class Seen:
     async def watches(self, actor: str, text: str, prahari: str | None, *,
                       enabled: bool, is_owner: bool = False) -> str:
         """Their watches, as Prahari says them; ``/watches every N 6h``
-        changes how often one looks."""
+        changes how often one looks, ``/watches pause|resume N`` whether."""
         if not enabled:
             return "Watches aren't switched on here."
         program = prahari or shutil.which("prahari")
@@ -163,9 +166,11 @@ class Seen:
         rest = text.strip().split()[1:]
         if rest and rest[0].lower() == "every":
             return await self._every(program, mine, rest[1:])
+        if rest and rest[0].lower() in ("pause", "resume"):
+            return await self._pause(program, mine, rest[0].lower(), rest[1:])
         if rest:
             return (f"I don't know \"/watches {' '.join(rest)}\". "
-                    + EVERY_HOW)
+                    + EVERY_HOW + " " + PAUSE_HOW)
         if not mine:
             return ("You have no watches. Ask me to tell you when something happens — "
                     "\"tell me when ALAB drops below $50\" — and I'll set one up.")
@@ -188,7 +193,7 @@ class Seen:
                 out.append(f"  You asked: \"{card['asked']}\"")
             out.append(f"  {card.get('sentence') or ''}{paused}.{how}")
         out.append("")
-        out.append(EVERY_HOW + " To pause, mend or remove one, just ask me.")
+        out.append(EVERY_HOW + " " + PAUSE_HOW + " To mend or remove one, just ask me.")
         return "\n".join(out)
 
     async def _every(self, program: str, mine: list[dict], words: list[str]) -> str:
@@ -211,8 +216,34 @@ class Seen:
         return f"Done. \"{changed.get('name')}\": {changed.get('sentence') or ''}."
 
 
+    async def _pause(self, program: str, mine: list[dict], word: str,
+                     words: list[str]) -> str:
+        if not words and len(mine) == 1:
+            words = ["1"]                  # the one watch they have
+        if len(words) != 1:
+            return PAUSE_HOW
+        card = _which(mine, words[0])
+        if card is None:
+            return (f"You have no watch {words[0]}. Send /watches to see their numbers."
+                    if mine else "You have no watches.")
+        state = card.get("state") or ""
+        if word == "pause" and state == "paused":
+            return f"\"{card.get('name')}\" is already paused. /watches resume starts it again."
+        if word == "resume" and state == "active":
+            return f"\"{card.get('name')}\" is already looking."
+        changed, trouble = await ask_json([program, word, str(card["id"]), "--json"])
+        if trouble or not isinstance(changed, dict):
+            return trouble or "Prahari didn't change it. Try again soon."
+        if word == "pause":
+            return (f"Paused. \"{changed.get('name')}\" stops looking and is kept; "
+                    f"/watches resume {words[0]} starts it again.")
+        return f"Looking again. \"{changed.get('name')}\": {changed.get('sentence') or ''}."
+
+
 #: How to change how often, said wherever it helps.
 EVERY_HOW = "To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d)."
+#: How to stop and start one.
+PAUSE_HOW = "To stop one looking: /watches pause NUMBER (and /watches resume NUMBER)."
 
 
 async def ask_json(argv: list[str], env: dict[str, str] | None = None) -> tuple[Any, str]:

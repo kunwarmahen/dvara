@@ -102,7 +102,7 @@ from urllib.parse import parse_qs, quote, urlparse
 import httpx
 
 from dvara import files as person_files
-from dvara import money
+from dvara import heard, money
 from dvara.actors import OWN_SETU, Actor, ActorBook
 from dvara.errors import ConfigProblem
 from dvara.roster import Roster
@@ -508,8 +508,10 @@ class Api:
             "came_by": run.came_by,
             "waited_seconds": run.waited_seconds, "resumes": run.resumes,
             "tools": [{"name": s.name, "refusal": s.refusal} for s in run.tools],
-            # the owner's own words, and nobody else's
-            "message": run.message if mine else None,
+            # the owner's own words, and nobody else's; a voice note's as
+            # 🎤 "…", the words they said, not the line the agent was given
+            "message": heard.plain(run.message) if mine and run.message else
+                       (run.message if mine else None),
             "reply": run.reply if mine else None,
             "detail": run.detail if mine else None,
         }

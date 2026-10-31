@@ -153,7 +153,7 @@ a page, each checked before it's written; and a turn watched while it
 runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools`, `/schedules` and
 `/watches` answered from the record (`/watches every 2 6h` changes how
-often one looks); and with `--prahari`, its owner's agent offers to tell
+often one looks, `/watches pause 2` and `resume 2` whether it does); and with `--prahari`, its owner's agent offers to tell
 them when something happens; and limits for a child (hours, messages a
 day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
@@ -533,7 +533,8 @@ And anyone can start their conversation with an agent over:
 /carry                         carry on a job a restart stopped, from its last step
 /steps                         what your last turn did, step by step (/steps 2: turn 2)
 /doctor                        what's wrong with what's yours, and the fix
-/doctor every morning          checked at 07:30 your time, told only what's new (off: stop)
+/doctor every morning          checked at 07:30 your time, told only what's new (off: stop;
+                               a time after it, 6:45 or 7am, moves it)
 ```
 
 A chat is one conversation for as long as it lasts, and a long one can
@@ -634,7 +635,7 @@ as personal`, or whom to ask). Nobody else's line is ever in it; the
 owner's ends with where the whole house is, Settings → Check or
 `sarathi doctor` ([notes/67](notes/67-a-check-of-your-own.md)).
 `/doctor every morning` has Samay send `/doctor` as them at 07:30 on
-their clock; that run says only the lines not said before, and nothing
+their clock (`/doctor every morning 6:45` at a time of their own); that run says only the lines not said before, and nothing
 at all when nothing is new ([notes/75](notes/75-a-check-every-morning.md)).
 
 `/new` answers at once and looks back over the conversation behind the
@@ -1160,8 +1161,9 @@ Done and Stop, and the skill a phone lesson leaves opens its app by name,
 for either phone (Yantra's notes/133). An agent sees only its package's skills (its
 `skills/` folder) and the person's own, never the ones in
 `~/.yantra/skills` on this computer. `/tools`, `/schedules` and
-`/watches` answer from the record, with no turn, and `/watches every N
-6h` changes how often watch N looks
+`/watches` answer from the record, with no turn, `/watches every N
+6h` changes how often watch N looks, and `/watches pause N` / `resume N`
+stop and start it
 ([notes/42](notes/42-seeing-the-work.md)).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
@@ -1287,7 +1289,8 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
   the Mail card); Prahari gets its login through `POST /mail-login`.
 * `/watches` lists their own watches, numbered, with no turn;
   `/watches every 2 6h` changes how often the second one looks (and
-  Prahari still refuses anything under 5 minutes)
+  Prahari still refuses anything under 5 minutes); `/watches pause 2`
+  stops it looking, kept, and `/watches resume 2` starts it again
   ([notes/42](notes/42-seeing-the-work.md)).
 
 ### Your phone, from the chat
@@ -1571,7 +1574,7 @@ reads that person's key from `<state>/memory.json`
 | `accounts.py` (window) | `/connect amazon`: Setu's streamed window, its link sent to the person ([notes/22](notes/22-a-window-sent-to-their-phone.md)) |
 | `heard.py` | a voice note (Telegram voice, the page's 🎤) heard into words before the turn by a Whisper server when `$DVARA_WHISPER` gives one (the OpenAI transcription road), else a local model listing "audio" (`$DVARA_HEARING`), ffmpeg to WAV; the agent told it was a voice note, the person shown what was heard; none said plainly ([notes/47](notes/47-a-voice-note.md)) |
 | `spoken.py` | an answer read aloud by Piper on this machine, sent after the words: a Telegram voice note (OGG Opus by ffmpeg), the page's ▶ Listen (WAV, made once per voice); code, links and tables left out, long answers cut at a sentence; `speak` per person (off, when-spoken, always: notices too) and their own `/voice`; every voice here, each person's own (`voice =`, `/voice use`), the answer's language told by script or small words and read in a voice for it, never in one that can't ([notes/64](notes/64-an-answer-read-aloud.md), [notes/65](notes/65-whose-voice-and-which-language.md)) |
-| `romanised.py` | Hindi typed in Latin letters ("kal kya hai") written in Devanagari for the Hindi voice: the commonest words from a list, the rest by rule ([notes/73](notes/73-hindi-in-latin-letters.md)) |
+| `romanised.py` | Hindi typed in Latin letters ("kal kya hai") written in Devanagari for the Hindi voice: the commonest words from a list, the rest by rule; numbers written as Hindi says them (9 नौ, 1,50,000 एक लाख पचास हज़ार) ([notes/73](notes/73-hindi-in-latin-letters.md)) |
 | `attached.py` | a picture or file sent with a message (Telegram photo/document, the page's paperclip): kept in the person's folder under `from-you/`, named in the message, a picture shown to a model that can see ([notes/44](notes/44-what-they-send.md)) |
 | `files.py` | `/files`, `/file NAME`: the person's own files from their folder with this agent, sent by the channel (Telegram: a document, the original), never a turn; `send_file`, the same for the agent, a write to the gate, sent with the answer or (in a schedule) as a notice ([notes/26](notes/26-the-file-itself.md)) |
 | `promoting.py` | a person's learned skill made a tool, the owner's from the settings page: `show` lists each agent's people's learned skills with how each did; `settings tool AGENT --person --skill` writes it, tests it once (the press is the yes), keeps it in their folder if it passed; `--remove` takes it back, the skill a recipe again ([notes/46](notes/46-a-tool-from-their-skill.md)) |
@@ -1605,7 +1608,7 @@ reads that person's key from `<state>/memory.json`
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
 | `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/learn start|watch|done|stop|clear`, a lesson kept on disk per person per agent, no look halfway ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's, Prahari's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |
-| `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay; `/watches`, theirs from Prahari, and `/watches every N 6h` ([notes/42](notes/42-seeing-the-work.md)) |
+| `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay; `/watches`, theirs from Prahari, `/watches every N 6h` and `/watches pause|resume N` ([notes/42](notes/42-seeing-the-work.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice, and the notices by themselves for a page's bell, with how far each person has read them, kept here so every page and address agrees, [notes/71](notes/71-one-conversation-two-chats.md)); a voice note's words on the person's own line ([notes/47](notes/47-a-voice-note.md)); an answer's steps from the kept conversation once the chat moved on, and each step's picture by line, step and number, only as an image ([notes/60](notes/60-a-run-step-by-step.md)); turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/new`'s answer marked `fresh`, and a page shown only from the newest one ([notes/34](notes/34-a-chat-on-a-page.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)); read aloud too for someone who chose "always", in their voice ([notes/65](notes/65-whose-voice-and-which-language.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)), a picture as a photo, falling back to a document ([notes/69](notes/69-a-picture-and-a-pdf.md)); an answer's Markdown as bold and italic, not asterisks ([notes/70](notes/70-bold-not-asterisks.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); **approve all for this task** under a question asked only because of a read ([notes/72](notes/72-asked-less-not-never.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)) |

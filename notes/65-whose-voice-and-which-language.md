@@ -126,6 +126,27 @@ is heard.py's weak spot ([notes/47](47-a-voice-note.md)); a person's
 voice is likelier to do better, and `$DVARA_HEARING=gemma4:12b` is the
 stronger of the two.
 
+### Spanish
+
+With `es_MX-claude-high` beside the English voice, for a person whose
+own voice is English, heard back by `faster-whisper-small`:
+
+```
+es_MX-claude-high | La basura se saca el martes por la mañana, y eso es todo.
+                    heard: La basura se saca el martes por la mañana y de eso des todo.
+es_MX-claude-high | Tu cita con el médico es mañana a las diez.
+                    heard: Tu cita con el médico es mañana a las 10.
+```
+
+**A VOICE PIPER CAN'T READ IS NOT COUNTED.** The first Spanish voice
+tried, `es_MX-ald-medium`, is in Piper's own catalogue with a card that
+says `"phoneme_type": "PhonemeType.ESPEAK"`, and Piper refuses it at the
+first answer (*'PhonemeType.ESPEAK' is not a valid PhonemeType*). A
+voice whose card names anything but `espeak` or `text` is left out of
+`spoken.voices`, so the answer is read by another voice for its language
+or, with none, not read and the owner told why, never a failure on
+every answer.
+
 ## What the tests hold
 
 `tests/test_spoken.py`, with a folder of stand-in voices so the voices
@@ -149,5 +170,8 @@ note; a notice on the page playing by itself.
   voices read Devanagari.~~ Told by Hindi's own small words, and
   written in Devanagari for the Hindi voice
   ([notes/73](73-hindi-in-latin-letters.md)).
+* **A voice that only says it can't be read.** A voice left out for its
+  card isn't named anywhere; the owner sees only that the language has
+  no voice.
 * **Two languages in one answer, each in its own voice.** The answer's
   main language picks one voice for all of it.

@@ -32,6 +32,9 @@ the firewall from here, and doesn't pretend to.
 EVERY MORNING, ONLY WHAT'S NEW. ``/doctor every morning`` makes them a
 schedule in Samay, at 07:30 on their own clock, that sends ``/doctor`` here
 as them with nobody watching (``/doctor every morning off`` removes it).
+A time after it (``/doctor every morning 6:45``, ``7am``, ``18:30``)
+makes it then, or moves the one they have: Samay has no edit for a
+schedule's time, so the old one is removed and a new one made.
 That run is answered with only the red and amber lines not said on an
 earlier morning, and ``NOTHING NEW`` when there are none, which Samay
 keeps and doesn't send: a phone left unplugged all week is said once, as
@@ -48,6 +51,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -90,15 +94,41 @@ def is_word(text: str) -> bool:
     return bool(first) and first[0].split("@")[0].lower() in WORDS
 
 
-def morning_word(text: str) -> str | None:
-    """"on" for ``/doctor every morning``, "off" with ``off`` after it;
-    None for anything else."""
+def morning_word(text: str) -> tuple[str, str | None] | None:
+    """``("on", None)`` for ``/doctor every morning``, ``("on", "06:45")``
+    with a time after it, ``("off", None)`` with ``off``, ``("bad", words)``
+    for a time it can't read; None for anything else."""
     rest = " ".join(text.strip().lower().split()[1:])
-    if rest == MORNING:
-        return "on"
-    if rest in (f"{MORNING} off", f"{MORNING} stop"):
-        return "off"
-    return None
+    if not rest.startswith(MORNING):
+        return None
+    after = rest[len(MORNING):].strip()
+    if not after:
+        return "on", None
+    if after in ("off", "stop"):
+        return "off", None
+    at = clock_time(after)
+    return ("on", at) if at else ("bad", after)
+
+
+_TIME = re.compile(r"^(?:at\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$")
+
+
+def clock_time(words: str) -> str | None:
+    """"6:45", "7am", "6.30 pm", "at 18:30" as ``HH:MM``; None otherwise."""
+    found = _TIME.match(words.strip().lower())
+    if not found:
+        return None
+    hour, minute = int(found.group(1)), int(found.group(2) or 0)
+    half = (found.group(3) or "").replace(".", "")
+    if half and not 1 <= hour <= 12:
+        return None
+    if half == "pm" and hour != 12:
+        hour += 12
+    elif half == "am" and hour == 12:
+        hour = 0
+    if hour > 23 or minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
 
 
 class Told:
@@ -125,9 +155,11 @@ class Told:
         return [line for line in now if line.said not in before]
 
 
-async def morning(who: Any, agent: str, on: bool, samay: str | None) -> str:
+async def morning(who: Any, agent: str, on: bool, samay: str | None,
+                  at: str | None = None) -> str:
     """``/doctor every morning`` (or ``off``): a Samay schedule that sends
-    ``/doctor`` here as them at 07:30 their time, told only when new."""
+    ``/doctor`` here as them at 07:30 their time (or ``at``), told only
+    when new."""
     from dvara.seen import ask_json
 
     if not samay:
@@ -144,16 +176,23 @@ async def morning(who: Any, agent: str, on: bool, samay: str | None) -> str:
                 return trouble
         return ("Stopped: no more morning checks." if mine
                 else "There's no morning check to stop.")
-    if mine:
+    had = ((mine[0].get("when") or {}).get("at") if mine else None) or MORNING_AT
+    if mine and (at is None or at == had):
         return (f"Already: {mine[0].get('sentence') or 'every morning'}. "
-                f"/doctor {MORNING} off stops it.")
+                f"/doctor {MORNING} off stops it; a time after it (7am) moves it.")
+    for card in mine:                     # moved: Samay has no edit for a time
+        _, trouble = await ask_json([samay, "rm", str(card["id"]), "--json"])
+        if trouble:
+            return trouble
+    at = at or MORNING_AT
     made, trouble = await ask_json(
-        [samay, "add", WORDS[0], "--when", f"at {MORNING_AT}", "--runner", "dvara",
+        [samay, "add", WORDS[0], "--when", f"at {at}", "--runner", "dvara",
          "--as", who.id, "--agent", agent, "--notify", "when_new", "--json"],
         env={"SAMAY_TZ": who.zone} if who.zone else None)
     if trouble or not isinstance(made, dict):
         return trouble or "Samay didn't make it. Try again soon."
-    return (f"Done: I'll check what's yours every day at {MORNING_AT} "
+    first = "Moved" if mine else "Done"
+    return (f"{first}: I'll check what's yours every day at {at} "
             f"({made.get('tz') or 'your time'}) and tell you only when something new "
             f"is wrong. /doctor {MORNING} off stops it.")
 

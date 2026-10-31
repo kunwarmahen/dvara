@@ -109,16 +109,20 @@ would be a way around them. A schedule is paused or removed by asking
 the agent, which asks the person first (Samay's tools), so there is one
 way to change one. `/schedules` lists theirs from `samay list`.
 
-**HOW OFTEN IS THE ONE CHANGE.** `/watches` lists the person's watches
+**HOW OFTEN, AND WHETHER, ARE THE ONLY CHANGES.** `/watches` lists the person's watches
 from `prahari list`, numbered, each with what the person asked for in
 their own words (when the watch kept them), its sentence and its last
 look; one whose days are over is said as ended, kept 30 days, never as
 paused.
 `/watches every 2 6h` changes how often the second one looks, through
 `prahari edit ID --every 6h`: the same change Prahari's page and Yantra's
-panel make with their Every box, and the only one a chat word makes. It
-is the person's own watch and only its pace; what it checks and what the
-agent may do when it fires still go through the agent, which asks. With
+panel make with their Every box. `/watches pause 2` stops it looking,
+kept, and `/watches resume 2` starts it again from now (`prahari
+pause|resume`); each undoes the other, which is why they are chat words
+and removing is not. It is the person's own watch and only its pace;
+what it checks, what the agent may do when it fires, and removing it
+still go through the agent, which asks. Pausing one already paused (or
+resuming one that is looking) says so and asks Prahari nothing. With
 one watch the number can be left out. A watch that hears (a WhatsApp
 message, mail pushed to the inlet) has no pace, and says so. Prahari's
 own refusal is passed on as it said it ("nothing is looked at more often
@@ -222,13 +226,32 @@ Your watches:
 1. ALAB under $50 (id 759486e5)
   every 6 hours, looks with web_fetch; tells you when the number is below 50 (once each time it becomes true).
 
-To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d). To pause, mend or remove one, just ask me.
+To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d). To stop one looking: /watches pause NUMBER (and /watches resume NUMBER). To mend or remove one, just ask me.
 --- maya: /watches every 1 2m
 Prahari said: nothing is looked at more often than every 5 minutes; '2m' is too often
 --- maya: /watches every 1 6h
 Done. "ALAB under $50": every 6 hours, looks with web_fetch; tells you when the number is below 50 (once each time it becomes true).
 --- owner: /watches
 You have no watches. Ask me to tell you when something happens — "tell me when ALAB drops below $50" — and I'll set one up.
+```
+
+`/watches pause` and `resume`, the same way (the real `prahari` over a
+scratch state holding one of Maya's watches):
+
+```
+--- maya: /watches pause 1
+Paused. "ALAB under $50" stops looking and is kept; /watches resume 1 starts it again.
+--- maya: /watches pause 1
+"ALAB under $50" is already paused. /watches resume starts it again.
+--- maya: /watches
+Your watches:
+1. ALAB under $50 (id 74e4d67d)
+  You asked: "tell me if ALAB gets cheap"
+  every 6 hours, looks at example.com (with web_fetch); tells you when the number is below 50 (once each time it becomes true) — paused: paused by you.
+
+To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d). To stop one looking: /watches pause NUMBER (and /watches resume NUMBER). To mend or remove one, just ask me.
+--- maya: /watches resume 1
+Looking again. "ALAB under $50": every 6 hours, looks at example.com (with web_fetch); tells you when the number is below 50 (once each time it becomes true).
 ```
 
 ## Found by the run

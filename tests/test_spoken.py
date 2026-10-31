@@ -328,6 +328,46 @@ def test_a_hindi_voice_is_handed_devanagari_and_english_is_left_alone(shelf, tmp
     assert read[1].strip() == "The bins go out on Tuesday, and that is all."
 
 
+def test_numbers_are_written_as_hindi_says_them():
+    from dvara.romanised import hindi_number, numbers
+    assert numbers("Kal subah 9 baje aapki meeting hai.") == "Kal subah नौ baje aapki meeting hai."
+    assert [hindi_number(n) for n in (0, 39, 79, 100, 1500, 2026)] == \
+        ["शून्य", "उनतालीस", "उन्यासी", "एक सौ", "एक हज़ार पाँच सौ", "दो हज़ार छब्बीस"]
+    assert numbers("1,50,000 rupaye") == "एक लाख पचास हज़ार rupaye"   # the Indian way
+    assert numbers("9:30 aur 10:00") == "नौ तीस aur दस"
+    assert numbers("5.49") == "पाँच दशमलव चार नौ"
+    assert numbers("007") == "शून्य शून्य सात"                       # a code, digit by digit
+    assert numbers("9876543210") == "नौ आठ सात छह पाँच चार तीन दो एक शून्य"
+    assert numbers("4th Wi-Fi2") == "4th Wi-Fi2"                     # inside a word: as it was
+
+
+def test_the_hindi_voice_is_handed_numbers_as_words(shelf, tmp_path, monkeypatch):
+    piper = tmp_path / "piper"
+    piper.write_text("#!/bin/sh\ncat >> \"$(dirname \"$0\")/read.txt\"\n"
+                     "while [ $# -gt 0 ]; do [ \"$1\" = -f ] && echo RIFF > \"$2\"; shift; done\n")
+    piper.chmod(0o755)
+    monkeypatch.setattr(spoken, "piper", lambda: [str(piper)])
+    spoken.make("Kal subah 9 baje aapki meeting hai.", tmp_path / "a.wav")
+    assert (tmp_path / "read.txt").read_text().strip() == "कल सुबह नौ बजे आपकी मीटिंग है."
+
+
+def test_a_spanish_answer_is_read_by_the_spanish_voice(shelf):
+    spanish = "La basura se saca el martes, y eso es todo lo que hay."
+    with pytest.raises(spoken.Unspoken, match="in Spanish and there's no Spanish voice"):
+        spoken.pick(spanish)
+    a_voice(shelf, "es_MX-ald-medium", "es", "Spanish")
+    assert spoken.pick(spanish).name == "es_MX-ald-medium"
+    assert spoken.pick("The bins go out on Tuesday, and that is all.").family == "en"
+
+
+def test_a_voice_whose_card_piper_cant_read_is_not_counted(shelf):
+    a_voice(shelf, "es_MX-ald-medium", "es", "Spanish")
+    card = shelf / "es_MX-ald-medium.onnx.json"
+    card.write_text(json.dumps({**json.loads(card.read_text()),
+                                "phoneme_type": "PhonemeType.ESPEAK"}))
+    assert "es_MX-ald-medium" not in [v.name for v in spoken.voices()]
+
+
 def test_the_house_voice_is_english_and_each_voice_knows_its_language(shelf):
     every = spoken.voices()
     assert [v.name for v in every] == ["en_US-lessac-medium", "hi_IN-pratham-medium"]
