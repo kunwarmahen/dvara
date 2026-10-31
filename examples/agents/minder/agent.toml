@@ -34,7 +34,10 @@ prompt      = "prompt.md"
 # not the mail's to follow; add "browser_open", "browser_close" here to
 # let minder open such a page in its own browser -- asked each time, and
 # with none of their sign-ins there. Its prompt says to answer from the
-# message first.
+# message first. The same two read a shop that drops web_fetch (a bot
+# shield), and a watch on such a page looks with browser_open; add
+# "browser_handoff" too, so a page that loads nowhere here still reaches
+# the person's own browser, or their answer as a link.
 #
 # The Prahari tools are named by pattern too, for the same reason: they
 # reach this agent only when the owner starts the service with
