@@ -184,3 +184,60 @@ class TestAMailboxLogin:
                                 headers={"Authorization": f"Bearer {TOKEN}"},
                                 json={"actor": "asha", "ref": "mail:home"})
         assert reply.status_code == 404 and "watches are off" in reply.json()["detail"]
+
+
+class TestAPageOnASparePhone:
+    """A page this computer's browser is turned away from, read on a phone.
+    With nobody there, ONLY ON A SPARE PHONE OF THEIRS: never one someone
+    carries, never another person's."""
+
+    PAGE = "mcp__sparsh__open_url"
+    ARGS = {"url": "https://shop.example/p/1"}
+
+    def test_no_spare_phone_is_an_answer_that_says_where_to_mark_one(
+            self, looks, monkeypatch):
+        monkeypatch.delenv("SPARSH_SPARE", raising=False)
+        said = asyncio.run(looks().call(actor="owner", agent="greeter", tool=self.PAGE,
+                                        arguments=self.ARGS))
+        assert not said["ok"] and "none is marked spare" in said["detail"]
+        assert "Settings -> Your phones -> Spare" in said["detail"]
+
+    def test_only_the_persons_spare_phones_start(self, looks, monkeypatch):
+        from dataclasses import replace
+
+        monkeypatch.setenv("SPARSH_SPARE", "drawer,ashas-old")
+        service = looks()
+        started = []
+
+        async def phone(agent, manager, *, who, grants=None, only=()):
+            started.append(only)
+        monkeypatch.setattr(service, "_phone", phone)
+        who = replace(service.actors.get("owner"), phones=("nexus", "drawer"))
+        monkeypatch.setattr(service.actors, "may", lambda actor, agent: who)
+        asyncio.run(service.call(actor="owner", agent="greeter", tool=self.PAGE,
+                                 arguments=self.ARGS))
+        assert started == [("drawer",)]          # theirs AND spare, nothing else
+
+    def test_spare_phones_are_mine_and_marked(self, looks, monkeypatch):
+        from dataclasses import replace
+
+        monkeypatch.setenv("SPARSH_SPARE", "drawer, tablet")
+        service = looks()
+        owner = service.actors.get("owner")
+        assert service._spare_phones(replace(owner, phones=("nexus",))) == ()
+        assert service._spare_phones(replace(owner, phones=("tablet",))) == ("tablet",)
+        assert service._spare_phones(replace(owner, phone=True)) == ("drawer", "tablet")
+        assert service._spare_phones(replace(owner, phone=False)) == ()
+
+    def test_other_tools_start_no_phone(self, looks, monkeypatch):
+        monkeypatch.setenv("SPARSH_SPARE", "drawer")
+        service = looks()
+        started = []
+
+        async def phone(*a, **k):
+            started.append(1)
+        monkeypatch.setattr(service, "_phone", phone)
+        (folder(service, "owner") / "n.txt").write_text("x\n")
+        asyncio.run(service.call(actor="owner", agent="greeter", tool="read_file",
+                                 arguments={"path": "n.txt"}))
+        assert started == []

@@ -84,6 +84,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import subprocess
 import sys
@@ -145,6 +146,9 @@ from dvara.watch import Safely, Watcher, shown
 #: How long a finished conversation that a program started is kept
 #: before ``Service.tidy`` lets it go: a week to look at what it did.
 KEEP_UNATTENDED = 7 * 24 * 3600.0
+#: The one phone tool a watch's look may use: a page read on a spare phone
+#: (Sparsh's open_url, wrapped by Yantra as an mcp__sparsh__ tool).
+PHONE_PAGE = "mcp__sparsh__open_url"
 #: How long nobody writes in a conversation before it is looked back over
 #: (``Service.look_back_quiet``): long enough that a pause is not an end.
 QUIET_FOR = 30 * 60.0
@@ -608,6 +612,14 @@ class Service:
         It is unattended: a sign-in wall comes back in ``needs_person``,
         never as a window opened for nobody.
 
+        A PHONE ONLY FOR A PAGE, AND ONLY A SPARE ONE. A page this
+        computer's browser is turned away from can be read on a phone
+        (Sparsh's ``open_url``). A look with nobody there opens it only on
+        a phone of this person's marked spare (Sarathi's ``[phone.NAME]
+        spare``, ``$SPARSH_SPARE``) -- one nobody carries -- and Sparsh is
+        started with just those, for just that call. In a chat the
+        person is asked every time instead.
+
         Only for a person whose watches are on (``watches_for``).
         """
         from yantra.calling import Called, as_json, call_once
@@ -624,7 +636,14 @@ class Service:
                 looker = self._looker(spec, who, key)
             except ConfigError as exc:
                 return as_json(Called(False, tool, detail=f"that agent cannot run: {exc}"))
-            servers = await self._look_servers(looker, who=who, spec=spec, key=key)
+            phones = self._spare_phones(who) if tool == PHONE_PAGE else ()
+            if tool == PHONE_PAGE and not phones:
+                return as_json(Called(False, tool, detail=(
+                    "a watch reads a page on a phone only on a spare phone of yours "
+                    "(one nobody carries), and none is marked spare: Sarathi's Settings "
+                    "-> Your phones -> Spare")))
+            servers = await self._look_servers(looker, who=who, spec=spec, key=key,
+                                               phones=phones)
             try:
                 called = await asyncio.to_thread(call_once, looker, tool, arguments,
                                                  list(allow_tools))
@@ -695,12 +714,22 @@ class Service:
         agent.trusted_reads = who.trusted
         return agent
 
-    async def _look_servers(self, agent, *, who: Actor, spec: AgentSpec, key: str):
+    def _spare_phones(self, who: Actor) -> tuple[str, ...]:
+        """This person's phones that are marked spare ($SPARSH_SPARE)."""
+        spare = [n.strip() for n in os.environ.get("SPARSH_SPARE", "").split(",")
+                 if n.strip()]
+        if who.phones:
+            return tuple(n for n in spare if n in who.phones)
+        return tuple(spare) if who.phone else ()
+
+    async def _look_servers(self, agent, *, who: Actor, spec: AgentSpec, key: str,
+                            phones: tuple[str, ...] = ()):
         """A call's servers: the person's accounts and the package's own --
-        what a look can read with -- and nothing that a turn alone needs."""
+        what a look can read with -- and nothing that a turn alone needs;
+        a spare phone only when ``phones`` names one (``call``)."""
         accounts = who.setu is not None and bool(spec.connections)
         packaged = bool(getattr(spec, "mcp", ()))
-        if not (accounts or packaged):
+        if not (accounts or packaged or phones):
             return None
         from yantra.mcp import MCPManager
 
@@ -710,6 +739,8 @@ class Service:
             await self._accounts(agent, manager, who=who, spec=spec)
         if packaged:
             await self._packaged(manager, spec=spec)
+        if phones:
+            await self._phone(agent, manager, who=who, only=phones)
         return manager
 
     async def ask(self, *, actor: str, tool: str, summary: str,

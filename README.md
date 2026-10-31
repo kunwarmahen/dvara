@@ -1218,7 +1218,11 @@ dvara --ask --samay /path/to/samay serve --port 8765        # or DVARA_SAMAY=PAT
   `browser_open` when the package lists it, and watched with it too;
   turned away there as well, minder says the site refuses automated
   browsers (not that the machine is blocked) and hands the person the
-  page (Yantra's notes/151).
+  page (Yantra's notes/151). Turned away there too, it can offer to read
+  the page on the person's phone (Sparsh's `open_url`, asked first). A
+  watch's look (`POST /call`) may use that only on a phone of theirs
+  marked spare (`$SPARSH_SPARE`, set by Sarathi), and starts Sparsh with
+  just those phones for that one call.
 * Each turn starts `samay mcp --for <that person> --agent <this agent>
   --runner dvara` and stops it when the turn ends. A scheduled turn gets
   only its tools that read (`list_schedules`, `schedule_runs`), so a
