@@ -1374,7 +1374,8 @@ class Service:
 
         async def deliver(path: Path, note: str) -> str:
             if not unattended:
-                sent.append(path)
+                if path not in sent:
+                    sent.append(path)
                 return f"{path.name} will be sent to them with your answer"
             result = await self.notices.send(who.id, self._told_at(who), note, file=path)
             if result.nowhere:
@@ -1382,6 +1383,18 @@ class Service:
             return f"sent {path.name} to them"
 
         agent.registry.register(files.SendFile(deliver))
+        if not unattended and agent.registry.admits(files.SendFile.name):
+            # A screenshot in a chat goes with the answer by itself
+            # (files.py): asked for one, minder said it had no tool to
+            # send it, because send_file was not among the tools its
+            # turn's words picked. A package that left send_file out
+            # sends no pictures either; a schedule still needs the card.
+            def hand(path: Path) -> str:
+                if path not in sent:
+                    sent.append(path)
+                return "It goes to the person with your answer"
+
+            agent.ctx.hand_picture = hand
         return sent
 
     def _asker(self, who: Actor):

@@ -207,3 +207,41 @@ def test_a_collected_notice_names_its_file(make_service, agents_root):
                                 text="go", unattended=True, allow_tools=["send_file"]))
     [kept] = service.notices.take("telegram")
     assert kept.as_dict()["file"].endswith("owner/courier/log.txt")
+
+
+# ---- a screenshot in a chat goes with the answer by itself -------------------
+
+def _turn_agent(tmp_path, allow=None):
+    from yantra.agent import Agent
+    from tests.conftest import ScriptedProvider
+    from yantra.tools.base import ToolRegistry
+
+    registry = ToolRegistry()
+    if allow is not None:
+        registry.admit_only(allow=allow)
+    return Agent(ScriptedProvider([]), model="m", tools=registry, cwd=tmp_path)
+
+
+def test_a_screenshot_in_a_chat_goes_with_the_answer(make_service, tmp_path):
+    from types import SimpleNamespace
+
+    from yantra.tools.browser import save_picture
+
+    service = make_service([])
+    agent = _turn_agent(tmp_path)
+    sent = service._send_file_tool(agent, SimpleNamespace(id="owner"))
+    out = save_picture(b"\xff\xd8jpeg", "https://calendar.example", "google", agent.ctx)
+    assert [p.parent.name for p in sent] == ["screenshots"]
+    assert "goes to the person with your answer" in out.text
+    asyncio.run(agent.registry.get("send_file").arun(
+        {"path": f"screenshots/{sent[0].name}"}, agent.ctx))
+    assert len(sent) == 1                  # sent again by hand: still once
+
+
+def test_a_package_without_send_file_sends_no_screenshot(make_service, tmp_path):
+    from types import SimpleNamespace
+
+    service = make_service([])
+    agent = _turn_agent(tmp_path, allow=["read_file"])
+    service._send_file_tool(agent, SimpleNamespace(id="owner"))
+    assert agent.ctx.hand_picture is None

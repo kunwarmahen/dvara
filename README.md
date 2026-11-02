@@ -482,8 +482,13 @@ else. An agent whose package lists `send_file` can send one itself
 asks in a chat, and in a schedule it runs only if the card allowed it
 ([notes/26](notes/26-the-file-itself.md)). A picture of a signed-in site
 ("send me a screenshot of my chart") is one such file: the site's
-`screenshot` saves it under `screenshots/` in their folder, and
-`send_file` sends it (Yantra's notes/137). On Telegram a picture an
+`screenshot` saves it under `screenshots/` in their folder, and in a
+chat it goes with the answer by itself, with no `send_file` call: the
+model only sends the dozen tools a turn's words match, and "screenshot"
+is not one of `send_file`'s words, so minder once took the picture and
+said it had no way to send it. Only for a package that admits
+`send_file`; a schedule still sends a picture through `send_file` on
+its card (Yantra's notes/137, [notes/26](notes/26-the-file-itself.md)). On Telegram a picture an
 agent or a notice sends arrives as a photo you see in the chat, not a
 file to open; `/file NAME` still sends the original as a document, and a
 picture Telegram won't take as a photo goes as a document too

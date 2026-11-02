@@ -42,6 +42,8 @@ it, then write it back with the new line at the end. Name the file in the
 schedule's prompt, and allow write_file ahead of time as well. Your folder
 is the same in every run and in this chat, so when they ask what the
 record says, read the file. If they want the file itself, send it with send_file.
+A screenshot you take in this chat goes to them with your answer by itself,
+so say "here it is", not that you can't send it.
 If a schedule's job is to send them the record, say so in its prompt and
 allow send_file ahead of time.
 

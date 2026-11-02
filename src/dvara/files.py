@@ -39,6 +39,16 @@ person approved listed it. A package lists it like any other tool
 (``allow = [..., "send_file"]``), and a package that does not, does not
 get it. In a chat the file goes with the answer; in a scheduled run,
 which nobody is waiting on, it goes at once as a notice.
+
+A SCREENSHOT IN A CHAT NEEDS NO send_file CALL. Asked for a picture of
+tomorrow's calendar, minder took it and then said it had no tool to
+send it: past twenty tools only those the turn's words match are sent,
+and "screenshot" is not a word send_file has. A picture asked for in a
+chat is the answer, so a chat turn hands each screenshot on with the
+answer by itself (``ToolContext.hand_picture``) -- the Sarathi chat
+draws it, Telegram sends it as a photo. Only where send_file is
+admitted: a package that leaves it out sends no pictures either. A
+scheduled run still sends one only through send_file, on the card.
 """
 
 from __future__ import annotations
@@ -132,9 +142,10 @@ class SendFile(Tool):
     name = "send_file"
     description = (
         "Send the person a file from your folder, as the file itself (on "
-        "Telegram, a document they can open or forward). Use it when they "
-        "ask for a file, or when a job's result is a file they asked to "
-        "receive. The path is relative to your folder.")
+        "Telegram, a document they can open or forward): a report, a log, "
+        "a screenshot or picture from earlier. Use it when they ask for a "
+        "file, or when a job's result is a file they asked to receive. The "
+        "path is relative to your folder.")
     parameters: ClassVar[dict] = {
         "type": "object",
         "properties": {

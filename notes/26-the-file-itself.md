@@ -193,6 +193,35 @@ that didn't. The Telegram tests (`tests/test_telegram.py`) check the
 multipart document with its name and bytes, a file over the limit, and
 that the agent's file comes after its words.
 
+## A screenshot in a chat needs no call
+
+A site's `screenshot` and `browser_screenshot` save a picture in the
+folder (Yantra's notes/137), and at first it reached the person only if
+the model called `send_file`. Asked for a picture of tomorrow's
+calendar, minder took it and answered *"I don't have a send-file tool,
+so it's not attached here"*. That was true for that turn: minder has
+every tool, so only the dozen whose words match the turn are sent, and
+"screenshot" is not one of `send_file`'s words.
+
+**A PICTURE ASKED FOR IN A CHAT IS THE ANSWER.** A chat turn sets
+Yantra's `ToolContext.hand_picture`. Each screenshot goes into the same
+list `send_file` fills, and it goes out with the answer: the Sarathi
+chat draws it under the words, and Telegram sends it as a photo
+([note 69](69-a-picture-and-a-pdf.md)). The model is told *"It goes to
+the person with your answer"*, so it says "here it is". If it calls
+`send_file` on the same file anyway, the file still goes once.
+`send_file` also names "a screenshot or picture from earlier" in its
+description now, so asking for an old one finds the tool.
+
+**ONLY WHERE `send_file` IS ADMITTED.** A package that leaves `send_file`
+out of its tools has said no files leave, so no pictures do either. A
+scheduled run sets nothing: nobody is waiting on its answer, and a
+picture it sends goes through `send_file`, as the approved card allowed.
+In a chat the picture does not ask first, even under `mode = "ask"`.
+That is deliberate: the screenshot is a read of a page `open` already
+read, the answer's words carry the same content to the same chat, and
+the person asked for it.
+
 ## What was deliberately not built
 
 * **Owing a file across a crash.** A reply's words are owed
