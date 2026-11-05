@@ -300,6 +300,11 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=400,
                                 detail="came_by is one short lowercase word, like samay")
         came_by = came_by or (via.kind if via is not None else "http")
+        # what the caller calls this turn (a schedule, a watch, a puck), for
+        # the phone's log; a label for the person, never a key
+        label = body.get("label") or ""
+        if not isinstance(label, str):
+            raise HTTPException(status_code=400, detail="label is a few words")
         stream = body.get("stream", False)
         if not isinstance(stream, bool):
             raise HTTPException(status_code=400, detail="stream is true or false")
@@ -312,7 +317,7 @@ def create_app(service: Service, *, token: str,
                     text=body["text"], unattended=unattended, allow_tools=allow_tools,
                     phone=phone, phone_steps=phone_steps,
                     wait=float(wait) if wait is not None else None, came_by=came_by,
-                    carry_on=carry_on)
+                    carry_on=carry_on, label=label)
         # What to do with the answer if the caller has stopped waiting by
         # the time the turn ends: "send" it to the person, or "keep" it
         # (the run's record has it). A schedule's time limit can run out
@@ -433,9 +438,12 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=400,
                                 detail="allow_tools is a list of grants")
         try:
+            came_by, label = body.get("came_by"), body.get("label") or ""
             return await service.call(actor=body["actor"], agent=body["agent"],
                                       tool=body["tool"], arguments=arguments,
-                                      allow_tools=allow_tools)
+                                      allow_tools=allow_tools,
+                                      came_by=came_by if isinstance(came_by, str) else None,
+                                      label=label if isinstance(label, str) else "")
         except Refused as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
 

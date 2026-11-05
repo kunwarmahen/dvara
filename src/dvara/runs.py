@@ -130,6 +130,32 @@ ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
 #: own channels and Samay write, and the page has a word for each.
 CAME_BY = ("telegram", "web", "samay", "prahari", "cli", "http")
 
+#: Each way in, as a phone's log names it (``asked_by``).
+CAME_BY_NAMES = {"telegram": "Telegram", "web": "Sarathi's chat", "samay": "Samay",
+                 "prahari": "Prahari", "vaani": "Vaani", "cli": "dvara say",
+                 "http": "Dvara", "dvara": "Dvara"}
+#: The longest label a caller's ``label`` keeps.
+LABEL_CHARS = 80
+
+
+def clean_label(raw: object) -> str:
+    """A caller's label ("Morning brief (bfaea182)"): printable, one line,
+    ``LABEL_CHARS`` at most; "" for anything that isn't a string."""
+    if not isinstance(raw, str):
+        return ""
+    return " ".join("".join(c if c.isprintable() else " " for c in raw).split())[:LABEL_CHARS]
+
+
+def asked_by(came_by: str | None, label: str, actor: str) -> str:
+    """Who asked for a turn, as the phone's log writes it beside each step
+    (Sparsh's page): the way in, the caller's label, and the person --
+    "Samay: Tell me my battery (bfaea182) · mahen", "Telegram · asha".
+
+    A LABEL, NEVER A KEY. It is what a caller said about itself, for the
+    person reading their phone's page; nothing is decided by it."""
+    way = CAME_BY_NAMES.get(came_by or "") or clean_label(came_by)[:24] or "Dvara"
+    return f"{way}: {label} · {actor}" if label else f"{way} · {actor}"
+
 
 @dataclass(frozen=True)
 class ToolStep:
@@ -224,6 +250,10 @@ class Run:
     #: row older than this field that the migration could not read it
     #: off (``_backfill_came_by``).
     came_by: str | None = None
+    #: What the caller called this turn ("Morning brief (bfaea182)", "kitchen
+    #: puck"), for the phone's log (``asked_by``). Not stored: the run's own
+    #: record already says which schedule or watch through its thread.
+    label: str = ""
     #: What the model's ``remember`` wrote about the person this turn, in
     #: the words it was kept in -- the ``Kept:`` line under the answer,
     #: and what a look back finding nothing new says was kept already

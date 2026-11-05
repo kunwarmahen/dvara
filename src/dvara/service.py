@@ -139,7 +139,7 @@ from dvara.locks import KeyedLocks
 from dvara.memory import PEOPLE_FILE, MemoryProblem, Person, Store, person
 from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
-from dvara.runs import Run, RunStore, ToolStep
+from dvara.runs import Run, RunStore, ToolStep, asked_by, clean_label
 from dvara.seen import Seen
 from dvara.watch import Safely, Watcher, shown
 
@@ -593,7 +593,8 @@ class Service:
                                               or actor in self.prahari_for)
 
     async def call(self, *, actor: str, agent: str, tool: str, arguments: dict,
-                   allow_tools: Sequence[str] = ()) -> dict:
+                   allow_tools: Sequence[str] = (), came_by: str | None = None,
+                   label: str = "") -> dict:
         """One tool, once, as this person, and no model (``POST /call``).
 
         A WATCH LOOKS WITH ITS PERSON'S ACCOUNTS. Prahari repeats a watch's
@@ -642,8 +643,10 @@ class Service:
                     "a watch reads a page on a phone only on a spare phone of yours "
                     "(one nobody carries), and none is marked spare: Sarathi's Settings "
                     "-> Your phones -> Spare")))
-            servers = await self._look_servers(looker, who=who, spec=spec, key=key,
-                                               phones=phones)
+            servers = await self._look_servers(
+                looker, who=who, spec=spec, key=key, phones=phones,
+                # who asked, on the phone's log: the watch (Sparsh's page)
+                asked=asked_by(came_by or "prahari", clean_label(label), who.id))
             try:
                 called = await asyncio.to_thread(call_once, looker, tool, arguments,
                                                  list(allow_tools))
@@ -723,7 +726,7 @@ class Service:
         return tuple(spare) if who.phone else ()
 
     async def _look_servers(self, agent, *, who: Actor, spec: AgentSpec, key: str,
-                            phones: tuple[str, ...] = ()):
+                            phones: tuple[str, ...] = (), asked: str = ""):
         """A call's servers: the person's accounts and the package's own --
         what a look can read with -- and nothing that a turn alone needs;
         a spare phone only when ``phones`` names one (``call``)."""
@@ -740,7 +743,7 @@ class Service:
         if packaged:
             await self._packaged(manager, spec=spec)
         if phones:
-            await self._phone(agent, manager, who=who, only=phones)
+            await self._phone(agent, manager, who=who, only=phones, asked=asked)
         return manager
 
     async def ask(self, *, actor: str, tool: str, summary: str,
@@ -832,7 +835,8 @@ class Service:
                       came_by: str | None = None,
                       watch: Watcher | None = None,
                       attachments: Sequence[attached.Attachment] = (),
-                      carry_on: bool = False) -> Reply:
+                      carry_on: bool = False,
+                      label: str = "") -> Reply:
         """Run one turn for one person, and answer them either way.
 
         ``carry_on`` (or a person's ``/carry``) carries on the job a
@@ -886,7 +890,10 @@ class Service:
 
         ``came_by`` is the way the turn came in, for the Run (``runs.py``):
         the caller's word for itself, or the channel's kind when it came
-        ``via`` one.
+        ``via`` one. ``label`` is what the caller calls this turn (a
+        schedule's prompt, a watch's name, a puck): with ``came_by`` and
+        the person it is the "asked by" on every phone step the turn takes
+        (``runs.asked_by``, Sparsh's page).
 
         ``watch`` sees the turn as it runs (watch.py): the words as they
         are written and each step as a line. A turn nobody is at is
@@ -1098,7 +1105,7 @@ class Service:
             # not have.
             run = Run(actor=actor, agent=agent, thread=thread, message=text,
                       started_at=started, cost_usd=0.0, unattended=unattended,
-                      came_by=came_by)
+                      came_by=came_by, label=clean_label(label))
             try:
                 if not unattended:
                     reply = await self._turn(spec=spec, who=who, key=key,
@@ -1437,6 +1444,7 @@ class Service:
             await self._watches(agent, manager, who=who, run=run)
         if phone:
             await self._phone(agent, manager, who=who,
+                              asked=asked_by(run.came_by, run.label, who.id),
                               grants=list(phone_run.steps) if phone_run else None,
                               only=phone_run.phones if phone_run else ())
         if remembering:
@@ -1695,7 +1703,8 @@ class Service:
             self._note(f"dvara: watches are off for this turn -- prahari: {exc}")
 
     async def _phone(self, agent, manager, *, who: Actor,
-                     grants: list[str] | None = None, only: tuple[str, ...] = ()) -> None:
+                     grants: list[str] | None = None, only: tuple[str, ...] = (),
+                     asked: str = "") -> None:
         """Sparsh's tools, for the phone's own person.
 
         THEIR PHONE, ASKED THERE. Only the one person the owner marked
@@ -1714,6 +1723,11 @@ class Service:
         another person's phone is not a phone this turn can reach --
         and a scheduled run, only the one it was checked free on.
 
+        EVERY STEP SAYS WHO ASKED. ``asked`` ("Samay: … · mahen",
+        "Telegram · asha") goes to Sparsh's log beside each step it
+        takes (``runs.asked_by``), so the phone's page says which program
+        and which person asked for it.
+
         WITH NOBODY THERE, ONLY WHEN ITS SCHEDULE SAYS SO (``deliver``):
         the phone was checked free first, and ``grants`` are the held
         taps its person let it do unasked. And a Sparsh that will not
@@ -1728,7 +1742,7 @@ class Service:
             assert found is not None
             data = narrowed(found[0], *names) if names else found[0]
             link = Sparsh(mode="on", path=self.sparsh, data=data, program=found[1],
-                          only=tuple(names))
+                          only=tuple(names), asked_by=asked or f"Dvara · {who.id}")
             provider = agent.provider
             link.shots, link.shots_why = shots(
                 getattr(provider, "name", ""),

@@ -107,7 +107,8 @@ first turn to a bot that asks you before anything changes.
   Voice puck answered by a person's agents: Vaani hears the question
   (Whisper on that computer), tells who asked it (a voice print, or the
   puck's own person when unsure), and calls `POST /message` as that
-  person with `came_by: "vaani"` and a thread per puck (`vaani:<puck>`).
+  person with `came_by: "vaani"`, a thread per puck (`vaani:<puck>`) and
+  the puck as `label` (a phone step says *Vaani: kitchen puck · asha*).
   Who may do what stays here. The agent's questions reach the puck too:
   Vaani reads `GET /asks` while a turn runs, puts each to the person out
   loud and answers `POST /asks/ID`; a question no standing yes covers
@@ -1096,6 +1097,13 @@ only those ([notes/77](notes/77-kept-and-told.md)).
 A caller may name itself with `"came_by"`, one short lowercase word
 (Samay sends `"samay"`); the page labels the turn with it, and a turn
 that names nothing is `http` ([notes/36](notes/36-which-way-it-came-in.md)).
+It may add a `"label"`, a few words for what it calls this turn (Samay
+sends the schedule's prompt start and id, Prahari the watch's name,
+Vaani the puck). `POST /call` takes both too. Every step the turn takes
+on a phone is then written down with who asked (Sparsh's page):
+*Samay: Tell me my battery (bfaea182) · mahen*, *Telegram · asha*. A
+step done after a yes says where the yes came from. A label is for the
+person reading, never a key: nothing is decided by it.
 An unattended caller may also say `"if_late": "send"`: if it has hung up
 by the time the turn ends (a schedule's time limit ran out), the answer
 goes to the person's channels instead of nowhere; Samay sends it for

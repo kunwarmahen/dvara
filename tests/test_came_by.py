@@ -169,3 +169,23 @@ def test_the_page_shows_and_filters_by_it(tmp_path, agents_root):
         assert status == 200 and [r["came_by"] for r in body["runs"]] == ["samay"]
     finally:
         api.close()
+
+
+def test_http_hands_on_the_callers_label_and_refuses_one_that_isnt_words(make_service):
+    # a schedule's or a watch's name, for the phone's log (runs.asked_by)
+    service = make_service([says("Hello.")])
+    seen, real = [], service.deliver
+
+    async def spy(**kw):
+        seen.append(kw.get("label"))
+        return await real(**kw)
+    service.deliver = spy
+    with TestClient(create_app(service, token=TOKEN)) as client:
+        ok = client.post("/message", headers=AUTH, json={
+            "actor": "owner", "agent": "greeter", "thread": "t", "text": "hi",
+            "came_by": "samay", "unattended": True, "label": "Morning brief (bfaea182)"})
+        bad = client.post("/message", headers=AUTH, json={
+            "actor": "owner", "agent": "greeter", "thread": "t", "text": "hi",
+            "label": ["x"]})
+    assert ok.status_code == 200 and seen == ["Morning brief (bfaea182)"]
+    assert bad.status_code == 400

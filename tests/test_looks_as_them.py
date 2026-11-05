@@ -209,14 +209,19 @@ class TestAPageOnASparePhone:
         service = looks()
         started = []
 
-        async def phone(agent, manager, *, who, grants=None, only=()):
+        async def phone(agent, manager, *, who, grants=None, only=(), asked=""):
             started.append(only)
+            heard.append(asked)
+        heard = []
         monkeypatch.setattr(service, "_phone", phone)
         who = replace(service.actors.get("owner"), phones=("nexus", "drawer"))
         monkeypatch.setattr(service.actors, "may", lambda actor, agent: who)
         asyncio.run(service.call(actor="owner", agent="greeter", tool=self.PAGE,
-                                 arguments=self.ARGS))
+                                 arguments=self.ARGS, came_by="prahari",
+                                 label="Mayfield ice cream"))
         assert started == [("drawer",)]          # theirs AND spare, nothing else
+        # and the phone's log says which watch asked (Sparsh's page)
+        assert heard == ["Prahari: Mayfield ice cream · owner"]
 
     def test_spare_phones_are_mine_and_marked(self, looks, monkeypatch):
         from dataclasses import replace

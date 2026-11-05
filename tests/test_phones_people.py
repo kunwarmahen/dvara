@@ -184,3 +184,43 @@ def test_settings_show_a_persons_phones():
 
     assert person(PEOPLE.get("asha"))["phones"] == ["nexus"]
     assert json.dumps(person(PEOPLE.get("asha")))
+
+
+class TestWhoAsked:
+    """Bias: a phone's page that can't say which program and which person
+    asked for a step. Every turn's phone is started with who asked (its
+    way in, its caller's label, its person), for Sparsh's log."""
+
+    @pytest.fixture
+    def asked(self, monkeypatch):
+        from yantra import sparsh_link
+
+        seen, real = [], sparsh_link.Sparsh.connect
+
+        def spy(link, *a, **kw):
+            seen.append(link.asked_by)
+            return real(link, *a, **kw)
+        monkeypatch.setattr(sparsh_link.Sparsh, "connect", spy)
+        return seen
+
+    def test_a_telegram_turn_and_a_schedules_turn_each_say_who_asked(
+            self, make_service, named_sparsh, asked):
+        from dvara.actors import Channel
+        book = ActorBook.from_dict({"actor": {"asha": {
+            "phones": ["nexus"], "channel": [{"kind": "telegram", "id": "42"}]}}})
+        service = make_service([says("ok"), says("ok")], sparsh=str(named_sparsh[0]),
+                               actors=book)
+        asyncio.run(service.deliver(via=Channel("telegram", "42"), agent="greeter",
+                                    thread="c", text="hi"))
+        asyncio.run(service.deliver(actor="asha", agent="greeter", thread="s", text="hi",
+                                    came_by="samay", label="Tell me my battery (bfaea182)"))
+        assert asked == ["Telegram · asha", "Samay: Tell me my battery (bfaea182) · asha"]
+
+
+def test_a_label_is_one_short_line_whatever_the_caller_sent():
+    from dvara.runs import asked_by, clean_label
+    assert clean_label("kitchen\npuck") == "kitchen puck"
+    assert clean_label(42) == "" and len(clean_label("x" * 300)) == 80
+    assert asked_by("vaani", "kitchen puck", "asha") == "Vaani: kitchen puck · asha"
+    assert asked_by(None, "", "mahen") == "Dvara · mahen"
+    assert asked_by("<b>x</b>\n", "", "mahen") == "<b>x</b> · mahen"
