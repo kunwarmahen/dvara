@@ -153,6 +153,11 @@ newer rows; an older file gains the columns.
 
 ## What is not here yet
 
+* ~~**Carrying one on while the chat still answers.**~~ The words go
+  with the conversation's id and wait their turn instead of being
+  refused; on Telegram a reply to an old answer carries it on
+  ([note 78](78-carried-on-where-it-was-written.md)).
+
 * **The same answer on both screens at once.** The page's chat lines and
   Telegram's messages are each their own. What the page said shows on
   Telegram as the model's knowledge of it, not as messages in the

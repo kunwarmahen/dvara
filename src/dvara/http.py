@@ -588,7 +588,8 @@ def create_app(service: Service, *, token: str,
         service.refresh()
         try:
             line = web.say(body["actor"], body["agent"], body.get("text") or "",
-                           attachments)
+                           attachments, conversation=body.get("conversation")
+                           if isinstance(body.get("conversation"), str) else None)
         except Refused as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         return {"line": line.as_dict()}

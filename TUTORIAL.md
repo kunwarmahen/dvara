@@ -1428,6 +1428,17 @@ would. A page can also give a conversation a name of your own and pin it
 to the top of the list; `/chats` then marks it *(pinned)*
 ([note 71](notes/71-one-conversation-two-chats.md)).
 
+**Going back while it's still answering.** You asked something, started
+a new chat, asked something else, and now want to follow up on the first
+before the second is answered. On the page, pick the first from the list
+and write under it: your words wait until the second answer is done,
+then go into the first. They never end up in the second. On Telegram,
+swipe-reply (or long-press, *Reply*) to any answer from the first
+conversation. The answer starts *"Back in: …"* with its name, and you're
+in it again. `/chats` on Telegram also comes with a button for each
+conversation, so you can tap one instead of typing its number
+([note 78](notes/78-carried-on-where-it-was-written.md)).
+
 An answer that was right (and checked) can be kept as a test:
 `/keep test 7:45, coach` keeps the conversation open now, `/chats test 2`
 one from the list. The words, comma-separated, are what the answer must

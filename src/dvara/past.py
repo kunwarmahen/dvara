@@ -51,6 +51,25 @@ chat was waiting on is set aside when another chat says something, the
 rule a new message already follows on one chat. ``/new`` leaves only
 the chat it was sent on.
 
+CARRIED ON IN ONE GO, AND NEVER TURNED AWAY. A page that shows an old
+conversation sends what is written under it with that conversation's id
+(``conversation`` on the message): the chat moves into it and the words
+are answered there, as one thing. Moving waits for the chat's lock like
+a second message does, so a chat still answering the one before is
+waited out, not refused -- the answer running finishes in its own
+conversation, and the words go into the one they were written under.
+``/chats N`` waits the same way. (A page used to send ``/chats open ID``
+and then the words, as two messages; a refusal of the first, while the
+other conversation was still answering, let the second be answered in
+the wrong one.)
+
+A REPLY GOES BACK. Telegram has one window, so a channel remembers which
+conversation each message in it was in (``sent``: the bot's answers and
+the person's words) and hands a reply to one of them back as its
+``conversation``. Swipe-reply to an old answer and that conversation is
+carried on, with "Back in: ..." said first. ``/chats`` comes with a button
+for each conversation it lists, which sends ``/chats N``.
+
 SHARED AS A FILE. ``/chats export N`` writes that conversation as a
 Markdown file (Yantra's ``export_markdown``: words, answers, the tools'
 names, never their output) into the person's folder with that agent,
@@ -118,7 +137,16 @@ CREATE TABLE IF NOT EXISTS latest (
     conversation  TEXT PRIMARY KEY,
     key           TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS said (
+    place         TEXT NOT NULL,
+    message       INTEGER NOT NULL,
+    conversation  TEXT NOT NULL,
+    PRIMARY KEY (place, message)
+);
 """
+#: Messages remembered per place (one bot's chat) for a reply to find its
+#: conversation by; the oldest beyond this are let go.
+SAID_KEPT = 5000
 
 CAME = {"telegram": "Telegram", "web": "the page", "http": "HTTP"}
 #: A puck's thread (``vaani:kitchen``) is named by its puck. A row kept
@@ -298,6 +326,10 @@ class PastBook:
             self._db.commit()
             return made
 
+    def here(self, key: str) -> str | None:
+        """The id this chat is in, without starting one."""
+        return self._open_here(key)
+
     def _open_here(self, key: str) -> str | None:
         """The id this chat is in, without starting one."""
         with self._lock:
@@ -390,6 +422,36 @@ class PastBook:
         from the row just taken (so it is not behind)."""
         self._set_current(key, conversation_id)
         self._mark_latest(key, conversation_id)
+
+    # ---- a message on a channel, and the conversation it was in ---------------
+
+    def sent(self, place: str, messages, conversation_id: str) -> None:
+        """These messages (a channel's own ids, in ``place``: one bot's
+        chat) were in this conversation: a reply to one carries it on."""
+        rows = [(place, int(m), conversation_id) for m in messages if m is not None]
+        if not rows:
+            return
+        with self._lock:
+            self._db.executemany(
+                "INSERT INTO said (place, message, conversation) VALUES (?, ?, ?) "
+                "ON CONFLICT(place, message) DO UPDATE SET conversation = "
+                "excluded.conversation", rows)
+            self._db.execute(
+                "DELETE FROM said WHERE place = ? AND message <= "
+                "(SELECT message FROM said WHERE place = ? ORDER BY message DESC "
+                "LIMIT 1 OFFSET ?)", (place, place, SAID_KEPT))
+            self._db.commit()
+
+    def sent_in(self, place: str, message) -> str | None:
+        """The conversation that message was in, or None when it was none
+        (a notice, a question) or is too old to be remembered."""
+        if message is None:
+            return None
+        with self._lock:
+            row = self._db.execute(
+                "SELECT conversation FROM said WHERE place = ? AND message = ?",
+                (place, int(message))).fetchone()
+        return row[0] if row else None
 
     def delete(self, actor: str, conversation_id: str) -> bool:
         if not self.log(actor).delete(conversation_id):
@@ -546,6 +608,41 @@ def transcript(payload: dict) -> list[dict]:
         else:
             out.append({"who": who, "text": words})
     return out
+
+
+GONE = ("That conversation is gone, so I didn't answer that, there or here. "
+        "Send /chats to see what's kept.")
+#: Buttons under ``/chats``'s list on a channel that has them.
+BUTTONS = 8
+BUTTON_LABEL = 40
+
+
+def back_in(payload: dict, *, dropped: bool = False) -> str:
+    """Said first when a message carried an old conversation on."""
+    line = f"Back in: {titled(payload) or '(no words)'}"
+    if dropped:
+        from yantra.skills.lesson import DROPPED
+        line = f"{line}\n\n{DROPPED}"
+    return line
+
+
+def choices(rows: list[Kept], numbers: dict[str, int],
+            open_id: str | None = None) -> tuple[tuple[str, str], ...]:
+    """The first rows of a list as buttons that go back into each: a
+    label and ``/chats N``, N its number in the whole list. Not the one
+    open here: there is nowhere to go."""
+    made = []
+    for row in rows:
+        if row.id == open_id or row.id not in numbers:
+            continue
+        n = numbers[row.id]
+        label = f"{n}. {row.title or '(no words)'}"
+        if len(label) > BUTTON_LABEL:
+            label = label[:BUTTON_LABEL - 1] + "…"
+        made.append((label, f"{WORD} {n}"))
+        if len(made) == BUTTONS:
+            break
+    return tuple(made)
 
 
 def reopened(payload: dict, agent: str = "") -> str:

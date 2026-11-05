@@ -316,10 +316,12 @@ class WebChannel:
         return out
 
     def say(self, actor: str, agent: str, text: str,
-            attachments: list[Attachment] | None = None) -> Line:
+            attachments: list[Attachment] | None = None,
+            conversation: str | None = None) -> Line:
         """Write down what they said and start the turn behind it. Files
         sent with it are named on their line (kept in their folder by
-        the turn: attached.py)."""
+        the turn: attached.py). ``conversation``: the old one it was
+        written under, carried on in the same turn (past.py)."""
         who = self.service.actors.get(actor)
         if not who.may_use(agent):
             raise Refused(f"you have no agent called {agent!r} here")
@@ -338,7 +340,7 @@ class WebChannel:
 
         self._start(actor, agent, self.service.deliver(
             actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND,
-            watch=watch, attachments=attachments or ()), live,
+            watch=watch, attachments=attachments or (), conversation=conversation), live,
             new=not attachments and fresh.is_new_word(text))
         return line
 

@@ -73,8 +73,12 @@ POST   /web/chats/ID/pin              {actor, pinned}: kept above the newest
 The last two, and each row's `roads` and `pinned`, are
 [note 71](71-one-conversation-two-chats.md)'s.
 
-A page carries one on by saying `/chats open ID` as a message, so the
-answer is a line like any other, with its transcript drawn in place.
+A page carries one on by sending the words written under it with its
+id (`conversation` on `POST /web/message`): the chat moves into it and
+answers them there in one turn, waiting for a chat that is still
+answering rather than refusing it ([note 78](78-carried-on-where-it-was-written.md)).
+`/chats open ID` as a message still works, and its answer is a line
+like any other, with its transcript drawn in place.
 Each answer in the transcript keeps its own lines (note 71). A page
 that already shows the conversation read from `/web/chats/ID`, as
 Sarathi's does, goes on from that and draws nothing from the transcript.
