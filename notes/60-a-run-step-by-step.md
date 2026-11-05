@@ -30,7 +30,7 @@ conversations under its run id, and the page's **Steps** find it there
 |---|---|
 | the door, `GET /runs/{id}/steps` (its own token) | the whole turn: what each tool was given, what came back, pictures, the answer. Samay shows its runs from here |
 | the owner's page, the owner's own runs | the same, and **File for a bug report** |
-| the owner's page, anybody else's run | its **shape**: which tools, when, how long, who said yes, what was refused. Not the arguments, results, pictures, message or answer |
+| the owner's page, anybody else's run | its **shape**: which tools, when, how long, how long the model thought and how many tokens, who said yes, what was refused. Not the arguments, results, pictures, message or answer |
 | a person in their chat, `/steps [N]` | their own conversation's last turn (or turn N), as text |
 
 The third row follows the page's own rule (note 29): what a person typed

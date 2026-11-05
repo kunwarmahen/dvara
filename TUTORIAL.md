@@ -1336,8 +1336,8 @@ dvara say --actor owner --agent greeter "/steps"
 ```
 
 Each step of your last turn: the tool, what it was given, what came
-back, when, how long it waited for a yes and how long it ran, and who
-said yes. On the owner's page, every run has a **Steps** button. Your
+back, when, how long it waited for a yes and how long it ran, who said
+yes, and how long the model **thought** before asking for it. On the owner's page, every run has a **Steps** button. Your
 own runs come whole, with **File for a bug report**. Anybody else's show
 only which tools ran and when, because what their tools read is theirs
 ([notes/60](notes/60-a-run-step-by-step.md)).

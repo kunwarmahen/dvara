@@ -221,9 +221,16 @@ function runCard(r) {
 const secs = (n) => (n === null || n === undefined ? ""
   : n < 0.001 ? "<1ms" : n < 1 ? `${Math.round(n * 1000)}ms` : `${n.toFixed(1)}s`);
 
+const thoughtWords = (m) => {
+  if (!m || m.thought == null) return "";
+  const t = [m.read ? `${m.read.toLocaleString()} read` : "",
+             m.wrote ? `${m.wrote.toLocaleString()} written` : ""].filter(Boolean);
+  return `thought ${secs(m.thought)}` + (t.length ? ` (${t.join(", ")})` : "");
+};
+
 function stepsView(v, r) {
   const rows = v.steps.map((s) => {
-    const meta = [s.at ? new Date(s.at).toLocaleTimeString() : "",
+    const meta = [s.at ? new Date(s.at).toLocaleTimeString() : "", thoughtWords(s),
       s.answered_by ? `asked ${s.answered_by}, ${secs(s.waited)}` : "",
       s.ran !== null && s.ran !== undefined ? `ran ${secs(s.ran)}` : "",
       s.refused ? `refused (${s.refused})` : "",
@@ -237,8 +244,13 @@ function stepsView(v, r) {
         ? h("img.ask-picture", { src: `data:${p.media_type};base64,${p.data}`,
                                  alt: `what ${s.tool} saw` }) : null));
   });
+  if (thoughtWords(v.answer_model)) rows.push(h("div.run-step", {}, h("b", {}, "answer"),
+    h("span.meta", {}, ` ${thoughtWords(v.answer_model)}`)));
   const out = [h("p.meta", {}, `${v.seconds !== null ? v.seconds + "s" : ""}`
-    + (v.outcome ? ` · ${v.outcome}` : "")), ...rows];
+    + (v.outcome ? ` · ${v.outcome}` : "")
+    + (v.model_calls && v.thinking != null
+       ? ` · the model ${secs(v.thinking)} over ${v.model_calls} call${v.model_calls > 1 ? "s" : ""}` : "")),
+    ...rows];
   if (!v.steps.length) out.push(h("p.meta", {}, "No tools: it answered from what it knew."));
   if (v.words !== false) {
     const save = h("button.btn.small", { type: "button",
