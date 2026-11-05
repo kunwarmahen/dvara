@@ -611,7 +611,9 @@ happens. When Dvara comes back after `sarathi down && up` or a crash,
 each person who had a job running is told what it was and how far it
 got, once, and `/carry` carries it on from the last step: nothing done
 is done again, and the agent looks at the screen again before it acts.
-Anything else they send leaves it. A schedule's run is Samay's to carry
+Anything else they send leaves it. On Telegram the message has a
+**Carry on** button (`/carry` sent as if typed), drawn only under a job
+that bot's `/carry` reaches. A schedule's run is Samay's to carry
 on (`carry_on` on `POST /message`)
 ([notes/59](notes/59-a-job-a-restart-stopped.md)).
 

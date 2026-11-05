@@ -15,6 +15,15 @@ leaves it. A schedule's run (``samay-…``) or a watch's (``prahari-…``)
 is not offered here: Samay and Prahari own those, and Samay asks for a
 carry-on itself (``carry_on: true`` on ``POST /message``).
 
+ONE PRESS ON TELEGRAM. The words say what to send, and Telegram puts a
+**Carry on** button under them, which sends ``/carry`` AS IF TYPED, by
+whoever pressed. The notice says which job it is (``extra["carry"]``:
+the agent and the conversation), and a bot draws the button only for a
+job its own ``/carry`` reaches -- its agent, that person's chat with it
+-- because a button that answers "Nothing stopped part way here" is
+worse than none. A job stopped in another chat (the home page's) is
+told in words only.
+
 TOLD ONCE. A job is told about once (``carry-told.json``, by session and
 when it was saved), so a service restarted three times in an evening
 does not say the same thing three times.

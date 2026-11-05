@@ -24,6 +24,8 @@ import json
 import time
 
 import httpx
+
+from dvara import carrying
 import pytest
 
 from dvara.actors import ActorBook
@@ -1020,6 +1022,39 @@ def test_pressing_one_is_the_word_typed(make_bot):
     asyncio.run(make_bot(fake, script=[]).run())
     assert fake.of("editMessageReplyMarkup")           # the buttons come off
     assert fake.texts() == ["greeter doesn't use skills, so there is nothing to keep here."]
+
+
+# ---- a job a restart stopped (carrying.py) -----------------------------------------
+
+
+def test_a_stopped_job_of_this_bots_carries_a_carry_on_button(make_bot):
+    fake = FakeTelegram([])
+    bot = make_bot(fake)
+    job = {"carry": {"agent": "greeter", "thread": f"telegram:{KNOWN}"}}
+    asyncio.run(bot._deliver_notice(str(KNOWN), "I stopped part way…", extra=job))
+    [button] = fake.sent()[-1]["reply_markup"]["inline_keyboard"][0]
+    assert button == {"text": "Carry on", "callback_data": "c:carry"}
+
+
+def test_a_job_this_bots_carry_cannot_reach_is_told_in_words_only(make_bot):
+    fake = FakeTelegram([])
+    bot = make_bot(fake)
+    for job in ({"agent": "scribe", "thread": f"telegram:{KNOWN}"},   # another agent's
+                {"agent": "greeter", "thread": "web:home"}):          # another chat's
+        asyncio.run(bot._deliver_notice(str(KNOWN), "I stopped part way…",
+                                        extra={"carry": job}))
+        assert "reply_markup" not in fake.sent()[-1]
+
+
+def test_pressing_carry_on_is_carry_typed_and_the_button_goes(make_bot):
+    pressed = {"update_id": 1, "callback_query": {
+        "id": "cb1", "from": {"id": KNOWN}, "data": "c:carry",
+        "message": {"message_id": 7, "chat": {"id": KNOWN}, "text": "I stopped…"}}}
+    fake = FakeTelegram([pressed])
+    asyncio.run(make_bot(fake, script=[]).run())
+    assert fake.of("editMessageReplyMarkup")
+    # nothing stopped here: the same answer typing /carry gets, no model asked
+    assert fake.texts() == [carrying.NOTHING]
 
 
 def test_the_working_message_shows_the_last_steps_only():

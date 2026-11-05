@@ -143,6 +143,12 @@ channel adapter usually goes wrong.
   (spoken.py). When the person's choice says so, the answer is read
   aloud on this machine and sent as a voice note after its text; a
   machine with no voice sends the text alone and tells the owner why.
+* **A reply carries on the conversation it replied to** (past.py). One
+  window holds every conversation one after another, so each answer
+  sent, and each message it answered, is remembered with the
+  conversation it was in; a reply to one of them hands that conversation
+  to the turn, which says "Back in: ..." first when it moved there.
+  ``/chats`` lists them with a button each.
 """
 
 from __future__ import annotations
@@ -158,7 +164,7 @@ from typing import Any
 import httpx
 from yantra import HELD, REFUSED_TIMEOUT
 
-from dvara import remembering, spoken
+from dvara import carrying, past, remembering, spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.service import works_phone
@@ -613,11 +619,14 @@ class TelegramBot:
             await self._api("sendChatAction", chat_id=chat, action="typing")
         typing = asyncio.ensure_future(self._typing(chat))
         steps = Steps(self, chat)
+        # a reply to an earlier message carries on the conversation it was in
+        replied = (message.get("reply_to_message") or {}).get("message_id")
         try:
             reply = await self.service.deliver(
                 via=Channel(kind="telegram", id=str(native)),
                 agent=self.agent, thread=str(chat), text=text, watch=steps,
-                attachments=attachments)
+                attachments=attachments,
+                conversation=self.service.past.sent_in(self._place(chat), replied))
         finally:
             typing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -627,10 +636,16 @@ class TelegramBot:
             with contextlib.suppress(Exception):
                 await self._api("deleteMessage", chat_id=chat,
                                 message_id=message["message_id"])
-        await self._answer(chat, row, reply)
+        await self._answer(chat, row, reply, asked=message.get("message_id"))
 
-    async def _answer(self, chat: int, row: int, reply) -> None:
-        """Send one turn's reply, marking it paid part by part."""
+    def _place(self, chat: int) -> str:
+        """Where a message id means one message: this bot's chat."""
+        return f"telegram:{self.agent}:{chat}"
+
+    async def _answer(self, chat: int, row: int, reply, *, asked=None) -> None:
+        """Send one turn's reply, marking it paid part by part, and keep
+        which conversation its messages (and ``asked``, the message it
+        answers) were in, for a reply to one to carry it on."""
         if reply.detail and not reply.ok and reply.held is None:
             # The channel gets the polite sentence; the owner, who is the
             # one person who can fix a bad base URL, gets the reason.
@@ -644,15 +659,24 @@ class TelegramBot:
         parts = self._reply_messages(reply.text, under or None)
         if reply.heard:                 # what the voice note was heard as, first
             parts = [f'I heard: "{reply.heard}"', *parts]
+        if reply.moved:                 # which conversation this carried on, first
+            parts = [reply.moved, *parts]
         self.outbox.answered(row, parts)
+        ids = [asked]
         for count, chunk in enumerate(parts, start=1):
             last = count == len(parts)
             extra = ({"reply_markup": _hold_buttons(reply.held)}
                      if last and reply.held is not None else
+                     {"reply_markup": _choice_buttons(reply.choices)}
+                     if last and reply.choices else
                      {"reply_markup": markup} if last and (markup := _tap_buttons(reply.text))
                      else {})
-            await self._send(chat, chunk, marked=True, **extra)
+            sent = await self._send(chat, chunk, marked=True, **extra)
+            ids.append((sent or {}).get("message_id"))
             self.outbox.sent(row, count)
+        if reply.conversation:
+            with contextlib.suppress(Exception):   # a reply that can't go back is all it costs
+                self.service.past.sent(self._place(chat), ids, reply.conversation)
         if reply.speak and reply.text.strip():
             await self._speak(chat, reply.text, voice=reply.voice)
         # What the agent sent with send_file, after the words that
@@ -865,10 +889,13 @@ class TelegramBot:
             await self._send_file(chat, file, caption=elide(text, CAPTION_LIMIT))
         else:
             offer = extra.get("offer")
+            buttons = (_offer_buttons(offer) if offer
+                       else _carry_button() if self._carries(extra.get("carry"), chat)
+                       else None)
             parts = split_message(text)
             for count, part in enumerate(parts, start=1):
-                more = ({"reply_markup": _offer_buttons(offer)}
-                        if offer and count == len(parts) else {})
+                more = ({"reply_markup": buttons}
+                        if buttons and count == len(parts) else {})
                 await self._send(chat, part, marked=True, **more)
         if extra.get("speak") and text.strip():     # "always": a notice too
             await self._speak(chat, text, voice=extra.get("voice"))
@@ -952,6 +979,9 @@ class TelegramBot:
         if verdict == "w" and ask_id:
             await self._tapped(query, ask_id)
             return
+        if verdict == "c" and ask_id == CARRY_DATA:
+            await self._carry_pressed(query)
+            return
         if self.service.asks is None or not ask_id \
                 or verdict not in ("y", "n", "t"):
             await self._toast(query_id, "that button means nothing here")
@@ -1029,6 +1059,31 @@ class TelegramBot:
             raise TelegramError(f"download: {response.status_code}")
         return Attachment(name=name, data=response.content)
 
+    def _carries(self, job: dict | None, chat: int) -> bool:
+        """Whether this bot's ``/carry`` in ``chat`` reaches ``job`` (a
+        stopped job a notice names, carrying.py): its agent, this chat."""
+        return bool(job) and job.get("agent") == self.agent \
+            and job.get("thread") == f"telegram:{chat}"
+
+    async def _carry_pressed(self, query: dict) -> None:
+        """Carry on, under a job a restart stopped: ``/carry`` sent as the
+        presser's own message, in the chat it was pressed in -- the same
+        turn, the same refusals and the same "nothing stopped" as typing
+        it. The button goes, so it isn't pressed twice."""
+        query_id = query.get("id", "")
+        pressed = query.get("message") or {}
+        chat = pressed.get("chat", {}).get("id")
+        if not chat:
+            await self._toast(query_id, "that button means nothing here")
+            return
+        await self._toast(query_id, "carrying on")
+        if pressed.get("message_id"):
+            with contextlib.suppress(TelegramError, httpx.HTTPError):
+                await self._api("editMessageReplyMarkup", chat_id=chat,
+                                message_id=pressed["message_id"])
+        await self._message({"chat": {"id": chat}, "from": query.get("from", {}),
+                             "text": carrying.WORD})
+
     async def _tapped(self, query: dict, word: str) -> None:
         """A sign-in word under an answer (accounts.taps), pressed: sent
         as the presser's own message, in the chat it was pressed in, so
@@ -1036,7 +1091,7 @@ class TelegramBot:
         query_id = query.get("id", "")
         pressed = query.get("message") or {}
         chat = pressed.get("chat", {}).get("id")
-        if not chat or not is_command(word):
+        if not chat or not (is_command(word) or past.is_word(word)):
             await self._toast(query_id, "that button means nothing here")
             return
         await self._toast(query_id, word)
@@ -1362,6 +1417,23 @@ def _tap_buttons(text: str) -> dict | None:
     row = [{"text": tap_label(w), "callback_data": f"w:{w}"} for w in taps(text)
            if len(f"w:{w}".encode()) <= CALLBACK_LIMIT]
     return {"inline_keyboard": [row]} if row else None
+
+
+#: A Carry on button's data: the bot and the chat already say whose job.
+CARRY_DATA = "carry"
+
+
+def _carry_button() -> dict:
+    """Carry on, under a job a restart stopped (carrying.py)."""
+    return {"inline_keyboard": [[{"text": "Carry on", "callback_data": f"c:{CARRY_DATA}"}]]}
+
+
+def _choice_buttons(choices) -> dict:
+    """One button a row (``/chats``'s list): pressing it sends its words,
+    as a sign-in word's button does (``_tapped``)."""
+    return {"inline_keyboard": [[{"text": label, "callback_data": f"w:{word}"}]
+                                for label, word in choices
+                                if len(f"w:{word}".encode()) <= CALLBACK_LIMIT]}
 
 
 def _offer_buttons(offer: dict) -> dict:

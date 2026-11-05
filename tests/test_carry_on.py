@@ -36,8 +36,9 @@ def people():
 def listening(service):
     got: list[str] = []
 
-    async def sender(address, text):
+    async def sender(address, text, extra=None):
         got.append(text)
+        listening.extra = extra
     service.notices.route("telegram", sender)
     return got
 
@@ -85,6 +86,9 @@ class TestStoppedPartWay:
         assert asyncio.run(service.tell_stopped()) == 1
         assert asyncio.run(service.tell_stopped()) == 0        # once
         assert "tidy my notes folder" in got[0] and "/carry" in got[0]
+        # which job it is, for a channel that draws a Carry on button
+        assert listening.extra["carry"]["agent"] == "greeter"
+        assert listening.extra["carry"]["thread"].endswith("chat")
 
     def test_carry_goes_on_from_the_last_step_and_repeats_nothing(self, make_service):
         service = make_service([calls("read_file", {"path": "notes.txt"}),

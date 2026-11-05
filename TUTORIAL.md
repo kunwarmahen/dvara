@@ -1315,7 +1315,9 @@ the same person on both, with the same allowance, rules and questions
 Every step of a turn is saved as it happens. Restart Dvara in the middle
 of a long job, and when it comes back the person gets a message:
 *"I stopped part way through "…" (2 steps done: read_file) when I was
-restarted. Send /carry to carry on from there."* Try it on the terminal
+restarted. Send /carry to carry on from there."* On Telegram there is a
+**Carry on** button under it: pressing it is the same as sending
+`/carry`. Try it on the terminal
 channel. Start a job that takes a few steps, stop it hard part way
 (Ctrl-C on `dvara say` is the person stopping it, which isn't the same,
 so use `kill -9`), then:

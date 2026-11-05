@@ -59,6 +59,27 @@ returned some other way. Anything else the person sends starts a turn
 normally and leaves the job. `/carry` with nothing stopped answers
 *"Nothing stopped part way here."* and asks no model.
 
+### One press on Telegram
+
+On a phone, typing `/carry` is the step people get wrong, the same
+lesson as `/connect` ([note 20](20-signing-in-from-the-chat.md)). So on Telegram the message has a
+**Carry on** button under it, and a press is `/carry` SENT AS IF TYPED,
+by whoever pressed: the same turn, the same refusals, and, with nothing
+stopped any more, the same *"Nothing stopped part way here."* The
+button comes off once pressed.
+
+The notice names its job (`extra["carry"]`: the agent and the
+conversation). A Telegram bot answers for one agent, and its `/carry`
+reaches only that agent's conversation in that chat, so **THE BUTTON
+IS DRAWN ONLY WHERE IT WORKS**. A job stopped in the home page's chat,
+or another agent's, is told in words alone: a button that answers
+"nothing stopped" would be worse than none. The press carries no id:
+the bot and the chat already say whose job it is.
+
+There is no **Leave it** button. Anything else the person sends leaves
+the job, and a button for not doing something is a second way to say
+nothing.
+
 ## Samay's road
 
 `POST /message` takes `carry_on: true` beside `unattended: true`. Samay
@@ -97,9 +118,9 @@ version is finished now.
 
 ## What was deliberately not built
 
-* **A Carry on button on Telegram.** `/carry` is in the `/` menu. A
-  button would need the message to name its thread, and a person has one
-  chat per agent there anyway.
+* ~~**A Carry on button on Telegram.**~~ Built: *One press on
+  Telegram*, above. Was: `/carry` is in the `/` menu. The notice now
+  names its job, so the button is drawn only where it works.
 * **Telling the owner about everyone's stopped jobs.** Each job is its
   person's. The owner sees the runs in `dvara runs` and on the page as
   ever.

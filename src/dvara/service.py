@@ -270,6 +270,16 @@ class Reply:
     #: channel says it its own way -- a line on Telegram, a chip with Undo
     #: on the page, one short sentence at the puck (remembering.kept_line).
     kept: tuple[tuple[str, str], ...] = ()
+    #: The conversation the chat is in once this was answered (past.py),
+    #: for a channel to remember its messages by (a reply to one carries
+    #: it on). None for an unattended turn, and after ``/new``.
+    conversation: str | None = None
+    #: Said first, when this message moved the chat into the conversation
+    #: it carried on (``deliver``'s ``conversation``): "Back in: ...".
+    moved: str = ""
+    #: Words a channel may offer as buttons, as (label, what pressing it
+    #: sends): ``/chats``'s list, one per conversation.
+    choices: tuple[tuple[str, str], ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -824,7 +834,58 @@ class Service:
         return self.actors.resolve(via.kind, via.id).id, f"{via.kind}:{thread}"
 
 
-    async def deliver(self, *, agent: str, thread: str, text: str,
+    async def deliver(self, *, conversation: str | None = None, **asked) -> Reply:
+        """Run one turn for one person, and answer them either way
+        (``_deliver`` says how).
+
+        ``conversation`` is the one these words carry on (past.py): an
+        old one a page shows, or the one a Telegram reply was to. The chat
+        moves into it first, waiting -- never refused -- while a turn in
+        the conversation it was in finishes; one that is gone is said so
+        and the words are not answered anywhere else.
+        """
+        key = who = None
+        if not asked.get("unattended"):
+            try:
+                whom, thread = self._whom(asked.get("actor"), asked.get("via"),
+                                          asked["thread"])
+                who = self.actors.may(whom, asked["agent"])
+                key = session_key(whom, asked["agent"], thread)
+            except Refused:
+                key = None          # _deliver says why, in its own words
+        moved = ""
+        if conversation and key is not None and conversation != self.past.here(key):
+            got = await self._switch(key, who, asked["agent"], conversation)
+            if got is None:
+                return Reply(text=past.GONE, run_id=None, agent=asked["agent"],
+                             actor=who.id, stop_reason="refused",
+                             conversation=self.past.here(key))
+            moved = past.back_in(got, dropped=self.learning.drop_lesson(
+                who.id, asked["agent"]))
+        reply = await self._deliver(**asked)
+        if key is None:
+            return reply
+        return replace(reply, conversation=self.past.here(key), moved=moved)
+
+    async def _switch(self, key: str, who: Actor, agent: str,
+                      conversation_id: str) -> dict | None:
+        """This chat into that conversation of this person's with this
+        agent: its payload, or None when it is gone. Waits for the chat's
+        own lock, as a second message does -- a turn still answering in
+        the one it was in finishes there first."""
+        if not any(r.id == conversation_id for r in self.past.listed(who.id, agent)):
+            return None
+        async with self._locks.hold(key):
+            payload = self.past.payload(who.id, conversation_id)
+            if payload is None:
+                return None
+            self.holds.drop_key(key)
+            self.sessions.forget(key)
+            self.sessions.save_payload(payload, session_id=key)
+            self.past.opened(key, conversation_id)
+        return payload
+
+    async def _deliver(self, *, agent: str, thread: str, text: str,
                       actor: str | None = None,
                       via: Channel | None = None,
                       unattended: bool = False,
@@ -978,9 +1039,10 @@ class Service:
             # Earlier conversations: theirs to list and go back into.
             said = await self._past_words(key, who=who, agent=agent, thread=thread,
                                           text=text)
-            said, shown = said if isinstance(said, tuple) else (said, ())
+            said, shown, *offered = said if isinstance(said, tuple) else (said, ())
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
-                         stop_reason="new", transcript=tuple(shown))
+                         stop_reason="new", transcript=tuple(shown),
+                         choices=tuple(offered[0]) if offered else ())
         if not unattended and learning.is_learn(text):
             verb, _ = learning.lesson_verb(text)
             if verb in ("", "done"):
@@ -2109,7 +2171,7 @@ class Service:
             await asyncio.gather(*list(self._behind), return_exceptions=True)
 
     async def _past_words(self, key: str, *, who: Actor, agent: str, thread: str,
-                          text: str) -> str | tuple[str, list[dict]]:
+                          text: str) -> str | tuple:
         """``/chats`` lists, ``/chats WORDS`` finds, ``/chats N`` goes back
         into one, ``/chats delete N [sure]`` deletes one (past.py)."""
         pick = past.picked(text)
@@ -2131,9 +2193,10 @@ class Service:
         if not pick.isdigit():
             # Found ones keep their number in the whole list, so the N
             # sent next means the row that was on screen.
-            return past.listing(agent, self.past.listed(who.id, agent, pick)
-                                if pick else rows, pick, open_id=open_id,
-                                numbers={r.id: n for n, r in enumerate(rows, 1)})
+            shown = self.past.listed(who.id, agent, pick) if pick else rows
+            numbers = {r.id: n for n, r in enumerate(rows, 1)}
+            return (past.listing(agent, shown, pick, open_id=open_id, numbers=numbers),
+                    [], past.choices(shown, numbers, open_id))
         if not 1 <= int(pick) <= len(rows):
             return (f"There's no conversation {pick} to go back to. Send /chats to "
                     f"see them." if rows else past.listing(agent, rows))
@@ -2141,16 +2204,10 @@ class Service:
         if chosen.id == open_id:
             return "That's the conversation we're in now."
         elsewhere = [k for k in self.past.open_on(who.id, chosen.id) if k != key]
-        if key in self._locks:
-            return fresh.STILL_ANSWERING.replace("/new", f"/chats {pick}")
-        async with self._locks.hold(key):
-            payload = self.past.payload(who.id, chosen.id)
-            if payload is None:
-                return "That conversation just went. Send /chats to see what's kept."
-            self.holds.drop_key(key)
-            self.sessions.forget(key)
-            self.sessions.save_payload(payload, session_id=key)
-            self.past.opened(key, chosen.id)
+        # waited for, like a second message, while the one we're in answers
+        payload = await self._switch(key, who, agent, chosen.id)
+        if payload is None:
+            return "That conversation just went. Send /chats to see what's kept."
         said = past.reopened(payload, agent)
         if elsewhere:
             said += (f"\n\nIt's open on {past.came_of_key(elsewhere[0])} too: what's "
@@ -2721,7 +2778,9 @@ class Service:
             if not carrying.is_peoples(thread) or told.already(key, info):
                 continue
             try:
-                await self.notify(actor=actor, text=carrying.stopped_words(agent, info))
+                # which job, for a channel that can draw a Carry on button
+                await self.notify(actor=actor, text=carrying.stopped_words(agent, info),
+                                  extra={"carry": {"agent": agent, "thread": thread}})
             except Refused:
                 continue          # no longer on the roster
             told.mark(key, info)
