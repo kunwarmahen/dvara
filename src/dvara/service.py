@@ -1588,7 +1588,7 @@ class Service:
         said = await self.accounts.handle(
             actor=who.id, text="/accounts page", home=self.setu_home(who),
             own=who.manages_setu, narrowed=who.setu_accounts, needs={},
-            may_lock=who.setu == OWN_SETU)
+            may_lock=who.setu == OWN_SETU, connectors=who.connectors)
         found = re.search(r"https?://\S+", said or "")
         return (found.group(0) if found else None), said or ""
 
@@ -1603,7 +1603,7 @@ class Service:
         return await self.accounts.handle(
             actor=who.id, text=text, home=self.setu_home(who), own=who.manages_setu,
             narrowed=who.setu_accounts, needs=needs_allow(spec.connections),
-            may_lock=who.setu == OWN_SETU)
+            may_lock=who.setu == OWN_SETU, connectors=who.connectors)
 
     async def _checkup(self, who: Actor, *, news: bool = False) -> str:
         """``/doctor``: this person's own lines (checkup.py) -- their
@@ -1672,10 +1672,12 @@ class Service:
             account = f"{row.get('connector')}:{account_of(row)}"
             if who.setu_accounts is not None and account not in who.setu_accounts:
                 continue
+            if not who.may_reach(row.get("connector")):      # their site list
+                continue
             if level := ceiling_of(needs, row):      # "*:read" reaches every one
                 allow[account] = level
         setu = Setu(mode="on", home=home, link=link, allow=allow,
-                    package=spec.name, mention=frozenset(needs),
+                    package=spec.name, mention=_reachable(needs, who),
                     connect_how=CONNECT_HERE if who.manages_setu else CONNECT_THERE,
                     locked_how=LOCKED_HERE, vault_key=key)
         try:
@@ -2849,6 +2851,18 @@ def phone_for(who: Actor, asked: bool | str) -> tuple[str, ...]:
                       f"{len(who.phones)} ({', '.join(who.phones)}): make it again "
                       f"naming one")
     return ()
+
+
+def _reachable(needs: dict[str, str], who: Actor) -> frozenset[str]:
+    """The connectors an agent may tell this person to connect: what its
+    package asks for, kept to their site list when the owner set one --
+    an agent that says "send /connect amazon" to someone who may not is
+    sending them to a refusal."""
+    if who.connectors is None:
+        return frozenset(needs)
+    if "*" in needs:
+        return frozenset(who.connectors)
+    return frozenset(c for c in needs if c in who.connectors)
 
 
 def works_phone(spec: AgentSpec) -> bool:

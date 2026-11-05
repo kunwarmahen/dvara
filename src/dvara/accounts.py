@@ -198,7 +198,8 @@ class AccountDesk:
 
     async def handle(self, *, actor: str, text: str, home: Path | None, own: bool,
                      narrowed: tuple[str, ...] | None, needs: dict[str, str],
-                     may_lock: bool | None = None) -> str | None:
+                     may_lock: bool | None = None,
+                     connectors: tuple[str, ...] | None = None) -> str | None:
         """The reply to a message that is the person's to act on, or None
         when it is a message for the agent. ``home`` is their Setu folder
         (None: no accounts here); ``own`` is whether its accounts are
@@ -206,7 +207,8 @@ class AccountDesk:
         (default: ``own``) -- a shared folder the owner lets them manage
         is not theirs to lock, since everything else using it would be
         locked out; ``needs`` is the package's connectors and levels, for
-        a default."""
+        a default; ``connectors`` the sites the owner listed for them
+        (None: every one), which /connect keeps to and /accounts shows."""
         command = is_command(text)
         if self.keys.expects_passphrase(actor):
             if not command:
@@ -231,7 +233,8 @@ class AccountDesk:
         if word == "/accounts" and [w.lower() for w in rest[:1]] == ["page"]:
             return await self._page(program, home, own if may_lock is None else may_lock)
         if word == "/accounts":
-            return await self._list(program, home, narrowed, self.keys.key_for(actor))
+            return await self._list(program, home, narrowed, self.keys.key_for(actor),
+                                    connectors)
         if not own:
             return ("Your accounts here are looked after by the owner of this service, "
                     "at their computer -- ask them to connect, disconnect or lock one.")
@@ -246,8 +249,8 @@ class AccountDesk:
             return await self._disconnect(program, home, rest)
         if [w.lower() for w in rest[:1]] == ["server"]:
             return await self._server(actor, program, home, rest[1:], needs,
-                                      own if may_lock is None else may_lock)
-        return await self._connect(actor, program, home, rest, narrowed, needs)
+                                      own if may_lock is None else may_lock, connectors)
+        return await self._connect(actor, program, home, rest, narrowed, needs, connectors)
 
     # ---- /accounts ------------------------------------------------------------
 
@@ -259,16 +262,19 @@ class AccountDesk:
         return json.loads(done[1])
 
     async def _list(self, program: str, home: Path,
-                    narrowed: tuple[str, ...] | None, key: str | None = None) -> str:
+                    narrowed: tuple[str, ...] | None, key: str | None = None,
+                    connectors: tuple[str, ...] | None = None) -> str:
         try:
             data = await self._status(program, home, key)
         except (RuntimeError, ValueError) as exc:
             self.log(f"dvara: accounts: {exc}")
             return "I couldn't read your accounts just now."
         rows = [r for r in data.get("connections") or []
-                if narrowed is None or r.get("ref") in narrowed]
+                if (narrowed is None or r.get("ref") in narrowed)
+                and (connectors is None or r.get("connector") in connectors)]
         if not rows:
-            return ("You have no accounts connected here. Send /connect gmail to "
+            first = connectors[0] if connectors else "gmail"   # one they may connect
+            return (f"You have no accounts connected here. Send /connect {first} to "
                     "connect one.")
         lines = [f"{r['ref']} -- {r.get('email') or ''} -- {r.get('level_label') or ''}"
                  for r in rows]
@@ -314,7 +320,8 @@ class AccountDesk:
     # ---- /connect server ---------------------------------------------------------
 
     async def _server(self, actor: str, program: str, home: Path, words: list[str],
-                      needs: dict[str, str], own_folder: bool) -> str:
+                      needs: dict[str, str], own_folder: bool,
+                      connectors: tuple[str, ...] | None = None) -> str:
         url, account, level, name = None, "personal", None, None
         while words:
             word = words.pop(0)
@@ -331,6 +338,11 @@ class AccountDesk:
                         "[a name] [read] [as NAME]")
         if url is None:
             return await self._server_page(program, home, own_folder)
+        if connectors is not None and name not in connectors:
+            # a server is its name here: one the owner listed, or none
+            return (f"The owner set the sites here for you to {', '.join(connectors)}. "
+                    "A server of your own needs its name on that list: "
+                    "/connect server https://its-address NAME")
         # its own sign-in page goes in the window too when there is one: on a
         # phone, 127.0.0.1 is the phone, and the page's return never gets here
         roads = ["--remote", "--paste"] if window_set() else ["--paste"]
@@ -388,7 +400,8 @@ class AccountDesk:
     # ---- /connect ----------------------------------------------------------------
 
     async def _connect(self, actor: str, program: str, home: Path, rest: list[str],
-                       narrowed: tuple[str, ...] | None, needs: dict[str, str]) -> str:
+                       narrowed: tuple[str, ...] | None, needs: dict[str, str],
+                       connectors: tuple[str, ...] | None = None) -> str:
         if not rest:
             return ("Say which: /connect gmail (or /connect gmail send as work, "
                     "/connect homeassistant http://your-home-assistant:8123, or "
@@ -406,6 +419,9 @@ class AccountDesk:
             else:
                 return f"I didn't follow {word!r}: /connect gmail [level] [as NAME]"
         ref = f"{connector}:{account}"
+        if connectors is not None and connector not in connectors:
+            return (f"The owner set the sites here for you to {', '.join(connectors)}; "
+                    f"{connector} isn't one of them, so your agents couldn't use it.")
         if narrowed is not None and ref not in narrowed:
             return (f"The owner set your accounts here to {', '.join(narrowed) or 'none'}; "
                     f"{ref} isn't one of them.")

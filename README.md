@@ -318,9 +318,9 @@ An unknown key is an error, not a shrug:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
-max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak, trusted, voice, zone
+known: agents, approver, channel, connectors, hours, max_turns_per_day,
+max_usd_per_day, max_usd_per_turn, max_wait_per_day, permissions, phone, phones,
+receipt, setu, setu_accounts, setu_manage, speak, trusted, voice, zone
 ```
 
 **Limits for a child.** `hours` is when their agents answer, on their
@@ -405,7 +405,10 @@ actor directly keys exactly as it always did.
 [Setu](https://github.com/kunwarmahen/setu) folder of their own
 (`<state>/setu/<name>`, readable by the service alone); a path points at
 an existing one, such as yours. `setu_accounts` narrows a folder to the
-accounts meant. Absent means none. `setu_manage = true` lets a person
+accounts meant. `connectors` narrows it by site instead (`gmail`,
+`amazon`, a server of theirs by its name), their own folder too: their
+agents use only those, and `/connect` signs in to only those. Absent
+means none. `setu_manage = true` lets a person
 change a folder they were pointed at from the chat -- meant for you, on
 your own folder, from your phone ([notes/27](notes/27-your-folder-from-your-phone.md)).
 
@@ -416,6 +419,10 @@ setu = true
 [actor.priya]
 setu = "~/.local/state/setu"         # your own folder...
 setu_accounts = ["gmail:personal"]   # ...but only this account of it
+
+[actor.asha]
+setu = true                          # her own sign-ins...
+connectors = ["google", "khanacademy"]  # ...of which her agents may use these
 
 [actor.owner]
 setu = "~/.local/state/setu"         # the folder your desktop and page use

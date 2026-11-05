@@ -129,7 +129,7 @@ from dvara.limits import Hours
 #: loader applies to ``agent.toml``).
 ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
-                        "receipt", "setu", "setu_accounts", "setu_manage",
+                        "receipt", "setu", "setu_accounts", "setu_manage", "connectors",
                         "phone", "phones", "hours", "max_turns_per_day",
                         "approver", "speak", "voice", "zone", "trusted"})
 
@@ -207,6 +207,13 @@ class Actor:
     #: The accounts of that folder they may reach (``gmail:personal``);
     #: None for all of them. Narrowing, for a folder shared with them.
     setu_accounts: tuple[str, ...] | None = None
+    #: The sites and services their agents may use, by connector
+    #: (``gmail``, ``amazon``, an own server's name); None for every one
+    #: the agent's package asks for. BOTH MUST ALLOW: the package's
+    #: ``[connections]`` and this. Narrows any folder, their own too -- a
+    #: child's own sign-ins stay theirs, the list says which of them an
+    #: agent here may touch, and which ``/connect`` signs in to.
+    connectors: tuple[str, ...] | None = None
     #: A folder the owner pointed them at, theirs to change from the chat
     #: (/connect, /disconnect) -- the owner's own phone on the owner's own
     #: folder. Never with ``setu_accounts``: a narrowed folder is a guest's.
@@ -250,6 +257,11 @@ class Actor:
     def manages_setu(self) -> bool:
         """Whether /connect and /disconnect in the chat reach their folder."""
         return self.setu == OWN_SETU or (self.setu is not None and self.setu_manage)
+
+    def may_reach(self, connector: str | None) -> bool:
+        """Whether their agents may use this connector's sign-ins
+        (``connectors``); every one when there is no list."""
+        return self.connectors is None or (connector or "") in self.connectors
 
     def may_use(self, agent: str) -> bool:
         return self.agents is None or agent in self.agents
@@ -417,6 +429,7 @@ class ActorBook:
                 setu=_setu(body.get("setu"), name, where),
                 setu_accounts=_setu_accounts(body, name, where),
                 setu_manage=_setu_manage(body, name, where),
+                connectors=_connectors(body, name, where),
                 phone=_phone(body, name, where),
                 phones=_phones(body, name, where),
                 hours=_hours(body, name, where),
@@ -506,6 +519,25 @@ def _setu_accounts(body: dict, name: str, where) -> tuple[str, ...] | None:
         raise ConfigProblem(f"{where}: [actor.{name}] setu_accounts must be a list "
                             f"of accounts like \"gmail:personal\"")
     return tuple(value)
+
+
+#: A connector's id, as Setu names it (``gmail``, ``amazon``, ``my-server``).
+CONNECTOR = re.compile(r"[a-z0-9][a-z0-9_.-]*\Z")
+
+
+def _connectors(body: dict, name: str, where) -> tuple[str, ...] | None:
+    value = body.get("connectors")
+    if value is None:
+        return None
+    if not body.get("setu"):
+        raise ConfigProblem(f"{where}: [actor.{name}] connectors names sites, but setu "
+                            f"is not set, so they have no sign-ins to narrow")
+    if (not isinstance(value, list) or not value
+            or not all(isinstance(v, str) and CONNECTOR.match(v) for v in value)):
+        raise ConfigProblem(f"{where}: [actor.{name}] connectors must be a list of "
+                            f"sites like \"gmail\" or \"amazon\" (Setu's names for them, "
+                            f"lower case); for none at all, leave setu out")
+    return tuple(dict.fromkeys(value))
 
 
 def _phone(body: dict, name: str, where) -> bool:

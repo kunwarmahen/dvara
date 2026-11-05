@@ -357,6 +357,21 @@ class TestListingAndDisconnecting:
         assert json.loads((shared / "accounts.json").read_text()) == [
             "gmail:personal", "gmail:mine"]
 
+    def test_their_site_list_is_what_connect_signs_in_to(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        mailer(agents_root)
+        service = make_service([], actors=book(kid={"setu": True,
+                                                    "connectors": ["khanacademy"]}))
+
+        async def go():
+            return (await turn(service, "kid", "/connect gmail"),
+                    await turn(service, "kid", "/connect server https://mcp.example.com"),
+                    await turn(service, "kid", "/accounts"))
+        gmail, server, listed = run(go())
+        assert "khanacademy" in gmail.text and "gmail isn't one of them" in gmail.text
+        assert "needs its name on that list" in server.text
+        assert "no accounts connected" in listed.text and "/connect khanacademy" in listed.text
+
     def test_a_shared_folder_the_owner_lets_them_manage_is_changed_but_not_locked(
             self, make_service, fake_setu, agents_root, tmp_path):
         """The owner's phone on the owner's own folder (the one the page on

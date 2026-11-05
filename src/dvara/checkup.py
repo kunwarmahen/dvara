@@ -245,6 +245,7 @@ def _when(at: Any, zone: str | None = None) -> str:
 # ---- each part ---------------------------------------------------------------------
 
 def accounts(data: dict, *, narrowed: tuple[str, ...] | None, own: bool,
+             connectors: tuple[str, ...] | None = None,
              owner: str | None, now: float, zone: str | None = None,
              is_owner: bool = False) -> list[Line]:
     """Their sign-ins, from ``setu status --json`` in their folder. The
@@ -252,7 +253,8 @@ def accounts(data: dict, *, narrowed: tuple[str, ...] | None, own: bool,
     the computer's own words for the owner, and whom to ask for anyone
     else."""
     rows = [r for r in data.get("connections") or []
-            if narrowed is None or r.get("ref") in narrowed]
+            if (narrowed is None or r.get("ref") in narrowed)
+            and (connectors is None or r.get("connector") in connectors)]
     ask = f"ask {owner} to sign it in again" if owner else "ask the owner to sign it in again"
     out = []
     for r in rows:
@@ -430,7 +432,8 @@ async def examine(who: Any, *, programs: Programs, setu_home: Path | None,
             env["SETU_VAULT_KEY"] = setu_key
         try:
             data = await ask([program, "status", "--json"], env)
-            lines += accounts(data, narrowed=who.setu_accounts, own=who.manages_setu,
+            lines += accounts(data, narrowed=who.setu_accounts, connectors=who.connectors,
+                              own=who.manages_setu,
                               owner=owner, now=now.timestamp(), zone=who.zone,
                               is_owner=is_owner)
         except RuntimeError as exc:

@@ -152,9 +152,9 @@ are errors too:
 
 ```
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
-known: agents, approver, channel, hours, max_turns_per_day, max_usd_per_day,
-max_usd_per_turn, max_wait_per_day, permissions, phone, phones, receipt, setu,
-setu_accounts, setu_manage, speak, trusted, voice, zone
+known: agents, approver, channel, connectors, hours, max_turns_per_day,
+max_usd_per_day, max_usd_per_turn, max_wait_per_day, permissions, phone, phones,
+receipt, setu, setu_accounts, setu_manage, speak, trusted, voice, zone
 ```
 
 A misspelled ceiling that quietly means "no ceiling" is exactly the
@@ -951,7 +951,17 @@ setu = true                          # a folder of his own, under the state dire
 [actor.priya]
 setu = "~/.local/state/setu"         # an existing folder -- yours
 setu_accounts = ["gmail:personal"]   # ...narrowed to one account
+
+[actor.asha]
+setu = true                          # her own folder...
+connectors = ["google", "khanacademy"]  # ...her agents use only these sites
 ```
+
+`connectors` is for a child, or anyone whose agents should keep to a few
+sites: their agents use only those sign-ins, and `/connect amazon` from
+asha answers *"The owner set the sites here for you to google,
+khanacademy; amazon isn't one of them"*. On Sarathi's home page it's
+**Settings → People → Change → Sites and accounts they may use**.
 
 raj signs in from the chat. If he asks about mail first, the agent says
 to send `/connect gmail` and the answer carries a **Connect gmail**

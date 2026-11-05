@@ -237,6 +237,29 @@ class TestWhoGetsNone:
         assert "mcp__gmail-personal__search_threads" in sent
         assert not any(n.startswith("mcp__gmail-work") for n in sent)
 
+    def test_their_site_list_keeps_their_own_sign_ins_from_an_agent(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        # a child's own Gmail, signed in at home, and a list without it
+        mailer(agents_root, needs='["*:read"]')
+        kid = home_with(tmp_path / "homes" / "kid", "personal")
+        service = make_service([says("ok")], actors=book(
+            kid={"setu": str(kid), "connectors": ["khanacademy"]}))
+        ask(service, "kid")
+        assert not any(n.startswith("mcp__gmail") for n in tools_sent(service))
+        # the agent knows it's there and not its own, so it doesn't go round
+        # by the phone or a browser; it never sends them to /connect gmail
+        system = service.scripted.requests[0]["system"]
+        assert "this agent was not given it" in system and "/connect gmail" not in system
+
+    def test_a_site_on_their_list_is_reached_as_ever(self, make_service, fake_setu,
+                                                     agents_root, tmp_path):
+        mailer(agents_root)
+        kid = home_with(tmp_path / "homes" / "kid", "personal")
+        service = make_service([says("ok")], actors=book(
+            kid={"setu": str(kid), "connectors": ["gmail", "khanacademy"]}))
+        ask(service, "kid")
+        assert "mcp__gmail-personal__search_threads" in tools_sent(service)
+
     def test_a_scheduled_turn_reaches_the_same_accounts(self, make_service, fake_setu,
                                                         agents_root, tmp_path):
         mailer(agents_root)
@@ -272,10 +295,22 @@ class TestTheActorsFile:
                                       {"setu": True, "setu_manage": True},
                                       {"setu_manage": True},
                                       {"setu": "~/x", "setu_manage": True,
-                                       "setu_accounts": ["gmail:personal"]}])
+                                       "setu_accounts": ["gmail:personal"]},
+                                      {"connectors": ["gmail"]},
+                                      {"setu": True, "connectors": []},
+                                      {"setu": True, "connectors": "gmail"},
+                                      {"setu": True, "connectors": ["Gmail"]},
+                                      {"setu": True, "connectors": ["gmail:personal"]}])
     def test_a_typo_is_refused_not_read_as_yes(self, body):
         with pytest.raises(ConfigProblem):
             book(a=body)
+
+    def test_a_site_list_is_read_as_written(self):
+        people = book(kid={"setu": True, "connectors": ["gmail", "gmail", "amazon"]},
+                      grown={"setu": True})
+        assert people.get("kid").connectors == ("gmail", "amazon")
+        assert people.get("kid").may_reach("amazon") and not people.get("kid").may_reach("x")
+        assert people.get("grown").connectors is None and people.get("grown").may_reach("x")
 
     def test_who_changes_accounts_from_the_chat(self):
         people = book(own={"setu": True}, owner={"setu": "~/x", "setu_manage": True},

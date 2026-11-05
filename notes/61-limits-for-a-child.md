@@ -84,8 +84,56 @@ These were there already, and the Sarathi form now shows them beside
 the new keys: `agents` is a complete list of what they may use, and
 `setu_accounts` narrows a shared Setu folder to the accounts named
 (`gmail:family`). Sites the browser may open are a package's own
-(`[connections]`), so a child gets an agent made for them rather than a
-per-person site list.
+(`[connections]`), and a person's own list narrows them further
+(`connectors`, below).
+
+### A site list of their own
+
+A child signed in to their school's site and, last weekend, to the
+family's Amazon on their own phone. Their homework agent asks for
+`*:read`, because it reads whatever school sends. Before, that meant
+Amazon too: the only way to keep an agent off a site was a second
+package that didn't ask for it, one per child per site.
+
+`connectors = ["google", "khanacademy"]` on the person is the list.
+**BOTH MUST ALLOW**: a connection reaches their agent only when the
+package asks for its connector and the person's list names it, the same
+∧ as `agents` and `setu_accounts`. That answers the old objection, "two
+places deciding one thing": they decide different things. The package
+says what an agent is for; the list says what this person may give it.
+
+* It narrows **any folder, their own too**. A child's own sign-ins stay
+  theirs (Setu's page still shows and changes them); the list says which
+  of them an agent here may touch.
+* **`/connect` keeps to it.** *"The owner set the sites here for you to
+  google, khanacademy; amazon isn't one of them, so your agents couldn't
+  use it."* A server of their own is its name: `/connect server URL
+  NAME`, with NAME on the list.
+* **The agent isn't sent to a refusal.** It is told which sites aren't
+  connected only from the list, so it never says "send /connect amazon"
+  to someone who may not. A site they signed in to anyway (on Setu's own
+  page) is named to the agent as not given, so it doesn't go round by
+  the phone or a browser.
+* By connector, not by account: `setu_accounts` is the account-level
+  one, and both may be set.
+
+The plain `browser_*` tools and the phone are not sign-ins and aren't
+narrowed by it; a child who shouldn't have the phone has `phone` off.
+
+The real Setu, a scratch Dvara, `kid` with `setu = true` and
+`connectors = ["khanacademy"]`, through `dvara say --actor kid`:
+
+```
+> /connect amazon
+The owner set the sites here for you to khanacademy; amazon isn't one of them, so your agents couldn't use it.
+> /connect server https://mcp.example.com
+The owner set the sites here for you to khanacademy. A server of your own needs its name on that list: /connect server https://its-address NAME
+> /accounts
+You have no accounts connected here. Send /connect khanacademy to connect one.
+```
+
+The first `/accounts` said *"Send /connect gmail"*, the old default, to
+someone who may not; it now names a site on their list.
 
 ## Receipt
 
@@ -125,9 +173,9 @@ refused | I'm not answering now -- your hours here are 03:00-04:00. Ask again af
   puts a person's hours, the time their agent is told and their
   schedules on their clock ([note 66](66-their-own-clock.md)). Was: one
   house, one clock; a child abroad is a reason to change the hours.
-* **Per-person site lists.** A site's tools come from the package's
-  `[connections]`. Narrowing those per person would mean two places
-  deciding one thing, and the agent list already does the job.
+* ~~**Per-person site lists.**~~ Built: *A site list of their own*,
+  above (`connectors`). Was: two places deciding one thing. They decide
+  different things, and both must allow.
 * **More messages on the approver's yes.** "Ask whoever looks after this"
   is the sentence. A button that raised the day's limit from the chat
   would be a limit the child could talk their way past.
