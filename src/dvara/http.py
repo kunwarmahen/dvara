@@ -492,7 +492,9 @@ def create_app(service: Service, *, token: str,
         """Keep or Not now, pressed on a phone's ntfy notification (push.py):
         ``{actor, agent, offer, word, mark}``. Only a mark made for exactly
         those is taken; then it is the same word the page's button sends,
-        in the person's page chat."""
+        in the person's page chat. An offer of ``remember:MARKS`` is a look
+        back's Keep or No: the facts kept or turned down by their words, as
+        the page's buttons do, and the answer sent back to the phone."""
         check(authorization)
         body = await request.json()
         if service.push is None or service.web is None:
@@ -503,6 +505,18 @@ def create_app(service: Service, *, token: str,
             raise HTTPException(status_code=403, detail="that button isn't one of ours")
         actor, agent, offer, word = fields
         service.refresh()
+        from dvara.push import REMEMBER
+        if offer.startswith(REMEMBER):
+            # what a look back noticed: the facts found again by their marks
+            facts = service.offered_by_marks(actor, offer[len(REMEMBER):].split("."))
+            try:
+                said, _ = await service.answer_offered(actor, agent, facts,
+                                                       keep=word == "keep")
+            except (Refused, ConfigProblem) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from None
+            with suppress(Exception):    # the answer, back on the phone
+                await service.push.notice(service.push.topic(actor), said)
+            return {"said": said}
         try:
             service.web.say(actor, agent, f"/skills {word} {offer}")
         except Refused as exc:

@@ -76,10 +76,10 @@ the owner's list and finds nothing.
 
 ## What it costs
 
-The words still say what to type, so Telegram and a phone's ntfy notice
-are unchanged: on those, a memory notice is still answered by typing
-`/remember 1`. Buttons there would need marks like the skill offer's
-(push.py) and callback handling; they were left for when someone asks.
+The words still say what to type. Telegram and a phone's ntfy notice
+were first left answering a memory notice by typing `/remember 1`;
+they have buttons now too, carrying a short mark of each fact's words
+([note 81](81-keep-on-every-road.md)).
 
 ## Live receipt
 
@@ -130,5 +130,5 @@ The person is vegetarian, …* under it, and the older notice said
 
 ## What is not here yet
 
-* **Keep and No on Telegram and on a phone's ntfy notice.** The page
-  has them; the other roads still take the typed word.
+* ~~**Keep and No on Telegram and on a phone's ntfy notice.**~~ Built:
+  [note 81](81-keep-on-every-road.md).

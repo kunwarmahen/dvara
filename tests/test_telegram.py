@@ -1200,3 +1200,91 @@ def test_what_the_model_kept_rides_under_the_answer(make_bot, make_service, agen
     asyncio.run(make_bot(fake, service=service).run())
     assert fake.texts()[-1:] == ["Saved.\n\n(Kept about you: Lives in Cary, NC -- "
                                  "/memory forget 1 to undo.)"]
+
+
+# ---- Keep and No on what a look back noticed (remembering.py) -----------------------
+# The bias: A BUTTON THAT KEEPS THE WRONG FACT. A notice is read late; a
+# button carrying a number would keep whatever moved into it. Each carries
+# the fact's mark, found again among what still waits for whoever pressed.
+
+REMEMBERING = ('[agent]\nname = "greeter"\nprompt = "prompt.md"\n'
+               '[memory]\nvia = "local"\n')
+
+
+@pytest.fixture
+def own_state(tmp_path, monkeypatch):
+    """Every store these tests open is a throwaway one: the memory store is
+    found under $XDG_STATE_HOME, and the real one must never be touched."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("YANTRA_USER", "the-machine")
+
+
+def _noticed(make_service, actors, agents_root):
+    from dvara import remembering
+
+    (agents_root / "greeter" / "agent.toml").write_text(REMEMBERING)
+    service = make_service([], actors=actors)
+    pune, cat = "Lives in Pune", "Has a cat called Biscuit"
+    service.offered.add("mahen", "greeter", [remembering.Offer(pune),
+                                             remembering.Offer(cat)])
+    return service, pune, cat
+
+
+def test_a_look_backs_notice_carries_keep_and_no_for_each_fact(
+        own_state, make_bot, make_service, actors, agents_root):
+    from dvara.remembering import fact_mark
+
+    service, pune, cat = _noticed(make_service, actors, agents_root)
+    fake = FakeTelegram([])
+    bot = make_bot(fake, service=service)
+    asyncio.run(bot._deliver_notice(str(KNOWN), "greeter: I noticed this about you: …",
+                                    extra=service._remember_extra("mahen", "greeter")))
+    rows = fake.sent()[-1]["reply_markup"]["inline_keyboard"]
+    assert [[b["text"] for b in r] for r in rows] == [
+        ["Keep 1", "No 1"], ["Keep 2", "No 2"], ["Keep all", "None of these"]]
+    m1, m2 = fact_mark(pune), fact_mark(cat)
+    assert rows[1][0]["callback_data"] == f"r:greeter:{m2}"
+    assert rows[2][1]["callback_data"] == f"s:greeter:{m1}.{m2}"
+    assert all(len(b["callback_data"].encode()) <= 64 for r in rows for b in r)
+
+
+def test_a_press_keeps_that_fact_by_its_words_and_leaves_the_rest(
+        own_state, make_bot, make_service, actors, agents_root):
+    from yantra.memory.local import LocalStore
+
+    from dvara.remembering import ANSWERED, fact_mark
+    from dvara.telegram import _remember_buttons
+
+    service, pune, cat = _noticed(make_service, actors, agents_root)
+    markup = _remember_buttons(service._remember_extra("mahen", "greeter")["remember"])
+    # the first fact went (typed elsewhere) before the second's Keep was pressed
+    service.offered.take("mahen", [1], decline=True)
+
+    def press(n, data):
+        return {"update_id": n, "callback_query": {
+            "id": f"cb{n}", "from": {"id": KNOWN}, "data": data,
+            "message": {"message_id": 7, "chat": {"id": KNOWN}, "text": "I noticed…",
+                        "reply_markup": markup}}}
+    keep_cat = f"r:greeter:{fact_mark(cat)}"
+    fake = FakeTelegram([press(1, keep_cat), press(2, keep_cat)])
+    asyncio.run(make_bot(fake, service=service).run())
+    assert [i.statement for i in LocalStore().list("mahen", 10)] == [cat]
+    first, again = fake.texts()
+    assert first.startswith("Kept:") and cat in first
+    assert again == ANSWERED                    # pressed twice: nothing else kept
+    # nothing waits now, so the buttons come off
+    assert "reply_markup" not in fake.of("editMessageReplyMarkup")[-1]
+
+
+def test_the_buttons_left_are_the_facts_still_waiting():
+    from dvara.remembering import fact_mark
+    from dvara.telegram import _remember_buttons, _remember_left
+
+    facts = ["Lives in Pune", "Has a cat called Biscuit", "Is vegetarian"]
+    markup = _remember_buttons({"agent": "greeter", "items": facts})
+    left = _remember_left(markup, {fact_mark(facts[0]), fact_mark(facts[2])}, "greeter")
+    assert [[b["text"] for b in r] for r in left["inline_keyboard"]] == [
+        ["Keep 1", "No 1"], ["Keep 3", "No 3"], ["Keep all", "None of these"]]
+    assert _remember_left(markup, {fact_mark(facts[2])}, "greeter")["inline_keyboard"] \
+        == [markup["inline_keyboard"][2]]
+    assert _remember_left(markup, set(), "greeter") is None

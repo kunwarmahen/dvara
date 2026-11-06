@@ -80,10 +80,19 @@ the word that keeps a fact stays the one word that keeps a fact. The
 home page shows the same list with an Undo beside each (Dvara's
 ``GET``/``POST /web/declined``); like declining, no store is opened and
 no model asked.
+
+A BUTTON ON EVERY ROAD, BY THE WORDS. A notice that lists what a look
+back noticed carries the facts beside its words, and the page draws Keep
+and No on each. Telegram's button can carry 64 bytes and ntfy's three
+buttons a notification, so neither carries a fact: each carries the
+fact's ``fact_mark``, a short hash of its words, found again at the
+press among what still waits. A number would name whatever moved into
+its place; a mark names that fact or nothing.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -115,6 +124,13 @@ ANSWERED = ("That's already answered: nothing from this notice is waiting any "
             "more. Send /remember to see what is.")
 NO_STORE = ("Your memories aren't open for you here yet. The owner can give "
             "you a place for them.")
+
+
+def fact_mark(statement: str) -> str:
+    """Eight hex of a hash of a fact's words, spaces folded: what a
+    Telegram or phone button carries in place of the fact itself."""
+    folded = " ".join(statement.split())
+    return hashlib.sha256(folded.encode()).hexdigest()[:8]
 
 
 def word_of(text: str) -> str | None:

@@ -35,7 +35,11 @@ topic. It carries no token: only a mark, an HMAC under ``ntfy.key`` of
 this person, this agent, this offer and this word, which Dvara checks
 (``POST /push/answer``, through the home page's ``/api/push/answer``).
 Copied, it can keep or drop that one offer and nothing else, which is
-what the person reading the notification could do anyway. The buttons
+what the person reading the notification could do anyway. What a look
+back noticed comes the same way: Keep and No for one fact, Keep all and
+None of these for several (ntfy draws three buttons at most), each
+carrying the facts' short marks in the offer's place (remembering.py);
+the answer comes back as a notice of its own. The buttons
 go where the tap already opens (``--ntfy-click``, the home page's
 address on the house network); without one, the words still say what
 to type.
@@ -87,6 +91,11 @@ def topic(state: Path, actor: str) -> str:
 
 #: The words a button may send, and what each is called on the phone.
 WORDS = {"keep": "Keep", "drop": "Not now"}
+#: A look back's facts on a button: this, then their marks joined by dots,
+#: in the ``offer`` place, so the mark covers exactly those facts.
+REMEMBER = "remember:"
+REMEMBER_ONE = {"keep": "Keep", "drop": "No"}
+REMEMBER_ALL = {"keep": "Keep all", "drop": "None of these"}
 #: Where on the home page a button's press goes.
 ANSWER_PATH = "/api/push/answer"
 
@@ -124,23 +133,46 @@ class Pusher:
                      extra: dict | None = None) -> None:
         words = text if file is None else f"{text}\n(a file came with it: {file.name})"
         actor = self._whose.get(address)
-        actions = self.actions(actor, (extra or {}).get("offer")) if actor else []
+        extra = extra or {}
+        actions = ((self.actions(actor, extra.get("offer"))
+                    or self.remember_actions(actor, extra.get("remember"))) if actor else [])
         await asyncio.to_thread(self._post, address, words, actions)
 
     def actions(self, actor: str, offer: dict | None) -> list[dict]:
         """Keep and Not now for a skill offered, when a phone can reach the
         home page; none otherwise."""
-        if not offer or not self.click or not offer.get("id") or not offer.get("agent"):
+        if not offer or not offer.get("id") or not offer.get("agent"):
+            return []
+        return self._buttons(actor, str(offer["agent"]), str(offer["id"]), WORDS)
+
+    def remember_actions(self, actor: str, noticed: dict | None) -> list[dict]:
+        """Keep and No for the one fact a look back noticed, or Keep all and
+        None of these for several: ntfy draws three buttons at most, so
+        one fact of several is answered on the page or by typing. The
+        buttons carry the facts' marks (remembering.fact_mark), found
+        again at the press among what still waits."""
+        from dvara.remembering import fact_mark
+        noticed = noticed or {}
+        facts = [f for f in noticed.get("waiting") or noticed.get("items") or []
+                 if isinstance(f, str)]
+        if not facts or not noticed.get("agent"):
+            return []
+        labels = (REMEMBER_ONE if len(facts) == 1 else REMEMBER_ALL)
+        offer = REMEMBER + ".".join(fact_mark(f) for f in facts)
+        return self._buttons(actor, str(noticed["agent"]), offer, labels)
+
+    def _buttons(self, actor: str, agent: str, offer: str,
+                 labels: dict[str, str]) -> list[dict]:
+        if not self.click:
             return []
         place = urlsplit(self.click)
         url = f"{place.scheme}://{place.netloc}{ANSWER_PATH}"
-        agent, offer_id = str(offer["agent"]), str(offer["id"])
         return [{"action": "http", "label": label, "url": url, "method": "POST",
                  "headers": {"Content-Type": "application/json"}, "clear": True,
-                 "body": json.dumps({"actor": actor, "agent": agent, "offer": offer_id,
+                 "body": json.dumps({"actor": actor, "agent": agent, "offer": offer,
                                      "word": word,
-                                     "mark": mark(self.state, actor, agent, offer_id, word)})}
-                for word, label in WORDS.items()]
+                                     "mark": mark(self.state, actor, agent, offer, word)})}
+                for word, label in labels.items()]
 
     def _post(self, topic_name: str, text: str, actions: list[dict] | None = None) -> None:
         if actions:

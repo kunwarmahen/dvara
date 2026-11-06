@@ -1605,6 +1605,14 @@ Press it again and it says *"That's already answered: nothing from this
 notice is waiting any more."* It never keeps whichever fact moved into
 that number ([notes/80](notes/80-one-menu-and-a-keep-button.md)).
 
+On Telegram the same notice comes with **Keep 1** / **No 1** for each
+fact (just **Keep** / **No** for one), and **Keep all** / **None of
+these** for several. Pressing one answers in the chat and takes away the
+buttons of what is no longer waiting. A phone's ntfy notice has them
+too (§22). Each button carries a short mark of its fact's words, not
+the fact's number, so a notice pressed tomorrow keeps that fact or says
+it's gone ([notes/81](notes/81-keep-on-every-road.md)).
+
 **`/memory` says the agent doesn't keep memories?** Its package has no
 `[memory]` table: add the two lines above to that agent's `agent.toml`.
 The words work from the next message. Telegram's `/` menu is sent when
@@ -1709,6 +1717,12 @@ With `--ntfy-click` set to the home page's address, a skill offered
 phone: the notification goes, and the chat on the home page shows the
 answer. The button carries no password, only a mark made for that one
 offer, so anyone reading the notice can do no more than press it.
+
+What a look back noticed (§21) comes with buttons too. One fact gets
+**Keep** and **No**; several get **Keep all** and **None of these**,
+since ntfy shows three buttons at most (to keep only some, use the page
+or type `/remember 1`). The answer, *Kept: …*, comes to the phone as a
+notice of its own ([notes/81](notes/81-keep-on-every-road.md)).
 
 The phone hears notices while it can reach your house, which means home
 Wi-Fi, or anywhere your own Tailscale reaches. An iPhone shows them when
@@ -2198,6 +2212,7 @@ Each topic, and the note that argues it:
 | `notes/72-asked-less-not-never.md` | **approve all for this task** on a question asked only because of a read; `trusted` servers aren't outside text; `--ask` alone asks everything |
 | `notes/77-kept-and-told.md` | on `yolo` the agent keeps a fact unasked: a *Kept about you* line under the answer, and the look back names what was already kept |
 | `notes/80-one-menu-and-a-keep-button.md` | one `/` menu for Telegram and the home page (`menu.py`), and **Keep** / **No** on a look back's notice, by the fact's words (`POST /web/remember`) |
+| `notes/81-keep-on-every-road.md` | Keep and No on a look back's notice on Telegram and a phone, each button carrying a short mark of its fact's words; one answer at a time for each person |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |

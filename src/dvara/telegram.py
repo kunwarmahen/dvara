@@ -877,16 +877,18 @@ class TelegramBot:
         which keeps the text for collection rather than losing it. A
         notice carrying a file (a scheduled run's ``send_file``) is the
         file, with the text as its caption. A skill offered (learning.py)
-        gets Keep and Not now under its last part; the words still say
-        what to type. Someone who chose to hear every answer hears this
+        gets Keep and Not now under its last part, and what a look back
+        noticed a Keep and a No for each fact (remembering.py); the words
+        still say what to type. Someone who chose to hear every answer hears this
         too, after it (spoken.py)."""
         chat = int(address)
         extra = extra or {}
         if file is not None:
             await self._send_file(chat, file, caption=elide(text, CAPTION_LIMIT))
         else:
-            offer = extra.get("offer")
+            offer, noticed = extra.get("offer"), extra.get("remember")
             buttons = (_offer_buttons(offer) if offer
+                       else _remember_buttons(noticed) if noticed
                        else _carry_button() if self._carries(extra.get("carry"), chat)
                        else None)
             parts = split_message(text)
@@ -973,6 +975,9 @@ class TelegramBot:
         if verdict in ("k", "d") and ask_id:
             await self._skill(query, ask_id, keep=verdict == "k")
             return
+        if verdict in ("r", "s") and ask_id:
+            await self._remember_pressed(query, ask_id, keep=verdict == "r")
+            return
         if verdict == "w" and ask_id:
             await self._tapped(query, ask_id)
             return
@@ -1030,6 +1035,41 @@ class TelegramBot:
             via=Channel(kind="telegram", id=str(native)), agent=agent,
             thread=str(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
         for part in split_message(reply.text):
+            await self._send(chat, part, marked=True)
+
+    async def _remember_pressed(self, query: dict, data: str, *, keep: bool) -> None:
+        """Keep or No on what a look back noticed (remembering.py): the
+        facts found again by their marks among what still waits for the
+        person who PRESSED, then kept or turned down as the page's buttons
+        do (``Service.answer_offered``). The buttons left are those whose
+        fact still waits; the answer goes into the chat."""
+        query_id = query.get("id", "")
+        native = query.get("from", {}).get("id")
+        pressed = query.get("message") or {}
+        agent, _, marks = data.rpartition(":")
+        chat = int(pressed.get("chat", {}).get("id", 0))
+        if not agent or not marks or not chat:
+            await self._toast(query_id, "that button means nothing here")
+            return
+        try:
+            actor = self.service.actors.resolve("telegram", native).id
+            self.service.refresh()
+            facts = self.service.offered_by_marks(actor, marks.split("."))
+            said, _ = await self.service.answer_offered(actor, agent, facts, keep=keep)
+        except (Refused, ConfigProblem) as exc:
+            await self._toast(query_id, str(exc))
+            return
+        await self._toast(query_id, ("kept" if keep else "turned down") if facts
+                          else "already answered")
+        if pressed.get("message_id"):
+            waiting = {remembering.fact_mark(o.statement)
+                       for o in self.service.offered.get(actor)}
+            left = _remember_left(pressed.get("reply_markup"), waiting, agent)
+            with contextlib.suppress(TelegramError, httpx.HTTPError):
+                await self._api("editMessageReplyMarkup", chat_id=chat,
+                                message_id=pressed["message_id"],
+                                **({"reply_markup": left} if left else {}))
+        for part in split_message(said):
             await self._send(chat, part, marked=True)
 
     async def _download(self, message: dict) -> Attachment:
@@ -1390,6 +1430,51 @@ def _offer_buttons(offer: dict) -> dict:
         {"text": "Keep", "callback_data": f"k:{data}"[:CALLBACK_LIMIT]},
         {"text": "Not now", "callback_data": f"d:{data}"[:CALLBACK_LIMIT]},
     ]]}
+
+
+def _remember_buttons(noticed: dict) -> dict | None:
+    """Keep and No beside each fact a look back noticed, numbered as the
+    notice numbers them, and Keep all / None of these when there are
+    several. Each carries the fact's mark (remembering.fact_mark), never
+    its number: a notice is read late, and the numbers move."""
+    agent = str(noticed.get("agent") or "")
+    facts = noticed.get("waiting") or noticed.get("items") or []
+    marks = [remembering.fact_mark(f) for f in facts if isinstance(f, str)]
+    if not agent or not marks:
+        return None
+    one = len(marks) == 1
+    rows = [[{"text": "Keep" if one else f"Keep {n}", "callback_data": f"r:{agent}:{m}"},
+             {"text": "No" if one else f"No {n}", "callback_data": f"s:{agent}:{m}"}]
+            for n, m in enumerate(marks, 1)]
+    rows = [r for r in rows if len(r[1]["callback_data"].encode()) <= CALLBACK_LIMIT]
+    rows += _remember_all(agent, marks)
+    return {"inline_keyboard": rows} if rows else None
+
+
+def _remember_all(agent: str, marks: list[str]) -> list[list[dict]]:
+    """Keep all / None of these, for two or more facts, when their marks
+    fit in one button's data; none otherwise (the single ones still do)."""
+    if len(marks) < 2:
+        return []
+    data = f"{agent}:{'.'.join(marks)}"
+    if len(f"r:{data}".encode()) > CALLBACK_LIMIT:
+        return []
+    return [[{"text": "Keep all", "callback_data": f"r:{data}"},
+             {"text": "None of these", "callback_data": f"s:{data}"}]]
+
+
+def _remember_left(markup: dict | None, waiting: set[str], agent: str) -> dict | None:
+    """A pressed notice's buttons, with only the facts still waiting:
+    their own rows as they were, and the all-row made again over what is
+    left. None when nothing waits."""
+    rows = []
+    for row in (markup or {}).get("inline_keyboard") or []:
+        marks = {str(b.get("callback_data", "")).rpartition(":")[2] for b in row}
+        if len(marks) == 1 and "." not in next(iter(marks)) and marks <= waiting:
+            rows.append(row)
+    left = [r[0]["callback_data"].rpartition(":")[2] for r in rows]
+    rows += _remember_all(agent, left)
+    return {"inline_keyboard": rows} if rows else None
 
 
 def _hold_buttons(hold: Hold) -> dict:

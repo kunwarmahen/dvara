@@ -428,6 +428,9 @@ class Service:
         self._provider_factory = provider_factory or _default_provider
         self._providers: dict[str, Provider] = {}
         self._locks: KeyedLocks[str] = KeyedLocks()
+        #: One answer to a person's waiting list at a time: two presses of
+        #: the same button must not both find the fact still there.
+        self._answering: KeyedLocks[str] = KeyedLocks()
         #: A person's own accounts, from the chat: /connect, /accounts,
         #: /disconnect and the address pasted back (accounts.py). Handled
         #: before any turn, and never seen by an agent.
@@ -2588,6 +2591,14 @@ class Service:
         return ({"remember": {"agent": agent, "items": [o.statement for o in waiting]}}
                 if waiting else {})
 
+    def offered_by_marks(self, actor: str, marks: list[str]) -> list[str]:
+        """The facts still waiting for ``actor`` whose ``fact_mark`` is one
+        of ``marks``: what a Telegram or phone button pressed late still
+        names. A mark whose fact went names nothing."""
+        wanted = set(marks)
+        return [o.statement for o in self.offered.get(actor)
+                if remembering.fact_mark(o.statement) in wanted]
+
     async def answer_offered(self, actor: str, agent: str, statements: list[str], *,
                              keep: bool) -> tuple[str, list[str]]:
         """Keep (``keep``) or turn down the facts a notice listed, as
@@ -2597,19 +2608,23 @@ class Service:
         sent: keeping one moves the rest up, and a newer look back
         replaces the list. The numbers are found again now, from what
         still waits; a fact no longer waiting is said so, never another
-        one kept in its place. Returns what was said and what of
-        ``statements`` still waits."""
+        one kept in its place. ONE AT A TIME FOR EACH PERSON: a button
+        pressed twice, or on two roads at once, finds the numbers only
+        after the first press has finished with them. Returns what was
+        said and what of ``statements`` still waits."""
         self.refresh()
         who = self.actors.may(actor, agent)
         spec = self.roster.spec(agent)
         asked = {" ".join(s.split()) for s in statements}
-        picked = [n for n, o in enumerate(self.offered.get(who.id), 1)
-                  if " ".join(o.statement.split()) in asked]
-        if not picked:
-            return remembering.ANSWERED, []
-        word = "/remember " if keep else "/remember not "
-        said = await self._memory_words(spec, who, session_key(actor, agent, "web:chat"),
-                                        word + " ".join(map(str, picked)))
+        async with self._answering.hold(who.id):
+            picked = [n for n, o in enumerate(self.offered.get(who.id), 1)
+                      if " ".join(o.statement.split()) in asked]
+            if not picked:
+                return remembering.ANSWERED, []
+            word = "/remember " if keep else "/remember not "
+            said = await self._memory_words(spec, who,
+                                            session_key(actor, agent, "web:chat"),
+                                            word + " ".join(map(str, picked)))
         still = {" ".join(o.statement.split()) for o in self.offered.get(who.id)}
         left = [s for s in statements if " ".join(s.split()) in still]
         return said, left

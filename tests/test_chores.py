@@ -297,6 +297,63 @@ class TestANoticeOnAPhone:
             lines = client.get("/web?actor=owner", headers=auth).json()["lines"]
             assert lines[0]["text"] == "/skills keep 4638"
 
+    # What a look back noticed, on the phone. The bias: A BUTTON THAT KEEPS
+    # THE WRONG FACT, or one fact of several kept because ntfy drew three
+    # buttons at most. One fact gets Keep and No; several get only Keep all
+    # and None of these; each press names the facts by their marks.
+
+    def test_one_fact_has_keep_and_no_and_several_have_keep_all(self, make_service, tmp_path):
+        from dvara.push import REMEMBER, Pusher
+        from dvara.remembering import fact_mark
+
+        pusher = Pusher("http://127.0.0.1:9", tmp_path, click="http://house:8760/#chat")
+        keep, no = pusher.remember_actions("owner", {"agent": "greeter",
+                                                     "items": ["Lives in Pune"]})
+        assert (keep["label"], no["label"]) == ("Keep", "No")
+        assert json.loads(keep["body"])["offer"] == REMEMBER + fact_mark("Lives in Pune")
+        both = pusher.remember_actions("owner", {"agent": "greeter",
+                                                 "items": ["Lives in Pune", "Has a cat"]})
+        assert [a["label"] for a in both] == ["Keep all", "None of these"]
+        assert json.loads(both[1]["body"])["word"] == "drop"
+        assert Pusher("http://127.0.0.1:9", tmp_path).remember_actions(
+            "owner", {"agent": "greeter", "items": ["Lives in Pune"]}) == []   # no page
+
+    def test_a_press_keeps_by_the_marks_and_the_answer_comes_back(self, make_service,
+                                                                 agents_root):
+        from fastapi.testclient import TestClient
+        from yantra.memory.local import LocalStore
+
+        from dvara import push, remembering
+        from dvara.http import create_app
+
+        (agents_root / "greeter" / "agent.toml").write_text(REMEMBERING)
+        service = make_service(actors=people(), web=True, ntfy="http://127.0.0.1:9",
+                               ntfy_click="http://house:8760/")
+        posted = []
+
+        async def heard(topic, text, **_):
+            posted.append((topic, text))
+        service.push.notice = heard
+        pune, cat = "Lives in Pune", "Has a cat called Biscuit"
+        service.offered.add("owner", "greeter", [remembering.Offer(pune),
+                                                 remembering.Offer(cat)])
+        offer = push.REMEMBER + ".".join(map(remembering.fact_mark, (pune, cat)))
+        # one of the two was turned down from the page before the phone's press
+        service.offered.take("owner", [1], decline=True)
+        press = {"actor": "owner", "agent": "greeter", "offer": offer, "word": "keep",
+                 "mark": push.mark(service.state, "owner", "greeter", offer, "keep")}
+        token = "a-token-long-enough-to-be-real"
+        auth = {"Authorization": f"Bearer {token}"}
+        with TestClient(create_app(service, token=token)) as client:
+            got = client.post("/push/answer", headers=auth, json=press).json()
+            assert got["said"].startswith("Kept:") and cat in got["said"]
+            assert [i.statement for i in LocalStore().list("owner", 10)] == [cat]
+            again = client.post("/push/answer", headers=auth, json=press).json()
+            assert again["said"] == remembering.ANSWERED
+            forged = {**press, "offer": push.REMEMBER + remembering.fact_mark(pune)}
+            assert client.post("/push/answer", headers=auth, json=forged).status_code == 403
+        assert posted[0] == (service.push.topic("owner"), got["said"])
+
 
 SAMAY = """#!/bin/sh
 echo "$@" >> "$(dirname "$0")/asked"
