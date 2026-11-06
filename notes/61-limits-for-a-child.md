@@ -112,8 +112,15 @@ says what an agent is for; the list says what this person may give it.
 * **The agent isn't sent to a refusal.** It is told which sites aren't
   connected only from the list, so it never says "send /connect amazon"
   to someone who may not. A site they signed in to anyway (on Setu's own
-  page) is named to the agent as not given, so it doesn't go round by
-  the phone or a browser.
+  page) is named to the agent as kept from it, WITH THIS REASON, not the
+  package's (Yantra's `Setu.withheld`, its note 128), so it neither goes
+  round by the phone or a browser nor offers to connect it. On
+  `qwen3.8-64k:latest`, `kid` asking *"Is there anything new in my
+  Gmail?"*: *"I can't check your Gmail from here — Gmail is connected to
+  your account, but the owner restricted which sites my agents can use
+  to just Khan Academy … the owner can change that setting."* (3 of 3;
+  before, *"you'd need to connect a Gmail account (or I could check it
+  in a browser with you)"*).
 * By connector, not by account: `setu_accounts` is the account-level
   one, and both may be set.
 

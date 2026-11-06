@@ -1666,20 +1666,25 @@ class Service:
         except SetuLinkError as exc:
             self._note(f"dvara: {who.id}'s accounts are off for this turn -- setu: {exc}")
             return
-        allow = {}
+        allow, withheld = {}, {}
         # locked ones too: named to the agent, never started (setu_link)
         for row in (link.connections + link.locked if link is not None else []):
             account = f"{row.get('connector')}:{account_of(row)}"
             if who.setu_accounts is not None and account not in who.setu_accounts:
                 continue
             if not who.may_reach(row.get("connector")):      # their site list
+                # named to the agent with this reason, not the package's
+                withheld[row.get("ref") or account] = (
+                    "the owner set the sites this person's agents may use to "
+                    + ", ".join(who.connectors or ())
+                    + " (and of those, only what is listed above as connected)")
                 continue
             if level := ceiling_of(needs, row):      # "*:read" reaches every one
                 allow[account] = level
         setu = Setu(mode="on", home=home, link=link, allow=allow,
                     package=spec.name, mention=_reachable(needs, who),
                     connect_how=CONNECT_HERE if who.manages_setu else CONNECT_THERE,
-                    locked_how=LOCKED_HERE, vault_key=key)
+                    locked_how=LOCKED_HERE, vault_key=key, withheld=withheld)
         try:
             done = await asyncio.to_thread(setu.sync, manager, agent)
         except MCPError as exc:

@@ -249,7 +249,18 @@ class TestWhoGetsNone:
         # the agent knows it's there and not its own, so it doesn't go round
         # by the phone or a browser; it never sends them to /connect gmail
         system = service.scripted.requests[0]["system"]
-        assert "this agent was not given it" in system and "/connect gmail" not in system
+        assert "kept from this agent: the owner set the sites this person's agents " \
+               "may use to khanacademy" in system
+        assert "package's [connections]" not in system and "/connect gmail" not in system
+
+    def test_an_agent_asking_only_for_a_site_off_their_list_still_hears_why(
+            self, make_service, fake_setu, agents_root, tmp_path):
+        mailer(agents_root)                               # gmail:read, nothing else
+        kid = home_with(tmp_path / "homes" / "kid", "personal")
+        service = make_service([says("ok")], actors=book(
+            kid={"setu": str(kid), "connectors": ["khanacademy"]}))
+        ask(service, "kid")
+        assert "kept from this agent" in service.scripted.requests[0]["system"]
 
     def test_a_site_on_their_list_is_reached_as_ever(self, make_service, fake_setu,
                                                      agents_root, tmp_path):
