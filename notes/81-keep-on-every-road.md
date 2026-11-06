@@ -43,14 +43,24 @@ that went come off, and the all-row is made again over what is left.
 The facts are looked up when the button is pressed, not when the
 message was sent.
 
-**ON THE PHONE, ONE FACT OR ALL OF THEM.** ntfy draws three buttons at
-most, so one fact gets **Keep** and **No**, and several get **Keep
-all** and **None of these**. Keeping only some of several means the
-page, or typing `/remember 1`. The buttons ride the skill offer's road
-unchanged: the offer's place holds `remember:` and the marks, and the
-HMAC mark under `ntfy.key` covers this person, agent, those facts and
-that word. Sarathi's `/api/push/answer` passes it through as it always
-did, untouched. The phone's press clears the notification, so the
+**ON THE PHONE, ONE NOTIFICATION PER FACT.** ntfy draws three buttons
+a notification. A single notification for several facts could only
+offer **Keep all** and **None of these**, and that is how this first
+shipped: keeping two facts of three meant the page, or typing. Now each
+fact comes as its own notification, *"greeter noticed this about you
+(2 of 4): …"*, with **Keep** and **No** for that fact and **Keep all**
+for every fact the look back listed. ONE BUZZ FOR THE LOT: the first
+posts at ntfy's default priority and the rest at low priority (2),
+which shows them without a sound. One fact gets one notification with
+**Keep** and **No**. Without `--ntfy-click` there is no page to press
+to, so the notice's words go whole, once, as before.
+
+The buttons ride the skill offer's road unchanged: the offer's place
+holds `remember:` and the marks, and the HMAC mark under `ntfy.key`
+covers this person, agent, those facts and that word. Sarathi's
+`/api/push/answer` passes it through as it always did. A press clears
+only its own notification, so the others stay on the phone; pressing
+one whose fact was answered elsewhere says *already answered*. The
 answer (*Kept: …*) comes back to the phone as a notice of its own.
 
 **ONE ANSWER AT A TIME FOR EACH PERSON.** Telegram handles presses
@@ -63,15 +73,19 @@ second press finds the first one's result and says *already answered*.
 
 ## What it costs
 
-A phone answers some-of-several by the page or by typing. A fourth
-button would need a fourth slot ntfy doesn't have. Telegram's labels
+Several facts are several notifications on the phone. They arrive as
+one buzz, but they take more room in the shade, and pressing Keep all
+on one leaves the others showing until they are swiped or pressed (a
+press then says *already answered*). The house's ntfy (v2.11) can't
+take a notification back; dropping None of these was the price of a
+third slot for Keep all, and not answering keeps nothing anyway. Telegram's labels
 say numbers, which match the notice's words when it is sent; once a
 fact is kept the numbers in the text are stale, but the buttons never
 are, because they look the fact up again.
 
 ## Live receipt
 
-A scratch Dvara (`serve --web --quiet-for 0.5`, `--ntfy` at the house's
+As first built, one notification for every fact. A scratch Dvara (`serve --web --quiet-for 0.5`, `--ntfy` at the house's
 ntfy server on a topic made from the scratch key, `--ntfy-click` its own
 address), the `greeter` package with `[memory] via = "local"`, on
 `qwen3.8:latest`. One message (*"My son Arjun has swim practice every
@@ -103,9 +117,42 @@ and the topic held both answers as notices after the look back's own.
 Telegram's buttons were run against the tests' fake Bot API, not a real
 bot.
 
+The same scratch Dvara after notifications went one per fact. One
+message (*"I work night shifts as a nurse at WakeMed, my daughter Akshi
+does Mathnasium on Mondays 7 to 8 pm, and I am allergic to peanuts."*),
+then quiet. The topic held four notifications:
+
+```
+priority -  greeter noticed this about you (1 of 4): The person is vegetarian, …
+              Keep remember:9ef58466 · No remember:9ef58466 · Keep all remember:9ef58466.18c80988.d5173cda.26454677
+priority 2  greeter noticed this about you (2 of 4): Works night shifts as a nurse at WakeMed …
+              Keep remember:18c80988 · No remember:18c80988 · Keep all (the same four)
+priority 2  … (3 of 4): Their daughter Akshi attends Mathnasium on Monday evenings …
+priority 2  … (4 of 4): Allergic to peanuts, …
+```
+
+Keep on the third, No on the first, Keep all from the second's, then
+the third's Keep again:
+
+```
+{"said":"Kept:\n- Their daughter Akshi attends Mathnasium on Monday evenings from 7 to 8 pm, …"}
+{"said":"I won't offer these again:\n- The person is vegetarian, …"}
+{"said":"Kept:\n- Works night shifts as a nurse at WakeMed …\n- Allergic to peanuts, …"}
+{"said":"That's already answered: nothing from this notice is waiting any more. …"}
+```
+
+Keep all kept only the two still waiting. The vegetarian fact came
+back in this run although the first run turned it down: it was worded
+*"The person is vegetarian"* this time, past `same`'s head-word match
+([note 68](68-what-you-turned-down.md)); turning it down again covers
+that wording too.
+
 ## What is not here yet
 
-* **Some of several from the phone.** ntfy's three buttons go to Keep
-  all and None of these; one fact of several is the page's, or typed.
+* ~~**Some of several from the phone.**~~ Built: one notification per
+  fact, above.
+* **Taking the other notifications away** once Keep all is pressed. It
+  needs an ntfy that can update a notification it sent; the house's
+  can't.
 * **A real bot pressed.** Telegram's side has run against the fake Bot
   API in the tests, not yet on the house's own bot.

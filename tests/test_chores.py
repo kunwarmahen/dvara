@@ -298,25 +298,47 @@ class TestANoticeOnAPhone:
             assert lines[0]["text"] == "/skills keep 4638"
 
     # What a look back noticed, on the phone. The bias: A BUTTON THAT KEEPS
-    # THE WRONG FACT, or one fact of several kept because ntfy drew three
-    # buttons at most. One fact gets Keep and No; several get only Keep all
-    # and None of these; each press names the facts by their marks.
+    # THE WRONG FACT, or a fact that can't be kept on its own because ntfy
+    # draws three buttons at most. Each fact gets its own notification with
+    # Keep and No for it (and Keep all), one buzz for the lot, and each
+    # press names the facts by their marks.
 
-    def test_one_fact_has_keep_and_no_and_several_have_keep_all(self, make_service, tmp_path):
+    def test_each_fact_its_own_notification_with_keep_no_and_keep_all(self, tmp_path):
         from dvara.push import REMEMBER, Pusher
         from dvara.remembering import fact_mark
 
+        facts = ["Lives in Pune", "Has a cat", "Is vegetarian"]
+        posted = []
         pusher = Pusher("http://127.0.0.1:9", tmp_path, click="http://house:8760/#chat")
-        keep, no = pusher.remember_actions("owner", {"agent": "greeter",
-                                                     "items": ["Lives in Pune"]})
-        assert (keep["label"], no["label"]) == ("Keep", "No")
-        assert json.loads(keep["body"])["offer"] == REMEMBER + fact_mark("Lives in Pune")
-        both = pusher.remember_actions("owner", {"agent": "greeter",
-                                                 "items": ["Lives in Pune", "Has a cat"]})
-        assert [a["label"] for a in both] == ["Keep all", "None of these"]
-        assert json.loads(both[1]["body"])["word"] == "drop"
-        assert Pusher("http://127.0.0.1:9", tmp_path).remember_actions(
-            "owner", {"agent": "greeter", "items": ["Lives in Pune"]}) == []   # no page
+        pusher._post = lambda topic, text, actions=None, quiet=False: posted.append(
+            (text, actions, quiet))
+        topic = pusher.topic("owner")
+        asyncio.run(pusher.notice(topic, "greeter: I noticed … /remember …",
+                                  extra={"remember": {"agent": "greeter", "items": facts}}))
+        assert [p[0] for p in posted] == [
+            f"greeter noticed this about you ({n} of 3):\n{f}"
+            for n, f in enumerate(facts, 1)]
+        assert [p[2] for p in posted] == [False, True, True]       # one buzz
+        every = REMEMBER + ".".join(map(fact_mark, facts))
+        for fact, (_, actions, _) in zip(facts, posted, strict=True):
+            assert [a["label"] for a in actions] == ["Keep", "No", "Keep all"]
+            bodies = [json.loads(a["body"]) for a in actions]
+            assert [b["offer"] for b in bodies] == [REMEMBER + fact_mark(fact)] * 2 + [every]
+            assert [b["word"] for b in bodies] == ["keep", "drop", "keep"]
+
+        posted.clear()          # one fact: Keep and No, no "1 of 1"
+        asyncio.run(pusher.notice(topic, "…", extra={"remember": {
+            "agent": "greeter", "items": ["Lives in Pune"]}}))
+        [(text, actions, quiet)] = posted
+        assert text == "greeter noticed this about you:\nLives in Pune" and not quiet
+        assert [a["label"] for a in actions] == ["Keep", "No"]
+
+        posted.clear()          # no home page to press to: the words, whole, once
+        bare = Pusher("http://127.0.0.1:9", tmp_path)
+        bare._post = pusher._post
+        asyncio.run(bare.notice(bare.topic("owner"), "the whole notice",
+                                extra={"remember": {"agent": "greeter", "items": facts}}))
+        assert posted == [("the whole notice", [], False)]
 
     def test_a_press_keeps_by_the_marks_and_the_answer_comes_back(self, make_service,
                                                                  agents_root):

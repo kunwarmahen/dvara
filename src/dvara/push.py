@@ -36,10 +36,12 @@ this person, this agent, this offer and this word, which Dvara checks
 (``POST /push/answer``, through the home page's ``/api/push/answer``).
 Copied, it can keep or drop that one offer and nothing else, which is
 what the person reading the notification could do anyway. What a look
-back noticed comes the same way: Keep and No for one fact, Keep all and
-None of these for several (ntfy draws three buttons at most), each
-carrying the facts' short marks in the offer's place (remembering.py);
-the answer comes back as a notice of its own. The buttons
+back noticed comes the same way, ONE NOTIFICATION PER FACT: ntfy draws
+three buttons at most, so each fact's has Keep and No for it and, when
+there are several, Keep all. Only the first makes a sound; the rest
+arrive at low priority, so several facts are still one buzz. Each
+button carries the facts' short marks in the offer's place
+(remembering.py), and the answer comes back as a notice of its own. The buttons
 go where the tap already opens (``--ntfy-click``, the home page's
 address on the house network); without one, the words still say what
 to type.
@@ -95,7 +97,10 @@ WORDS = {"keep": "Keep", "drop": "Not now"}
 #: in the ``offer`` place, so the mark covers exactly those facts.
 REMEMBER = "remember:"
 REMEMBER_ONE = {"keep": "Keep", "drop": "No"}
-REMEMBER_ALL = {"keep": "Keep all", "drop": "None of these"}
+#: The third button on each fact's notification, when there are several.
+REMEMBER_ALL = "Keep all"
+#: ntfy's "low" priority: shown, with no sound and no buzz.
+QUIET = 2
 #: Where on the home page a button's press goes.
 ANSWER_PATH = "/api/push/answer"
 
@@ -134,8 +139,14 @@ class Pusher:
         words = text if file is None else f"{text}\n(a file came with it: {file.name})"
         actor = self._whose.get(address)
         extra = extra or {}
-        actions = ((self.actions(actor, extra.get("offer"))
-                    or self.remember_actions(actor, extra.get("remember"))) if actor else [])
+        posts = self.remember_posts(actor, extra.get("remember")) \
+            if actor and file is None and not extra.get("offer") else []
+        if posts:
+            for n, (said, buttons) in enumerate(posts):
+                # one sound for the lot: the rest arrive quietly
+                await asyncio.to_thread(self._post, address, said, buttons, quiet=n > 0)
+            return
+        actions = self.actions(actor, extra.get("offer")) if actor else []
         await asyncio.to_thread(self._post, address, words, actions)
 
     def actions(self, actor: str, offer: dict | None) -> list[dict]:
@@ -145,21 +156,38 @@ class Pusher:
             return []
         return self._buttons(actor, str(offer["agent"]), str(offer["id"]), WORDS)
 
-    def remember_actions(self, actor: str, noticed: dict | None) -> list[dict]:
-        """Keep and No for the one fact a look back noticed, or Keep all and
-        None of these for several: ntfy draws three buttons at most, so
-        one fact of several is answered on the page or by typing. The
-        buttons carry the facts' marks (remembering.fact_mark), found
-        again at the press among what still waits."""
+    def remember_posts(self, actor: str, noticed: dict | None) -> list[tuple[str, list[dict]]]:
+        """What a look back noticed, as the phone gets it: one notification
+        for EACH fact, so each can be kept or turned down on its own.
+
+        ntfy draws three buttons a notification, so a single notification
+        for several facts could only offer all or none of them. Each
+        fact's has Keep and No for that fact, and Keep all (with several)
+        for every fact the look back listed. The buttons carry the facts'
+        marks (remembering.fact_mark), found again at the press among what
+        still waits: a fact answered from another notification, the page
+        or Telegram is "already answered", never another one. None without
+        a home page to press to (``--ntfy-click``): the words are then
+        posted whole, as any notice."""
         from dvara.remembering import fact_mark
         noticed = noticed or {}
         facts = [f for f in noticed.get("waiting") or noticed.get("items") or []
                  if isinstance(f, str)]
-        if not facts or not noticed.get("agent"):
+        agent = str(noticed.get("agent") or "")
+        if not facts or not agent or not self.click:
             return []
-        labels = (REMEMBER_ONE if len(facts) == 1 else REMEMBER_ALL)
-        offer = REMEMBER + ".".join(fact_mark(f) for f in facts)
-        return self._buttons(actor, str(noticed["agent"]), offer, labels)
+        every = REMEMBER + ".".join(fact_mark(f) for f in facts)
+        posts = []
+        for n, fact in enumerate(facts, 1):
+            one = REMEMBER + fact_mark(fact)
+            buttons = self._buttons(actor, agent, one, REMEMBER_ONE)
+            if len(facts) > 1:
+                buttons += self._buttons(actor, agent, every, {"keep": REMEMBER_ALL})
+                head = f"{agent} noticed this about you ({n} of {len(facts)}):"
+            else:
+                head = f"{agent} noticed this about you:"
+            posts.append((f"{head}\n{fact}", buttons))
+        return posts
 
     def _buttons(self, actor: str, agent: str, offer: str,
                  labels: dict[str, str]) -> list[dict]:
@@ -174,11 +202,14 @@ class Pusher:
                                      "mark": mark(self.state, actor, agent, offer, word)})}
                 for word, label in labels.items()]
 
-    def _post(self, topic_name: str, text: str, actions: list[dict] | None = None) -> None:
+    def _post(self, topic_name: str, text: str, actions: list[dict] | None = None, *,
+              quiet: bool = False) -> None:
         if actions:
             # buttons need ntfy's JSON form: the header form can't carry a body
             body = {"topic": topic_name, "message": text[:4000], "title": "Your agents",
                     "tags": ["speech_balloon"], "actions": actions}
+            if quiet:
+                body["priority"] = QUIET
             if self.click:
                 body["click"] = self.click
             request = urllib.request.Request(self.url, data=json.dumps(body).encode(),
