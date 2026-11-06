@@ -12,7 +12,11 @@ an ntfy server the owner runs (Sarathi starts one), so the words never
 leave the house. The price: a phone hears it while it can reach that
 server -- on the home network, or wherever the owner's own network
 reaches (Tailscale). ntfy.sh, the public server, was turned down: every
-notice would pass through somebody else's computer.
+notice would pass through somebody else's computer. An iPhone is the one
+exception, and it is the server's setting, not Dvara's: iOS wakes an app
+only through Apple, so the house's ntfy may tell ntfy.sh that a message
+came (its id and a hash of the topic, never the words), and the iPhone
+fetches the words from the house (Sarathi's ``[dvara] ntfy_upstream``).
 
 ONE TOPIC PER PERSON, THAT NOBODY CAN GUESS. ntfy's topics are open: who
 knows a topic's name can read it. So a person's topic is

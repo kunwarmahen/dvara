@@ -1707,7 +1707,12 @@ $ curl -H "Authorization: Bearer $DVARA_TOKEN" "localhost:8798/web/push?actor=ow
 
 On the phone: install ntfy, press +, turn on *Use another server*, and
 enter `http://192.168.1.44:8793` and that topic. Send a notice
-(`POST /notify` as in §19) and it shows on the phone. You won't usually
+(`POST /notify` as in §19) and it shows on the phone. On an iPhone it
+shows only when the app is opened, unless the server wakes it through
+ntfy.sh: add `--base-url http://192.168.1.44:8793 --upstream-base-url
+https://ntfy.sh` after `serve`, and in the app set **Settings → Default
+Server** to that same address before adding the topic. ntfy.sh learns
+only that a message came, never its words. You won't usually
 type any of this: with Sarathi, `sarathi dvara --ntfy` starts the server,
 and each person finds their server and topic under **Notices on this
 phone** on the home page.

@@ -31,7 +31,8 @@ Sarathi starts the server and passes both (Sarathi's `[dvara] ntfy`).
   price: a phone hears a notice while it can reach that server, which is
   on the home network, or wherever the owner's own network reaches
   (Tailscale). ntfy.sh, the public server, was turned down because every
-  notice would pass through somebody else's computer.
+  notice would pass through somebody else's computer. An iPhone is woken
+  through it, but without the words (below).
 * **ONE TOPIC PER PERSON, AND NOBODY CAN GUESS IT.** ntfy's topics are
   open: anyone who knows a topic's name can read it. A person's topic is
   `dvara-<id>-<16 hex>`, the hex an HMAC of their id under a key in
@@ -113,11 +114,14 @@ gets the same link and words as `/accounts page`.
 
 ## What was deliberately not built
 
-* **ntfy.sh.** As above: no notice through somebody else's computer.
+* **ntfy.sh for the words.** As above: no notice through somebody
+  else's computer.
 * **Answers pushed.** An answer to what they wrote on the page is not
   pushed; they are on the page.
 * **Web Push from the page itself.** That needs the page on HTTPS, and
   the house's pages are plain HTTP on the home network.
-* **iPhones, fully.** ntfy's iOS app is told about a new message through
-  Apple, which a server in the house reaches only by forwarding through
-  ntfy.sh. Without that, an iPhone shows notices when the app is opened.
+* ~~**iPhones, fully.**~~ An iPhone is woken through ntfy.sh, with the
+  words kept home. That is the ntfy server's setting (`--base-url` equal
+  to the app's Default Server, `--upstream-base-url https://ntfy.sh`),
+  and nothing in Dvara changes. Sarathi's `[dvara] ntfy_upstream` sets
+  it, with a real iPhone's receipt in Sarathi's note 15.
