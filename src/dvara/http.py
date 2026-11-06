@@ -589,7 +589,8 @@ def create_app(service: Service, *, token: str,
         try:
             line = web.say(body["actor"], body["agent"], body.get("text") or "",
                            attachments, conversation=body.get("conversation")
-                           if isinstance(body.get("conversation"), str) else None)
+                           if isinstance(body.get("conversation"), str) else None,
+                           new=body.get("new") is True)
         except Refused as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         return {"line": line.as_dict()}
@@ -727,16 +728,24 @@ def create_app(service: Service, *, token: str,
     @app.delete("/web/chats/{conversation_id}")
     async def web_chat_delete(conversation_id: str, actor: str = "",
                               authorization: str | None = Header(default=None)) -> dict:
-        """Gone for good. Not one open in a chat now: its next turn would
-        write it again. To carry one on, the page says ``/chats open ID``."""
+        """Gone for good. Not one open in a chat elsewhere (Telegram, a
+        puck): its next turn would write it again. Its own page chat is
+        closed with it, unless it is answering right now."""
         check(authorization)
         web_for(actor)
-        if conversation_id in service.past.open_ids(actor):
+        on_page = service.past.page_keys(actor, conversation_id)
+        if set(service.past.open_on(actor, conversation_id)) - set(on_page):
             raise HTTPException(status_code=409,
                                 detail="that conversation is open in a chat now -- "
                                        "start a new one there first (/new)")
+        if any(service.busy(k) for k in on_page):
+            raise HTTPException(status_code=409,
+                                detail="that conversation is answering now -- "
+                                       "delete it once it has answered")
         if not service.past.delete(actor, conversation_id):
             raise HTTPException(status_code=404, detail="that conversation is gone")
+        for key in on_page:
+            service.close_chat(key)
         return {"deleted": conversation_id}
 
     @app.post("/web/chats/{conversation_id}/rename")

@@ -16,10 +16,23 @@ gone; these are kept, so a person away for a week finds the week.
 A page that keeps them in a place of their own asks for them alone
 (``notices``), whatever ``/new`` has cleared from the chat.
 
-THE CHAT IS THE PAGE'S OWN CONVERSATION. Turns from here run under the
-thread ``web:chat``, beside Telegram's ``telegram:<chat>`` -- a chat on
-Telegram does not continue on the page by itself, and the reverse;
-``/chats N`` opens one in both, and both carry it on (past.py). The person is
+EACH CONVERSATION ON THE PAGE IS ITS OWN CHAT. Telegram has one window,
+so its conversations take turns in one chat (``telegram:<chat>``). A page
+has a list of them, and a person who asks something in one while another
+is still answering means both, at once. So a page turn runs under its
+conversation's own thread, ``web:chat.<id>``: its own session, its own
+lock, its own questions waiting. Words sent as ``new`` start a new
+one, its id made here and handed back on the line, so the page knows the
+chat it just began; words with neither go to the one page chat every
+message went to before, for a caller that keeps no list. Every line
+says its ``conversation``, ``look`` says which are ``working`` and
+keeps each one's ``live`` view apart, and the page draws only the
+conversation it shows. (Turns ran under one thread,
+``web:chat``, before: a chat answering in one conversation held words
+for another until it was done. Its conversation is still open there and
+is carried on by its id like any other.) A conversation begun on
+Telegram is carried on here under its own page chat too, and both carry
+it on (past.py). The person is
 the same person on both: same allowance, rules, folder, sign-ins, and
 one queue of questions. A question a page turn raises still goes to
 their Telegram if they have one, and the page lists it too; the first
@@ -81,8 +94,13 @@ if TYPE_CHECKING:
 
 #: The channel's kind, in notices and in the thread a page turn runs in.
 KIND = "web"
-#: The page's one conversation per agent, as Telegram's is one per chat.
+#: The page's thread; each conversation's is this and its id (``page_thread``).
 THREAD = f"{KIND}:chat"
+
+
+def page_thread(conversation: str) -> str:
+    """The thread a page conversation's turns run under: its own chat."""
+    return f"{THREAD}.{conversation}"
 #: Lines kept per person; the oldest go first.
 KEEP_PER_PERSON = 2000
 #: Lines one look hands over, at most.
@@ -132,7 +150,8 @@ class Line:
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
         for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent",
-                     "transcript", "heard", "speak", "fresh", "kept"):
+                     "transcript", "heard", "speak", "fresh", "kept",
+                     "conversation", "moved_to"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         # its turn can be read step by step (``steps``); asked for by line,
@@ -265,10 +284,10 @@ class WebChannel:
     def __init__(self, service: Service, book: WebBook) -> None:
         self.service = service
         self.book = book
-        #: (actor, agent) with a turn running now.
-        self._busy: set[tuple[str, str]] = set()
+        #: (actor, agent, conversation) with a turn running now.
+        self._busy: set[tuple[str, str, str]] = set()
         #: What each of those turns has written and done so far.
-        self._live: dict[tuple[str, str], Live] = {}
+        self._live: dict[tuple[str, str, str], Live] = {}
         self._jobs: set[asyncio.Task] = set()
 
     async def notice(self, address: str, text: str, file: Path | None = None,
@@ -291,9 +310,12 @@ class WebChannel:
                 if self.service.asks is not None else [])
         return {"actor": actor, "agents": agents,
                 "lines": [line.as_dict() for line in self.book.after(actor, after)],
-                "busy": sorted(agent for (a, agent) in self._busy if a == actor),
-                "live": [{"agent": agent, **live.as_dict()}
-                         for (a, agent), live in sorted(self._live.items()) if a == actor],
+                "busy": sorted({agent for (a, agent, _) in self._busy if a == actor}),
+                # which conversations are answering now, each its own chat
+                "working": sorted({c for (a, _, c) in self._busy if a == actor and c}),
+                "live": [{"agent": agent, "conversation": c, **live.as_dict()}
+                         for (a, agent, c), live in sorted(self._live.items())
+                         if a == actor],
                 "asks": [ask.as_dict() for ask in asks],
                 "holds": [hold.as_dict()
                           for hold in self.service.holds.pending(actor)],
@@ -317,19 +339,25 @@ class WebChannel:
 
     def say(self, actor: str, agent: str, text: str,
             attachments: list[Attachment] | None = None,
-            conversation: str | None = None) -> Line:
+            conversation: str | None = None, new: bool = False) -> Line:
         """Write down what they said and start the turn behind it. Files
         sent with it are named on their line (kept in their folder by
-        the turn: attached.py). ``conversation``: the old one it was
-        written under, carried on in the same turn (past.py)."""
+        the turn: attached.py). ``conversation``: the one it was written
+        under, carried on in its own chat; ``new`` starts one in a chat of
+        its own, its id on the line. Neither is the one page chat every
+        message went to before conversations had chats of their own."""
+        from yantra.history import new_id
+
         who = self.service.actors.get(actor)
         if not who.may_use(agent):
             raise Refused(f"you have no agent called {agent!r} here")
         if not text.strip() and not attachments:
             raise Refused("say something and I will answer it")
         sent = [safe_name(a.name) for a in attachments or []]
+        begin = new and not conversation
+        conversation = new_id() if begin else conversation
         line = self.book.add(actor, "you", text, agent=agent,
-                             extra={"sent": sent})
+                             extra={"sent": sent, "conversation": conversation})
         live = Live()
 
         def watch(event: dict) -> None:
@@ -338,9 +366,11 @@ class WebChannel:
                 self.book.stamp(actor, line.id, {"heard": event.get("text")})
             live(event)
 
-        self._start(actor, agent, self.service.deliver(
-            actor=actor, agent=agent, thread=THREAD, text=text, came_by=KIND,
-            watch=watch, attachments=attachments or (), conversation=conversation), live,
+        self._start(actor, agent, conversation or "", self.service.deliver(
+            actor=actor, agent=agent,
+            thread=page_thread(conversation) if conversation else THREAD, text=text,
+            came_by=KIND, watch=watch, attachments=attachments or (),
+            conversation=conversation, begin=begin), live,
             new=not attachments and fresh.is_new_word(text))
         return line
 
@@ -356,38 +386,47 @@ class WebChannel:
         if hold.actor != actor:
             raise NotYourHold(hold_id)
         live = Live()
-        self._start(actor, hold.agent, self.service.resume(
+        self._start(actor, hold.agent, self.service.past.here(hold.key) or "",
+                    self.service.resume(
             hold_id, answers=answers, actor=actor, door=KIND, watch=live), live)
 
-    def _start(self, actor: str, agent: str, turn, live: Live | None = None,
-               *, new: bool = False) -> None:
-        self._busy.add((actor, agent))
+    def _start(self, actor: str, agent: str, conversation: str, turn,
+               live: Live | None = None, *, new: bool = False) -> None:
+        running = (actor, agent, conversation)
+        self._busy.add(running)
         if live is not None:
-            self._live[(actor, agent)] = live
+            self._live[running] = live
+        tag = {"conversation": conversation}
 
         async def run() -> None:
             try:
                 reply = await turn
             except Refused as exc:
                 self.book.add(actor, "agent", str(exc), agent=agent,
-                              extra={"stop_reason": "refused"})
+                              extra={"stop_reason": "refused", **tag})
             except Exception as exc:     # never a turn that silently vanished
                 self.book.add(actor, "agent", f"That went wrong: {exc}",
-                              agent=agent, extra={"stop_reason": "error"})
+                              agent=agent, extra={"stop_reason": "error", **tag})
             else:
                 # a /new refused under a running turn started nothing over
                 self.answered(actor, agent, reply, new=new and reply.stop_reason == "new"
-                              and reply.text != fresh.STILL_ANSWERING)
+                              and reply.text != fresh.STILL_ANSWERING,
+                              conversation=conversation)
             finally:
-                self._busy.discard((actor, agent))
-                self._live.pop((actor, agent), None)
+                self._busy.discard(running)
+                self._live.pop(running, None)
 
         job = asyncio.ensure_future(run())
         self._jobs.add(job)
         job.add_done_callback(self._jobs.discard)
 
-    def answered(self, actor: str, agent: str, reply: Reply, *, new: bool = False) -> Line:
+    def answered(self, actor: str, agent: str, reply: Reply, *, new: bool = False,
+                 conversation: str = "") -> Line:
+        conversation = conversation or reply.conversation or ""
         return self.book.add(actor, "agent", reply.text, agent=agent, extra={
+            # the window it was asked from, and where ``/chats N`` took it
+            "conversation": conversation,
+            "moved_to": reply.conversation if reply.conversation != conversation else None,
             # the page starts over from here (/new)
             "fresh": new,
             # the run, for its steps (``steps``); a word's answer has none

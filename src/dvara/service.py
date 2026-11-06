@@ -834,7 +834,8 @@ class Service:
         return self.actors.resolve(via.kind, via.id).id, f"{via.kind}:{thread}"
 
 
-    async def deliver(self, *, conversation: str | None = None, **asked) -> Reply:
+    async def deliver(self, *, conversation: str | None = None, begin: bool = False,
+                      **asked) -> Reply:
         """Run one turn for one person, and answer them either way
         (``_deliver`` says how).
 
@@ -843,6 +844,10 @@ class Service:
         moves into it first, waiting -- never refused -- while a turn in
         the conversation it was in finishes; one that is gone is said so
         and the words are not answered anywhere else.
+
+        ``begin``: ``conversation`` is a new one's id, made by the caller
+        (a page's new chat, web.py), and this chat starts it under that id
+        rather than one of its own.
         """
         key = who = None
         if not asked.get("unattended"):
@@ -854,7 +859,9 @@ class Service:
             except Refused:
                 key = None          # _deliver says why, in its own words
         moved = ""
-        if conversation and key is not None and conversation != self.past.here(key):
+        if begin and conversation and key is not None and self.past.here(key) is None:
+            self.past.opened(key, conversation)
+        elif conversation and key is not None and conversation != self.past.here(key):
             got = await self._switch(key, who, asked["agent"], conversation)
             if got is None:
                 return Reply(text=past.GONE, run_id=None, agent=asked["agent"],
@@ -2170,6 +2177,17 @@ class Service:
         task = asyncio.get_running_loop().create_task(look())
         self._behind.add(task)
         task.add_done_callback(self._behind.discard)
+
+    def busy(self, key: str) -> bool:
+        """A turn is running, or waiting to, in this chat."""
+        return key in self._locks
+
+    def close_chat(self, key: str) -> None:
+        """A chat let go of whole, its conversation deleted (a page's
+        own chat for it): no session, nothing current, no question waiting."""
+        self.holds.drop_key(key)
+        self.sessions.forget(key)
+        self.past.ended(key)
 
     async def settle(self) -> None:
         """Wait for every look back still running behind a ``/new``: what

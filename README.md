@@ -533,7 +533,9 @@ And anyone can start their conversation with an agent over:
                                open on Telegram stays open there too; while
                                an answer is still coming it waits, then goes
                                (on Telegram the list has a button for each, and
-                               a reply to an old answer carries that one on)
+                               a reply to an old answer carries that one on; on
+                               a page each conversation is its own chat, so
+                               nothing waits for another one)
 /chats export 2                that one as a file to share (words, answers,
                                tool names -- never what a tool returned)
 /chats export 2 pdf            the same as a PDF, made here (opens on any phone)
@@ -1072,8 +1074,9 @@ POST /call         {actor, agent, tool, args, allow_tools}  -> yantra.call.v1
 POST /mail-login   {actor, ref}                  -> their mail login, from their Setu folder
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}
-POST /web/message  {actor, agent, text, conversation?} -> {line}
-                   (conversation: an old one's id, carried on in this turn)
+POST /web/message  {actor, agent, text, conversation?, new?} -> {line}
+                   (conversation: carried on in its own chat; new: a new one in
+                   its own chat, its id on the line; neither: the one page chat)
 POST /web/asks/{id}  {actor, approve, for_turn?} -> {answered, approved}
 POST /web/holds/{id} {actor, answers}            -> {started}
 GET  /web/file?actor=&line=&n=                   -> a file a line carried
@@ -1160,9 +1163,13 @@ their agent answered, and every notice sent to them. So a schedule's
 answer waits there until they open the page, even for someone with no
 Telegram (`nowhere` is never true with `--web` on). `POST /web/message`
 writes the line and starts the turn behind the request; the answer is a
-later line, so a page reloaded mid-turn loses nothing. The page's turns
-run as their own conversation (`web:chat`): a chat on Telegram doesn't
-continue there. Questions and held turns are listed in the same look
+later line, so a page reloaded mid-turn loses nothing. Each conversation
+on a page is its own chat (`web:chat.<id>`): one answers while you ask in
+another, every line says its `conversation`, and `look` lists the ones
+`working`. A new chat's first words go as `new: true` and get their id
+back on the line; words with neither run in the one page chat
+(`web:chat`), as before ([notes/79](notes/79-each-conversation-its-own-chat.md)).
+A chat on Telegram doesn't continue on the page by itself. Questions and held turns are listed in the same look
 and answered with `/web/asks` and `/web/holds`. Sarathi's home page is
 one such page ([notes/34](notes/34-a-chat-on-a-page.md)): the owner's,
 and each person's in the house once they sign in there, as their id in
@@ -1635,7 +1642,7 @@ reads that person's key from `<state>/memory.json`
 | `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/learn start|watch|done|stop|clear`, a lesson kept on disk per person per agent, no look halfway ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's, Prahari's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |
 | `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay; `/watches`, theirs from Prahari, `/watches every N 6h` and `/watches pause|resume N` ([notes/42](notes/42-seeing-the-work.md)) |
-| `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice, and the notices by themselves for a page's bell, with how far each person has read them, kept here so every page and address agrees, [notes/71](notes/71-one-conversation-two-chats.md)); a voice note's words on the person's own line ([notes/47](notes/47-a-voice-note.md)); an answer's steps from the kept conversation once the chat moved on, and each step's picture by line, step and number, only as an image ([notes/60](notes/60-a-run-step-by-step.md)); turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/new`'s answer marked `fresh`, and a page shown only from the newest one ([notes/34](notes/34-a-chat-on-a-page.md)) |
+| `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice, and the notices by themselves for a page's bell, with how far each person has read them, kept here so every page and address agrees, [notes/71](notes/71-one-conversation-two-chats.md)); a voice note's words on the person's own line ([notes/47](notes/47-a-voice-note.md)); an answer's steps from the kept conversation once the chat moved on, and each step's picture by line, step and number, only as an image ([notes/60](notes/60-a-run-step-by-step.md)); turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/new`'s answer marked `fresh`, and a page shown only from the newest one ([notes/34](notes/34-a-chat-on-a-page.md)); each page conversation its own chat, every line and live view saying its conversation, `working` in each look ([notes/79](notes/79-each-conversation-its-own-chat.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)); read aloud too for someone who chose "always", in their voice ([notes/65](notes/65-whose-voice-and-which-language.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)), a picture as a photo, falling back to a document ([notes/69](notes/69-a-picture-and-a-pdf.md)); an answer's Markdown as bold and italic, not asterisks ([notes/70](notes/70-bold-not-asterisks.md)); the `/` menu, only the words this agent answers ([notes/28](notes/28-starting-over.md)), `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); **approve all for this task** under a question asked only because of a read ([notes/72](notes/72-asked-less-not-never.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)); a reply to an old answer carries its conversation on, and `/chats` has a button for each ([notes/78](notes/78-carried-on-where-it-was-written.md)) |
 | `outbox.py` | replies the Telegram bot owes, written down so a restart can finish sending them or say they were never answered ([notes/13](notes/13-a-reply-that-is-owed.md)) |

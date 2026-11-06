@@ -382,6 +382,12 @@ class PastBook:
                 "SELECT key FROM current WHERE conversation = ? AND substr(key, 1, ?) = ?",
                 (conversation_id, len(prefix), prefix)).fetchall()]
 
+    def page_keys(self, actor: str, conversation_id: str) -> list[str]:
+        """The page's chats this conversation is open in (web.py: each
+        conversation its own), which a delete closes with it."""
+        return [k for k in self.open_on(actor, conversation_id)
+                if came_of_key(k) == CAME["web"]]
+
     def open_ids(self, actor: str) -> set[str]:
         """Every conversation open in one of this person's chats now."""
         prefix = quote(actor, safe="") + "/"
@@ -399,7 +405,9 @@ class PastBook:
             keys = self._db.execute(
                 "SELECT key, conversation FROM current WHERE substr(key, 1, ?) = ?",
                 (len(prefix), prefix)).fetchall()
-        open_now = {c for _, c in keys}
+        # a page conversation's own chat (web.py) doesn't hold it "open":
+        # only a chat elsewhere does, which a delete would write again
+        open_now = {c for k, c in keys if came_of_key(k) != CAME["web"]}
         here = {c for k, c in keys if came_of_key(k) == CAME["web"]}
         return [{**r.as_dict(), "agent": r.folder, "open": r.id in open_now,
                  "here": r.id in here}

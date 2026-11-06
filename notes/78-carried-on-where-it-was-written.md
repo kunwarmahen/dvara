@@ -124,11 +124,10 @@ conversation reach Dvara with its id, and only an id is passed on.
 
 ## What is not here yet
 
-* **Two conversations answering at once.** One person's chat with one
-  agent on one road is still one chat that moves between conversations.
-  While it answers in one, words for another wait. Giving each
-  conversation its own chat on the page would let both run, with the
-  list showing which are working.
+* ~~**Two conversations answering at once.**~~ On the page, each
+  conversation is its own chat, and the list marks the ones working
+  ([note 79](79-each-conversation-its-own-chat.md)). Telegram's one
+  window still takes them one at a time.
 * **Telegram topics.** One thread per conversation in the bot's private
   chat, if the Bot API in use supports it there.
 * **The page's own refusal.** If the conversation is gone, the page

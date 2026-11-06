@@ -1431,8 +1431,10 @@ to the top of the list; `/chats` then marks it *(pinned)*
 **Going back while it's still answering.** You asked something, started
 a new chat, asked something else, and now want to follow up on the first
 before the second is answered. On the page, pick the first from the list
-and write under it: your words wait until the second answer is done,
-then go into the first. They never end up in the second. On Telegram,
+and write under it: the first takes it up at once, without waiting for
+the second, which goes on in its own chat (the list says *working…* beside it).
+Each conversation on the page is a chat of its own
+([note 79](notes/79-each-conversation-its-own-chat.md)). On Telegram,
 swipe-reply (or long-press, *Reply*) to any answer from the first
 conversation. The answer starts *"Back in: …"* with its name, and you're
 in it again. `/chats` on Telegram also comes with a button for each

@@ -353,7 +353,9 @@ def test_the_page_lists_searches_reads_and_deletes(make_service):
                             params={"actor": "owner"}).json()
         assert [r["title"] for r in listed["rows"]] == ["boiler pressure?",
                                                          "where should we go?"]
-        assert listed["rows"][0]["open"] and not listed["rows"][1]["open"]
+        # open only in the page's own chat: "here", and not held open elsewhere
+        assert listed["rows"][0]["here"] and not listed["rows"][0]["open"]
+        assert not listed["rows"][1]["open"]
         assert listed["rows"][1]["agent"] == "greeter"
         found = client.get("/web/chats", headers=auth,
                            params={"actor": "owner", "q": "lisbon"}).json()["rows"]
@@ -372,8 +374,10 @@ def test_the_page_lists_searches_reads_and_deletes(make_service):
         assert client.get(f"/web/chats/{old}/export", headers=auth,
                           params={"actor": "guest"}).status_code == 404
         now = listed["rows"][0]["id"]
+        # the page's own chat for it is closed with it, never written again
         assert client.request("DELETE", f"/web/chats/{now}", headers=auth,
-                              params={"actor": "owner"}).status_code == 409
+                              params={"actor": "owner"}).status_code == 200
+        assert service.past.here(session_key("owner", "greeter", "web:chat")) is None
         assert client.request("DELETE", f"/web/chats/{old}", headers=auth,
                               params={"actor": "owner"}).status_code == 200
         assert client.get(f"/web/chats/{old}", headers=auth,
