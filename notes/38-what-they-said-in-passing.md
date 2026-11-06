@@ -201,6 +201,10 @@ offers the two words only where the package remembers.
 * ~~**Seeing, or undoing, what they turned down.**~~ `/remember
   declined` and `/remember undo N`, and **Turned down** on Sarathi's home
   page ([note 68](68-what-you-turned-down.md)).
+* ~~**Keep without typing a number.**~~ A look back's notice on
+  Sarathi's home page has **Keep** and **No** beside each fact, sent by
+  its words, and the page's + menu has `/remember` as Telegram's does
+  ([note 80](80-one-menu-and-a-keep-button.md)).
 * ~~**A look back without `/new`.**~~ A conversation nobody has written
   in for 30 minutes is looked back over too, and the person sent what it
   noticed ([note 39](39-while-nobody-is-writing.md)).

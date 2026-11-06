@@ -109,6 +109,10 @@ DECLINED_WORDS = ("declined", "turned", "refused")
 UNDO = ("undo", "unblock", "restore")
 
 NOTHING_HERE = "{agent} doesn't keep memories about the people it talks to."
+#: A notice's button for a fact no longer waiting: kept, turned down, or
+#: replaced by a newer look back since the notice was sent.
+ANSWERED = ("That's already answered: nothing from this notice is waiting any "
+            "more. Send /remember to see what is.")
 NO_STORE = ("Your memories aren't open for you here yet. The owner can give "
             "you a place for them.")
 

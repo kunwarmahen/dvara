@@ -88,7 +88,7 @@ def test_new_answers_at_once_and_what_it_noticed_comes_after(make_service, remem
     service = make_service([says("Pune is lovely."), says(LOOKED)], actors=people)
     got: list[str] = []
 
-    async def sender(address, text):
+    async def sender(address, text, **_):
         got.append(text)
     service.notices.route("telegram", sender)
     say(service, "I live in Pune, and Biscuit my cat says hi")
@@ -486,3 +486,72 @@ def test_a_program_reads_what_was_kept_in_the_words(make_service, remembers):
     assert reply.kept == ()
     assert reply.text.endswith("(Kept about you: Lives in Cary, NC -- /memory forget 1 "
                                "to undo.)")
+
+
+# ---- the page's Keep and No on a look back's notice ---------------------------
+# The same bias from the page: a button pressed on a notice read later than
+# it was sent must keep the fact it showed, or say it's gone -- never the one
+# that moved into its number -- and only ever the presser's own.
+
+def test_a_look_backs_notice_carries_what_it_listed_for_the_page(make_service, remembers):
+    service = make_service([says("Pune is lovely."), says(LOOKED)], web=True)
+    say(service, "I live in Pune, and Biscuit my cat says hi", actor="guest")
+    start_over(service, actor="guest")
+    notice = service.web.book.notices("guest")[0].as_dict()
+    assert notice["remember"] == {"agent": "greeter", "items": [
+        "Lives in Pune (Asia/Kolkata time)", "Has a cat called Biscuit"]}
+    assert "1. Lives in Pune" in notice["text"]     # the words still say what to type
+
+
+def test_the_notices_buttons_keep_by_the_words_and_only_their_own(make_service, remembers):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service([], web=True)
+    pune, cat = "Lives in Pune", "Has a cat called Biscuit"
+    service.offered.add("guest", "greeter", [remembering.Offer(pune), remembering.Offer(cat)])
+    asyncio.run(service.notify(text="greeter: I noticed this about you:", actor="guest",
+                               extra=service._remember_extra("guest", "greeter")))
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+
+    def press(actor, **facts):
+        return client.post("/web/remember", headers=auth,
+                           json={"actor": actor, "agent": "greeter", **facts})
+
+    def waiting():
+        rows = client.get("/web/notices", headers=auth, params={"actor": "guest"}).json()
+        return rows["notices"][0]["remember"]["waiting"]
+
+    with TestClient(create_app(service, token=token)) as client:
+        assert waiting() == [pune, cat]
+        # the second, by its words: number 2 when sent, whatever it is now
+        got = press("guest", keep=[cat]).json()
+        assert cat in got["said"] and got["waiting"] == []
+        assert kept("guest") == [cat] and waiting() == [pune]
+        # pressed again on a page drawn before: said, and nothing else kept
+        again = press("guest", keep=[cat]).json()
+        assert again == {"said": remembering.ANSWERED, "waiting": []}
+        assert kept("guest") == [cat]
+        # the owner naming the guest's words reaches only the owner's list
+        assert press("owner", keep=[pune]).json()["said"] == remembering.ANSWERED
+        assert waiting() == [pune] and kept("owner") == []
+        # No turns it down, never to be offered again
+        press("guest", decline=[pune])
+        assert service.offered.declined("guest") == [pune] and waiting() == []
+        assert kept("guest") == [cat]
+        assert press("guest", keep="Lives").status_code == 400
+        assert press("guest", keep=[pune], decline=[cat]).status_code == 400
+
+
+def test_the_page_is_handed_the_same_words_telegrams_menu_is(make_service, remembers):
+    from dvara.menu import words_for
+
+    service = make_service([], web=True)
+    look = service.web.look("guest")
+    spec = service.roster.spec("greeter")
+    assert look["words"]["greeter"] == [[f"/{w}", said]
+                                        for w, said in words_for(service, spec)]
+    assert {"/remember", "/new"} <= {w for w, _ in look["words"]["greeter"]}
+    assert "words" not in service.web.look("guest", after=5)    # the first look's

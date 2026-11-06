@@ -47,7 +47,7 @@ def people(**extra):
 def listening(service):
     got: list[str] = []
 
-    async def sender(address, text):
+    async def sender(address, text, **_):
         got.append(text)
     service.notices.route("telegram", sender)
     return got

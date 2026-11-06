@@ -157,7 +157,6 @@ import asyncio
 import contextlib
 import sys
 import tempfile
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
@@ -167,7 +166,9 @@ from yantra import HELD, REFUSED_TIMEOUT
 from dvara import carrying, past, remembering, spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
-from dvara.service import works_phone
+from dvara.menu import remembers as _remembers
+from dvara.menu import words_for
+from dvara.menu import writes_files as _writes_files
 from dvara.files import is_file_word
 from dvara.fresh import is_new_word
 from dvara.actors import Channel
@@ -782,11 +783,7 @@ class TelegramBot:
         try:
             await self._api("setMyCommands", commands=[
                 {"command": word, "description": said}
-                for word, said in _menu(self.spec,
-                                        schedules=self.service.samay is not None,
-                                        watches=self.service.prahari is not None,
-                                        phone=self.service.sparsh is not None
-                                        and works_phone(self.spec))])
+                for word, said in words_for(self.service, self.spec)])
         except Exception as exc:  # noqa: BLE001 -- the bot still answers
             self._note(f"telegram: the / menu was not set: {exc}")
 
@@ -1359,56 +1356,6 @@ def ending(answer: Answer | None) -> str:
         return decided
     place = {"terminal": "at the terminal", "http": "over HTTP"}
     return f"{decided} {place.get(answer.via, f'on {answer.via}')}"
-
-
-def _menu(spec, *, schedules: bool = False, watches: bool = False,
-          phone: bool = False) -> list[tuple[str, str]]:
-    """``/`` menu entries for this agent, in the order a person needs them."""
-    words = [("new", "Start our conversation over"),
-             ("carry", "Carry on a job a restart stopped"),
-             ("steps", "What my last answer did, step by step"),
-             ("chats", "Our conversations: find, open, delete"),
-             ("tests", "Answers kept as tests, and how each did"),
-             ("doctor", "What's wrong with yours; /doctor every morning")]
-    if _writes_files(spec):
-        words += [("files", "What I keep for you"),
-                  ("file", "Send one of them: /file NAME")]
-    if _remembers(spec):
-        words += [("memory", "What I remember about you"),
-                  ("remember", "Keep what I noticed: /remember 1 2; /remember declined")]
-    if spec.connections:
-        words += [("accounts", "Your connected accounts"),
-                  ("connect", "Connect one: /connect NAME"),
-                  ("disconnect", "Remove one: /disconnect NAME"),
-                  ("lock", "Lock your accounts with a passphrase"),
-                  ("unlock", "Unlock them for a while")]
-    if getattr(spec, "skills", None):
-        words += [("skills", "Skills I've learned, and ones to keep"),
-                  ("learn", "Keep what I just did as a skill; /learn start to teach me")]
-    # every agent is told what everyone in the house knows (household.py)
-    words += [("household", "What everyone's agents know; /remember for everyone …"),
-              ("tools", "What I can use for you"),
-              ("voice", "Answers read aloud: when, and in whose voice")]
-    if phone:
-        words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
-    if schedules:
-        words += [("schedules", "Your schedules")]
-    if watches:
-        words += [("watches", "What I watch for you; /watches every N 6h, pause N, resume N")]
-    return words
-
-
-def _remembers(spec) -> bool:
-    """Whether this agent's package keeps memories about people at all."""
-    return getattr(spec, "memory", None) not in (None, "off")
-
-
-def _writes_files(spec) -> bool:
-    """Whether this agent can leave a file in the person's folder -- the
-    only kind worth telling them ``/files`` exists."""
-    allowed = spec.tool_allow is None or any(fnmatch("write_file", p)
-                                             for p in spec.tool_allow)
-    return allowed and not any(fnmatch("write_file", p) for p in spec.tool_deny)
 
 
 def _tap_buttons(text: str) -> dict | None:

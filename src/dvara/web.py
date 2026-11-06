@@ -87,6 +87,7 @@ from dvara.accounts import tap_label, taps
 from dvara.attached import Attachment, safe_name
 from dvara.errors import Refused
 from dvara.holds import NoSuchHold, NotYourHold
+from dvara.menu import words_for
 from dvara.watch import Live
 
 if TYPE_CHECKING:
@@ -149,7 +150,7 @@ class Line:
         # number, never by a path on this machine
         files = self.extra.get("files") or []
         out["files"] = [Path(f).name for f in files]
-        for name in ("receipt", "held", "stop_reason", "offer", "taps", "sent",
+        for name in ("receipt", "held", "stop_reason", "offer", "remember", "taps", "sent",
                      "transcript", "heard", "speak", "fresh", "kept",
                      "conversation", "moved_to"):
             if self.extra.get(name):
@@ -293,10 +294,13 @@ class WebChannel:
     async def notice(self, address: str, text: str, file: Path | None = None,
                      extra: dict | None = None) -> None:
         """A notice for ``address`` (the actor id): a line, kept. A skill
-        offered rides on it (``offer``), for the page's buttons."""
+        offered rides on it (``offer``), and what a look back noticed
+        (``remember``), for the page's buttons."""
         self.book.add(address, "notice", text,
                       extra={"files": [str(file)] if file else [],
                              "offer": (extra or {}).get("offer"),
+                             # what a look back noticed, for Keep and No
+                             "remember": (extra or {}).get("remember"),
                              # "always": it plays by itself on the page too
                              "speak": (extra or {}).get("speak")})
 
@@ -324,7 +328,22 @@ class WebChannel:
                 "lessons": self._lessons(actor, agents),
                 # whether an answer can be read aloud here (spoken.py): the
                 # page's play button, and why not when it can't
-                "voice": spoken.can_speak() is None}
+                "voice": spoken.can_speak() is None,
+                # each agent's / words, the list Telegram's menu is (menu.py):
+                # on a page's first look, not every poll after it
+                **({"words": self._words(agents)} if not after else {})}
+
+    def _words(self, agents: list[str]) -> dict[str, list[list[str]]]:
+        """``{agent: [["/word", what it does], …]}``; an agent whose
+        package won't load is left out, never the look."""
+        out: dict[str, list[list[str]]] = {}
+        for agent in agents:
+            try:
+                spec = self.service.roster.spec(agent)
+                out[agent] = [[f"/{word}", said] for word, said in words_for(self.service, spec)]
+            except Exception:  # noqa: BLE001 -- the page falls back to its own list
+                continue
+        return out
 
     def _lessons(self, actor: str, agents: list[str]) -> list[dict]:
         learning = getattr(self.service, "learning", None)

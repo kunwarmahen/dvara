@@ -550,7 +550,15 @@ def create_app(service: Service, *, token: str,
         including what ``/new`` cleared from the chat (web.py)."""
         check(authorization)
         book = web_for(actor).book
-        return {"notices": [ln.as_dict() for ln in book.notices(actor)],
+        rows = [ln.as_dict() for ln in book.notices(actor)]
+        still = {" ".join(o.statement.split()) for o in service.offered.get(actor)}
+        for row in rows:
+            if row.get("remember"):
+                # which of what it listed still wait: those get buttons
+                row["remember"] = {**row["remember"], "waiting": [
+                    s for s in row["remember"].get("items") or []
+                    if " ".join(s.split()) in still]}
+        return {"notices": rows,
                 # how far they've read, on any page or address (the bell)
                 "read": book.read_upto(actor)}
 
@@ -808,6 +816,31 @@ def create_app(service: Service, *, token: str,
         back = service.offered.undecline(actor, undo)
         return {"back": back, "declined": service.offered.declined(actor)[::-1],
                 "waiting": len(service.offered.get(actor))}
+
+    @app.post("/web/remember")
+    async def web_remember(request: Request,
+                           authorization: str | None = Header(default=None)) -> dict:
+        """``{actor, agent, keep: [fact, …]}`` or ``{…, decline: [...]}``:
+        a look back's notice answered from its buttons, as /remember N and
+        /remember not N -- by the words, so a notice read late can't keep
+        the wrong one (service.answer_offered)."""
+        check(authorization)
+        body = await request.json()
+        actor, agent = body.get("actor"), body.get("agent")
+        web_for(actor)
+        keep, decline = body.get("keep"), body.get("decline")
+        facts = keep if keep is not None else decline
+        if not isinstance(agent, str) or (keep is None) == (decline is None) \
+                or not isinstance(facts, list) or not facts \
+                or not all(isinstance(f, str) and f.strip() for f in facts):
+            raise HTTPException(status_code=400,
+                                detail="agent, and one of keep or decline as a list of facts")
+        try:
+            said, left = await service.answer_offered(actor, agent, facts,
+                                                      keep=keep is not None)
+        except (Refused, ConfigProblem) as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from None
+        return {"said": said, "waiting": left}
 
     @app.post("/web/forget")
     async def web_forget(request: Request,

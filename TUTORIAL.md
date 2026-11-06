@@ -1583,12 +1583,32 @@ with an **Undo** beside each ([note 68](notes/68-what-you-turned-down.md)).
 `/memory forget 1` takes it back. Mid-conversation, what the agent
 notices joins the same list, and the answer gets one line saying so.
 On Telegram both words are in the `/` menu of an agent that remembers
-([notes/38](notes/38-what-they-said-in-passing.md)).
+([notes/38](notes/38-what-they-said-in-passing.md)). On Sarathi's home
+page they are behind the + and in the `/` list, the same list
+(`GET /web?actor=…&after=0` carries it as `words`). There, a look
+back's notice also has **Keep** and **No** beside each fact, which do
+what `/remember 1` and `/remember not 1` do, by the fact's words. Try
+the button's road from here:
+
+```bash
+# a Dvara serving with --web (as Sarathi starts it, on 8770)
+curl -s -H "Authorization: Bearer $DVARA_TOKEN" -H 'Content-Type: application/json' \
+  -X POST localhost:8770/web/remember \
+  -d '{"actor":"guest","agent":"greeter","keep":["Has a cat called Biscuit"]}'
+```
+
+```
+{"said":"Kept:\n- Has a cat called Biscuit","waiting":[]}
+```
+
+Press it again and it says *"That's already answered: nothing from this
+notice is waiting any more."* It never keeps whichever fact moved into
+that number ([notes/80](notes/80-one-menu-and-a-keep-button.md)).
 
 **`/memory` says the agent doesn't keep memories?** Its package has no
 `[memory]` table: add the two lines above to that agent's `agent.toml`.
 The words work from the next message. Telegram's `/` menu is sent when
-the bot starts, so restart Dvara for the menu to show them (`sarathi
+the bot starts (and the home page's when the page is opened), so restart Dvara for the menu to show them (`sarathi
 down && sarathi up`, or `systemctl --user restart sarathi-dvara` on
 Sarathi's Podman road), then reopen the chat.
 
@@ -2177,6 +2197,7 @@ Each topic, and the note that argues it:
 | `notes/71-one-conversation-two-chats.md` | one conversation open on Telegram and the page at once, each taking what the other said before its turn; named and pinned |
 | `notes/72-asked-less-not-never.md` | **approve all for this task** on a question asked only because of a read; `trusted` servers aren't outside text; `--ask` alone asks everything |
 | `notes/77-kept-and-told.md` | on `yolo` the agent keeps a fact unasked: a *Kept about you* line under the answer, and the look back names what was already kept |
+| `notes/80-one-menu-and-a-keep-button.md` | one `/` menu for Telegram and the home page (`menu.py`), and **Keep** / **No** on a look back's notice, by the fact's words (`POST /web/remember`) |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |

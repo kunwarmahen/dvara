@@ -121,7 +121,9 @@ costs the menu, never the bot.
 
 ## What is not here yet
 
-* ~~**Telegram's command menu.**~~ Above.
+* ~~**Telegram's command menu.**~~ Above. It moved to `menu.py`, and
+  Sarathi's home page draws its + menu and `/` list from the same list
+  ([note 80](80-one-menu-and-a-keep-button.md)).
 * ~~**Going back.**~~ What `/new` ends is now kept, and `/chats` opens
   it again ([note 45](45-going-back.md)); the answer to `/new` says so.
   Every conversation is kept as it goes now, `/new` or not

@@ -2171,7 +2171,8 @@ class Service:
                 await self.told_behind(who.id, text)
                 return
             try:
-                await self.notify(text=text, actor=who.id)
+                await self.notify(text=text, actor=who.id,
+                                  extra=self._remember_extra(who.id, workspace_parts(key)[1]))
             except Refused:
                 pass
         task = asyncio.get_running_loop().create_task(look())
@@ -2580,6 +2581,39 @@ class Service:
                 self._note(f"dvara: {who.id}: {word} failed -- {type(exc).__name__}: {exc}")
                 return "I couldn't reach where your memories are kept just now. Try again soon."
 
+    def _remember_extra(self, actor: str, agent: str) -> dict:
+        """What a page draws beside a look back's notice: the facts it
+        listed, by their words, for a Keep and a No on each."""
+        waiting = self.offered.get(actor)
+        return ({"remember": {"agent": agent, "items": [o.statement for o in waiting]}}
+                if waiting else {})
+
+    async def answer_offered(self, actor: str, agent: str, statements: list[str], *,
+                             keep: bool) -> tuple[str, list[str]]:
+        """Keep (``keep``) or turn down the facts a notice listed, as
+        ``/remember N`` and ``/remember not N`` do: the page's buttons.
+
+        BY THE WORDS, NOT A NUMBER. A notice is read later than it was
+        sent: keeping one moves the rest up, and a newer look back
+        replaces the list. The numbers are found again now, from what
+        still waits; a fact no longer waiting is said so, never another
+        one kept in its place. Returns what was said and what of
+        ``statements`` still waits."""
+        self.refresh()
+        who = self.actors.may(actor, agent)
+        spec = self.roster.spec(agent)
+        asked = {" ".join(s.split()) for s in statements}
+        picked = [n for n, o in enumerate(self.offered.get(who.id), 1)
+                  if " ".join(o.statement.split()) in asked]
+        if not picked:
+            return remembering.ANSWERED, []
+        word = "/remember " if keep else "/remember not "
+        said = await self._memory_words(spec, who, session_key(actor, agent, "web:chat"),
+                                        word + " ".join(map(str, picked)))
+        still = {" ".join(o.statement.split()) for o in self.offered.get(who.id)}
+        left = [s for s in statements if " ".join(s.split()) in still]
+        return said, left
+
     def _declined_words(self, who: Actor, verb: str, rest: str) -> str:
         """``/remember declined`` and ``/remember undo N``: only the list
         changes, as when they declined (remembering.py)."""
@@ -2690,7 +2724,8 @@ class Service:
             done += 1
             if said:
                 try:
-                    await self.notify(text=f"{agent}: {said}", actor=actor)
+                    await self.notify(text=f"{agent}: {said}", actor=actor,
+                                      extra=self._remember_extra(actor, agent))
                 except Refused:
                     pass
         return done
