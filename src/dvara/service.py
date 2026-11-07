@@ -280,6 +280,10 @@ class Reply:
     #: Words a channel may offer as buttons, as (label, what pressing it
     #: sends): ``/chats``'s list, one per conversation.
     choices: tuple[tuple[str, str], ...] = ()
+    #: The conversation it was written under is gone (deleted, or let
+    #: go): nothing was answered, and a page drawing that conversation
+    #: draws it no longer (``past.GONE``).
+    gone: bool = False
 
     @property
     def ok(self) -> bool:
@@ -869,7 +873,7 @@ class Service:
             if got is None:
                 return Reply(text=past.GONE, run_id=None, agent=asked["agent"],
                              actor=who.id, stop_reason="refused",
-                             conversation=self.past.here(key))
+                             conversation=self.past.here(key), gone=True)
             moved = past.back_in(got, dropped=self.learning.drop_lesson(
                 who.id, asked["agent"]))
         reply = await self._deliver(**asked)

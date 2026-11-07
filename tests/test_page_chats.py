@@ -166,6 +166,19 @@ def test_a_conversation_answering_is_not_deleted_from_under_itself(page):
     assert page.service.sessions.load_latest(key) is None
 
 
+def test_words_under_a_deleted_conversation_come_back_marked_gone(page):
+    conv = say(page, "where should we go?", new=True)["conversation"]
+    until(page, lambda s: not s["busy"])
+    assert page.request("DELETE", f"/web/chats/{conv}", headers=AUTH,
+                        params={"actor": "owner"}).status_code == 200
+    say(page, "and then?", conversation=conv)
+    seen = until(page, lambda s: any(ln.get("gone") for ln in s["lines"]))
+    gone = [ln for ln in seen["lines"] if ln.get("gone")]
+    assert len(gone) == 1 and "That conversation is gone" in gone[0]["text"]
+    assert gone[0]["conversation"] == conv          # the window it was written in
+    assert not any(ln.get("gone") for ln in seen["lines"] if ln is not gone[0])
+
+
 def test_new_in_a_conversation_clears_that_window_only(page):
     conv = say(page, "where should we go?", new=True)["conversation"]
     until(page, lambda s: not s["busy"])

@@ -108,7 +108,7 @@ def test_a_conversation_that_is_gone_is_said_and_answered_nowhere(make_service):
     say(service, "where should we go?")
     asked = len(service.scripted.requests)
     reply = say(service, "and then?", conversation="not-a-conversation")
-    assert reply.text == past.GONE and reply.stop_reason == "refused"
+    assert reply.text == past.GONE and reply.stop_reason == "refused" and reply.gone
     assert len(service.scripted.requests) == asked          # no turn at all
 
 

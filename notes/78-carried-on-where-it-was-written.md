@@ -130,9 +130,11 @@ conversation reach Dvara with its id, and only an id is passed on.
   window still takes them one at a time.
 * **Telegram topics.** One thread per conversation in the bot's private
   chat, if the Bot API in use supports it there.
-* **The page's own refusal.** If the conversation is gone, the page
-  shows Dvara's sentence as an answer line but still draws the old
-  conversation above it.
+* ~~**The page's own refusal.**~~ The answer to words written under a
+  conversation that is gone carries `gone` on its line (`Reply.gone`).
+  The page then takes the old conversation's words out of the window,
+  leaving your words and Dvara's sentence, and the window is a new chat
+  again. Telegram needs nothing: its old messages are its own history.
 
 Continues [note 71](71-one-conversation-two-chats.md) (one conversation,
 two chats) and [note 45](45-going-back.md) (going back).

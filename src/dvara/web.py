@@ -152,7 +152,7 @@ class Line:
         out["files"] = [Path(f).name for f in files]
         for name in ("receipt", "held", "stop_reason", "offer", "remember", "taps", "sent",
                      "transcript", "heard", "speak", "fresh", "kept",
-                     "conversation", "moved_to"):
+                     "conversation", "moved_to", "gone"):
             if self.extra.get(name):
                 out[name] = self.extra[name]
         # its turn can be read step by step (``steps``); asked for by line,
@@ -446,6 +446,8 @@ class WebChannel:
             # the window it was asked from, and where ``/chats N`` took it
             "conversation": conversation,
             "moved_to": reply.conversation if reply.conversation != conversation else None,
+            # written under one that is gone: the page stops drawing it
+            "gone": reply.gone,
             # the page starts over from here (/new)
             "fresh": new,
             # the run, for its steps (``steps``); a word's answer has none
