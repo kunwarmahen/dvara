@@ -67,10 +67,10 @@ buttons, one per conversation, labelled with its number and name. A
 press sends `/chats N`, as if you had typed it. The one you're in has no
 button, because there is nowhere to go.
 
-Not built: Telegram's topics in a bot's private chat, which would give
-each conversation its own thread like a sidebar. A reply is something
-every Telegram app already does, and it needs no setting from
-BotFather.
+Telegram's topics in a bot's private chat give each conversation its
+own thread like a sidebar, once topics mode is on in BotFather
+([notes/82](82-a-topic-is-a-conversation.md)). A reply needs no such
+setting: every Telegram app already does it.
 
 ## Live receipt
 
@@ -128,8 +128,8 @@ conversation reach Dvara with its id, and only an id is passed on.
   conversation is its own chat, and the list marks the ones working
   ([note 79](79-each-conversation-its-own-chat.md)). Telegram's one
   window still takes them one at a time.
-* **Telegram topics.** One thread per conversation in the bot's private
-  chat, if the Bot API in use supports it there.
+* ~~**Telegram topics.**~~ Each topic its own conversation, answered
+  inside it ([notes/82](82-a-topic-is-a-conversation.md)).
 * ~~**The page's own refusal.**~~ The answer to words written under a
   conversation that is gone carries `gone` on its line (`Reply.gone`).
   The page then takes the old conversation's words out of the window,

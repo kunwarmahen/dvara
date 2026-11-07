@@ -565,7 +565,7 @@ class TelegramBot:
                        f"{type(exc).__name__}: {exc}")
 
     async def _message(self, message: dict) -> None:
-        chat = int(message.get("chat", {}).get("id", 0))
+        chat = _chat_in(message)
         native = message.get("from", {}).get("id")
         if not chat or native is None:
             return
@@ -625,7 +625,7 @@ class TelegramBot:
         try:
             reply = await self.service.deliver(
                 via=Channel(kind="telegram", id=str(native)),
-                agent=self.agent, thread=str(chat), text=text, watch=steps,
+                agent=self.agent, thread=_thread(chat), text=text, watch=steps,
                 attachments=attachments,
                 conversation=self.service.past.sent_in(self._place(chat), replied))
         finally:
@@ -641,7 +641,7 @@ class TelegramBot:
 
     def _place(self, chat: int) -> str:
         """Where a message id means one message: this bot's chat."""
-        return f"telegram:{self.agent}:{chat}"
+        return f"telegram:{self.agent}:{int(chat)}"
 
     async def _answer(self, chat: int, row: int, reply, *, asked=None) -> None:
         """Send one turn's reply, marking it paid part by part, and keep
@@ -1023,7 +1023,7 @@ class TelegramBot:
         native = query.get("from", {}).get("id")
         pressed = query.get("message") or {}
         agent, _, offer_id = data.partition(":")
-        chat = int(pressed.get("chat", {}).get("id", 0))
+        chat = _chat_in(pressed)
         if not agent or not offer_id or not chat:
             await self._toast(query_id, "that button means nothing here")
             return
@@ -1034,7 +1034,7 @@ class TelegramBot:
                                 message_id=pressed["message_id"])
         reply = await self.service.deliver(
             via=Channel(kind="telegram", id=str(native)), agent=agent,
-            thread=str(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
+            thread=_thread(chat), text=f"/skills {'keep' if keep else 'drop'} {offer_id}")
         for part in split_message(reply.text):
             await self._send(chat, part, marked=True)
 
@@ -1048,7 +1048,7 @@ class TelegramBot:
         native = query.get("from", {}).get("id")
         pressed = query.get("message") or {}
         agent, _, marks = data.rpartition(":")
-        chat = int(pressed.get("chat", {}).get("id", 0))
+        chat = _chat_in(pressed)
         if not agent or not marks or not chat:
             await self._toast(query_id, "that button means nothing here")
             return
@@ -1101,7 +1101,7 @@ class TelegramBot:
         """Whether this bot's ``/carry`` in ``chat`` reaches ``job`` (a
         stopped job a notice names, carrying.py): its agent, this chat."""
         return bool(job) and job.get("agent") == self.agent \
-            and job.get("thread") == f"telegram:{chat}"
+            and job.get("thread") == f"telegram:{_thread(chat)}"
 
     async def _carry_pressed(self, query: dict) -> None:
         """Carry on, under a job a restart stopped: ``/carry`` sent as the
@@ -1336,7 +1336,11 @@ class TelegramBot:
         """
         url = f"{self._url}/{method}"
         fields = {k: v for k, v in payload.items() if v is not None}
-        for attempt in (1, 2):
+        topic = getattr(fields.get("chat_id"), "topic", None)
+        if topic and method not in NO_TOPIC:
+            # the topic it was asked in: the answer goes back into it
+            fields["message_thread_id"] = topic
+        for attempt in (1, 2, 3):
             if upload is None:
                 response = await self._client.post(url, json=fields)
             else:
@@ -1364,6 +1368,15 @@ class TelegramBot:
                     "two pollers do not collide, they split -- half the "
                     "messages go to whichever one asked last")
             body = _body(response)
+            if (response.status_code == 400 and "message_thread_id" in fields
+                    and "thread not found" in str(body.get("description", "")).lower()):
+                # THE CHAT ITSELF, WHEN THE TOPIC IS REFUSED. A topic
+                # deleted, or a Bot API that won't send into a private
+                # chat's topic: an answer outside it beats none.
+                self._note(f"telegram: {method}: topic {topic} refused "
+                           f"({body.get('description')}); sent to the chat itself")
+                fields.pop("message_thread_id")
+                continue
             if response.status_code != 200 or not body.get("ok", False):
                 raise TelegramError(
                     f"{method}: {response.status_code} "
@@ -1371,6 +1384,12 @@ class TelegramBot:
             return body.get("result")
         raise TelegramError(f"{method}: gave up after a rate limit")
 
+
+#: Calls about one message or the bot itself, where a topic means nothing
+#: (Telegram finds the message by its id) or is not a parameter at all.
+NO_TOPIC = frozenset({"editMessageText", "editMessageReplyMarkup", "deleteMessage",
+                      "answerCallbackQuery", "getFile", "getMe", "getUpdates",
+                      "setMyCommands", "deleteWebhook"})
 
 #: The third button, on a question asked only because the agent read
 #: something you didn't write (gate.put). Words a person reads, so no
@@ -1498,9 +1517,44 @@ def _chat_of(hold: Hold, pressed: dict) -> int:
     here, so its answer goes where the press came from.
     """
     kind, _, chat = hold.thread.partition(":")
+    chat, _, topic = chat.partition("/")
     if kind == "telegram" and chat.lstrip("-").isdigit():
-        return int(chat)
-    return int(pressed.get("chat", {}).get("id", 0))
+        return Chat(int(chat), int(topic) if topic.isdigit() else None)
+    return _chat_in(pressed)
+
+
+class Chat(int):
+    """A chat's id, and the topic inside it a message came from.
+
+    TOPICS ARE CONVERSATIONS. A bot whose private chat has topics turned
+    on (BotFather's topics mode, Bot API 9.3) gets each message with the
+    topic it was written in. Each topic is its own conversation here --
+    its own session, its own lock -- so two can answer at once, as the
+    page's conversations do. Everything sent while answering one goes back
+    into it: ``_api`` adds ``message_thread_id`` wherever this chat is the
+    ``chat_id``. An int still, so every other use of a chat id is
+    unchanged, and a chat with no topic is exactly the number it was."""
+
+    topic: int | None
+
+    def __new__(cls, chat: int, topic: int | None = None) -> Chat:
+        made = super().__new__(cls, chat)
+        made.topic = topic or None
+        return made
+
+
+def _chat_in(message: dict) -> Chat:
+    """The chat a message (or a pressed button's message) is in, with its
+    topic when it was written inside one."""
+    chat = int(message.get("chat", {}).get("id", 0) or 0)
+    topic = message.get("message_thread_id") if message.get("is_topic_message") else None
+    return Chat(chat, int(topic) if isinstance(topic, int) else None)
+
+
+def _thread(chat: int) -> str:
+    """The thread a chat's turns run under: the chat, and its topic."""
+    topic = getattr(chat, "topic", None)
+    return f"{int(chat)}/{topic}" if topic else str(int(chat))
 
 
 def _body(response: httpx.Response) -> dict:
