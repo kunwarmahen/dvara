@@ -96,7 +96,7 @@ from a table; above it सौ, हज़ार, लाख and करोड़ bu
 way (1,50,000 is एक लाख पचास हज़ार). A time (9:30) is said as its two
 numbers, a decimal (5.49) with दशमलव and then a digit at a time, and a
 code that starts with 0 or a figure past 99 crore (a phone number) a
-digit at a time. A number inside a word (*4th*, *Wi-Fi2*) is left alone.
+digit at a time. A number inside a word (*Wi-Fi2*) is left alone.
 
 Receipt, the same Piper voice heard back by the house's
 `faster-whisper-small` server:
@@ -111,6 +111,34 @@ The time is now heard as a time (*नाव बजे*, a soft नौ), and the 
 *one thousand five hundred*. What is left is the voice's own accent, not
 a number it couldn't say.
 
+## Money and ordinals
+
+**MONEY SAYS ITS NAME AFTER THE AMOUNT.** *₹1,500* was the sign the
+voice can't say and then a number. Hindi says एक हज़ार पाँच सौ रुपये:
+the amount, then its name, and paise as their own count (*₹5.05* is
+पाँच रुपये पाँच पैसे), never दशमलव. Rupees are found by ₹, Rs, Rs. or
+INR, and dollars by $ or USD (रुपया/रुपये, डॉलर, सेंट), since the
+house's accounts are read in dollars. Three places after the point is a
+rate, so it is read as a number.
+
+**ORDINALS BY HINDI'S OWN WORDS, A DATE BY ITS COUNT.** *1st*, *2nd*,
+*3rd* are typed in Hindi answers as in English. Hindi says पहला, दूसरा,
+तीसरा, चौथा, छठा, and the rest as the number with -वाँ (सातवाँ,
+पच्चीसवाँ). Before a month, in Latin letters or Devanagari, a date is
+said as a count, as Hindi says it: *2nd November* is दो नवंबर. The
+masculine form is said every time. Whether *3rd reminder* wants तीसरा
+or *3rd meeting* wants तीसरी is the sentence's gender, and that is a
+model's job, not the step before a voice.
+
+Receipt, the Hindi voice in Sarathi's Dvara container
+(`hi_IN-pratham-medium`) heard back by the house's Whisper:
+
+```
+Aapka bill ₹1,500 hai, aur yeh 3rd reminder hai. 2nd November ko milenge.
+read:  आपका बिल्ल एक हज़ार पाँच सौ रुपये है, और यह तीसरा रेमिंदेर है. दो नोवेम्बेर को मिलेंगे.
+heard: आपका बिल्ल एक हजार पाज सो रुपाई हैं और यहाँ तीसरा रेमी देर है दो नूवीम बेर को मिलेंगे
+```
+
 ## Tests
 
 `tests/test_spoken.py`: romanised Hindi told as Hindi, and an English
@@ -119,12 +147,13 @@ rules' (long final *a* and *i*, *a* before a vowel, *n* before a
 consonant) spelt as said, a number and Devanagari left as they were; a
 Hindi voice handed Devanagari by `make`, an English answer handed to its
 voice as written; numbers to a hundred from the table, lakh and crore,
-a time, a decimal and a code; the Hindi voice handed *नौ* for *9*.
+a time, a decimal and a code; the Hindi voice handed *नौ* for *9*; money with its name after (rupees and paise, dollars and cents, a rate left a number); ordinals in Hindi's words and a date before a month as its count.
 
 ## What is not here yet
 
 * ~~**Numbers said in Hindi.**~~ Written as words first (above).
-* **Ordinals and money in Hindi** (*4th*, *₹*): left as typed.
+* ~~**Ordinals and money in Hindi**~~ (*4th*, *₹*): said as Hindi says them (above).
+* **An ordinal's gender** (तीसरा or तीसरी): always the masculine.
 * **Romanised Hindi heard.** This is the voice. A voice note *spoken*
   in Hindi is heard as the hearing model writes it, in Devanagari
   ([notes/47](47-a-voice-note.md)).

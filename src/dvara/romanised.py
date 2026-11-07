@@ -223,7 +223,66 @@ def _said(match: re.Match) -> str:
     return said
 
 
+# ---- money and ordinals -------------------------------------------------------
+#
+# MONEY SAYS ITS NAME AFTER THE AMOUNT. "₹1,500" read by the Hindi voice
+# was the sign it can't say and then a number; Hindi says एक हज़ार पाँच सौ
+# रुपये, the name last, and paise (or cents) as their own count, never
+# "decimal". Rupees by ₹, Rs, Rs. or INR; dollars by $ or USD, since the
+# house's accounts are read in dollars. An amount with more than two places
+# after the point is a rate, not money, and is read as a number.
+#
+# ORDINALS BY HINDI'S OWN WORDS, A DATE BY ITS COUNT. "1st", "2nd" are
+# typed in Hindi answers as in English; Hindi says पहला, दूसरा, तीसरा,
+# चौथा, छठा, and the rest as the number with -वाँ (सातवाँ, पच्चीसवाँ).
+# Before a month a date is said as a count, as Hindi does: "2nd November"
+# is दो नवंबर. The masculine form is said; the gender of what follows is
+# a model's job, not this step's.
+
+_MONEY = re.compile(
+    r"(?:(₹|\bRs\.?|\bINR|\$|\bUSD)\s?)(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.(\d{1,2}))?(?![\d\w])")
+_CURRENCY = {"₹": ("रुपया", "रुपये", "पैसा", "पैसे"),
+             "$": ("डॉलर", "डॉलर", "सेंट", "सेंट")}
+_ORDINAL = re.compile(r"(?<![\w.])(\d{1,3})(?:st|nd|rd|th)\b(\s+([^\s,.;:!?]+))?", re.IGNORECASE)
+_FIRST_ORDINALS = {1: "पहला", 2: "दूसरा", 3: "तीसरा", 4: "चौथा", 6: "छठा"}
+_MONTHS = set(
+    "january february march april may june july august september october november "
+    "december jan feb mar apr jun jul aug sep sept oct nov dec "
+    "जनवरी फ़रवरी फरवरी मार्च अप्रैल मई जून जुलाई अगस्त सितंबर सितम्बर अक्टूबर "
+    "अक्तूबर नवंबर नवम्बर दिसंबर दिसम्बर".split())
+
+
+def _money(match: re.Match) -> str:
+    sign, whole, cents = match.groups()
+    one, many, small_one, small_many = _CURRENCY[
+        "$" if sign in ("$", "USD") else "₹"]
+    amount = int(whole.replace(",", ""))
+    said = f"{hindi_number(amount)} {one if amount == 1 else many}"
+    if cents and int(cents.ljust(2, "0")):
+        small = int(cents.ljust(2, "0"))
+        said += f" {hindi_number(small)} {small_one if small == 1 else small_many}"
+    return said
+
+
+def hindi_ordinal(n: int) -> str:
+    """``n``-th as Hindi says it: 1 पहला, 7 सातवाँ, 25 पच्चीसवाँ."""
+    if n in _FIRST_ORDINALS:
+        return _FIRST_ORDINALS[n]
+    said = hindi_number(n)
+    return said[:-1] + "वाँ" if said.endswith("ा") else said + "वाँ"
+
+
+def _ordinal(match: re.Match) -> str:
+    n, after, word = int(match.group(1)), match.group(2) or "", match.group(3) or ""
+    if word.lower() in _MONTHS:
+        return f"{hindi_number(n)}{after}"
+    return f"{hindi_ordinal(n)}{after}"
+
+
 def numbers(text: str) -> str:
     """``text`` with each number written as Hindi says it, for the Hindi
-    voice: "subah 9 baje" -> "subah नौ baje", 5.49 -> पाँच दशमलव चार नौ."""
+    voice: "subah 9 baje" -> "subah नौ baje", 5.49 -> पाँच दशमलव चार नौ,
+    ₹1,500 -> एक हज़ार पाँच सौ रुपये, 3rd -> तीसरा."""
+    text = _MONEY.sub(_money, text)
+    text = _ORDINAL.sub(_ordinal, text)
     return _NUMBER.sub(_said, text)

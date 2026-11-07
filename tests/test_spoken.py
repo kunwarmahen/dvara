@@ -338,7 +338,29 @@ def test_numbers_are_written_as_hindi_says_them():
     assert numbers("5.49") == "पाँच दशमलव चार नौ"
     assert numbers("007") == "शून्य शून्य सात"                       # a code, digit by digit
     assert numbers("9876543210") == "नौ आठ सात छह पाँच चार तीन दो एक शून्य"
-    assert numbers("4th Wi-Fi2") == "4th Wi-Fi2"                     # inside a word: as it was
+    assert numbers("Wi-Fi2") == "Wi-Fi2"                             # inside a word: as it was
+
+
+def test_money_is_said_with_its_name_after_the_amount():
+    from dvara.romanised import numbers
+    assert numbers("Bill ₹1,500 hai.") == "Bill एक हज़ार पाँच सौ रुपये hai."
+    assert numbers("₹1") == "एक रुपया"
+    assert numbers("Rs. 250.50 aur INR 99") == "दो सौ पचास रुपये पचास पैसे aur निन्यानवे रुपये"
+    assert numbers("₹5.05") == "पाँच रुपये पाँच पैसे"
+    assert numbers("$471,203.10 balance") == "चार लाख इकहत्तर हज़ार दो सौ तीन डॉलर दस सेंट balance"
+    assert numbers("₹10.00") == "दस रुपये"                          # no paise said
+    assert numbers("rate 7.125") == "rate सात दशमलव एक दो पाँच"    # not money
+
+
+def test_ordinals_are_hindis_own_words_and_a_date_is_its_count():
+    from dvara.romanised import hindi_ordinal, numbers
+    assert [hindi_ordinal(n) for n in (1, 2, 3, 4, 5, 6, 7, 9, 25, 100)] == \
+        ["पहला", "दूसरा", "तीसरा", "चौथा", "पाँचवाँ", "छठा", "सातवाँ", "नौवाँ",
+         "पच्चीसवाँ", "एक सौवाँ"]
+    assert numbers("Yeh aapka 3rd reminder hai") == "Yeh aapka तीसरा reminder hai"
+    assert numbers("2nd November ko") == "दो November ko"
+    assert numbers("21st नवंबर") == "इक्कीस नवंबर"
+    assert numbers("4th floor") == "चौथा floor"
 
 
 def test_the_hindi_voice_is_handed_numbers_as_words(shelf, tmp_path, monkeypatch):
