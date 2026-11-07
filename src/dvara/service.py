@@ -1227,7 +1227,8 @@ class Service:
                      actor: str | None = None,
                      via: Channel | None = None,
                      door: str | None = None,
-                     watch: Watcher | None = None) -> Reply:
+                     watch: Watcher | None = None,
+                     for_task: bool = False) -> Reply:
         """Answer a held turn, and let it carry on (notes/16).
 
         ``answers`` has one entry per waiting call, by call id: True runs
@@ -1243,6 +1244,13 @@ class Service:
         say which; any other ``Refused`` is the answers or the person's
         access. Once the turn is running, it answers exactly as
         ``deliver`` does: a reply either way.
+
+        ``for_task`` is "approve all for this task": with every call a
+        yes, on a hold whose calls were all asked only because of what
+        the turn read (``Hold.for_task``), the resumed turn's later
+        questions asked for that same reading are answered by it too,
+        until it reads something new. Anywhere else it is a plain yes, as
+        on a question (``AskDesk.answer``).
 
         A RESUME IS A NEW TURN. It is checked against today's money
         before anything is used up, so a person whose allowance is spent
@@ -1283,37 +1291,43 @@ class Service:
             run = Run(actor=actor, agent=hold.agent, thread=hold.thread,
                       message="", started_at=started, cost_usd=0.0,
                       came_by="cli" if door == "terminal" else door)
-            try:
-                reply = await self._turn(spec=spec, who=who, key=hold.key,
-                                         run=run, resuming=hold,
-                                         answers=answers, door=door, watch=watch)
-                # a yes is a tap, not a voice note: read aloud only for "always"
-                return replace(reply, speak=spoken.wanted(
-                    self.voices.choice(who.id, who.speak), spoke=False),
-                    voice=self.voices.voice(who.id, who.voice))
-            except (NoSuchHold, NotYourHold):
-                raise
-            except Refused as exc:
-                if self.holds.get(hold_id) is not None:
-                    # Refused before the hold was used -- bad answers, a
-                    # spent allowance. Nothing ran; nothing to record.
+            carried = nullcontext()
+            if (for_task and hold.for_task and self.asks is not None
+                    and all(a is True for a in answers.values())):
+                carried = self.asks.carry_task(actor, hold.agent, hold.thread,
+                                               hold.read)
+            with carried:
+                try:
+                    reply = await self._turn(spec=spec, who=who, key=hold.key,
+                                             run=run, resuming=hold,
+                                             answers=answers, door=door, watch=watch)
+                    # a yes is a tap, not a voice note: read aloud only for "always"
+                    return replace(reply, speak=spoken.wanted(
+                        self.voices.choice(who.id, who.speak), spoke=False),
+                        voice=self.voices.voice(who.id, who.voice))
+                except (NoSuchHold, NotYourHold):
                     raise
-                run.reply, run.stop_reason = str(exc), "refused"
-                self.runs.record(run)
-                return Reply(text=str(exc), run_id=run.id, agent=run.agent,
-                             actor=actor, stop_reason="refused")
-            except asyncio.CancelledError:
-                run.stop_reason, run.reply = "cancelled", ""
-                self.runs.record(run)
-                raise
-            except Exception as exc:  # noqa: BLE001 -- as deliver
-                run.stop_reason = "error"
-                run.detail = f"{type(exc).__name__}: {exc}"
-                run.reply = "that went wrong at my end"
-                self.runs.record(run)
-                return Reply(text=run.reply, run_id=run.id, agent=run.agent,
-                             actor=actor, stop_reason="error",
-                             detail=run.detail)
+                except Refused as exc:
+                    if self.holds.get(hold_id) is not None:
+                        # Refused before the hold was used -- bad answers, a
+                        # spent allowance. Nothing ran; nothing to record.
+                        raise
+                    run.reply, run.stop_reason = str(exc), "refused"
+                    self.runs.record(run)
+                    return Reply(text=str(exc), run_id=run.id, agent=run.agent,
+                                 actor=actor, stop_reason="refused")
+                except asyncio.CancelledError:
+                    run.stop_reason, run.reply = "cancelled", ""
+                    self.runs.record(run)
+                    raise
+                except Exception as exc:  # noqa: BLE001 -- as deliver
+                    run.stop_reason = "error"
+                    run.detail = f"{type(exc).__name__}: {exc}"
+                    run.reply = "that went wrong at my end"
+                    self.runs.record(run)
+                    return Reply(text=run.reply, run_id=run.id, agent=run.agent,
+                                 actor=actor, stop_reason="error",
+                                 detail=run.detail)
 
     # ---- one turn, in the order that works ---------------------------------
 
@@ -2005,7 +2019,9 @@ class Service:
             key=key, actor=run.actor, agent=run.agent, thread=run.thread,
             run_id=run.id,
             held_at=datetime.fromtimestamp(agent.held.at, UTC),
-            calls=[Waiting(r.call_id, r.tool_name, r.summary)
+            calls=[Waiting(r.call_id, r.tool_name, r.summary,
+                           read=tuple(getattr(r, "after_reading", ()) or ())
+                           if getattr(r, "only_after_reading", False) else ())
                    for r in waiting])
 
     def _carry_on(self, agent, hold: Hold, answers: Mapping[str, bool | str],

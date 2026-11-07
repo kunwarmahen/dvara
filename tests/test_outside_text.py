@@ -216,3 +216,36 @@ def test_a_wildcard_in_trusted_is_refused_with_the_fix():
 def test_trusted_must_be_a_list():
     with pytest.raises(ConfigProblem, match="list of names"):
         book('"samay"')
+
+
+# ---- a held turn answered "for this task" -------------------------------------
+
+
+def test_a_held_cards_yes_becomes_the_resumed_turns_at_its_first_question():
+    # the resumed turn is a new turn with a new id: the yes waits by
+    # conversation and is bound to that id, read as the held card named it
+    desk, decisions = AskDesk(timeout=5), Decisions()
+    with desk.carry_task("owner", "minder", "t", ("https://x.com (web_fetch)",)):
+        assert runs_unasked(yolo_gate(desk, decisions),
+                            after_reading(turn="resumed", call="c2")) is True
+        assert decisions.of("c2") == "for_turn"
+        assert runs_unasked(yolo_gate(desk), after_reading(turn="resumed", call="c3"))
+        more = after_reading(turn="resumed", call="c4",
+                             read=("https://x.com (web_fetch)", "an email from a@evil"))
+        _, ok = answered(yolo_gate(desk), more, False, desk)
+        assert ok is False                  # something new read: asked again
+
+
+def test_a_held_cards_yes_never_reaches_past_its_resume():
+    desk = AskDesk(timeout=5)
+    with desk.carry_task("owner", "minder", "t", ("https://x.com (web_fetch)",)):
+        pass                                # the resumed turn asked nothing
+    _, ok = answered(yolo_gate(desk), after_reading(turn="next"), False, desk)
+    assert ok is False
+
+
+def test_a_held_cards_yes_is_another_conversations_nothing():
+    desk = AskDesk(timeout=5)
+    with desk.carry_task("owner", "minder", "another-thread", ("https://x.com (web_fetch)",)):
+        _, ok = answered(yolo_gate(desk), after_reading(turn="resumed"), False, desk)
+    assert ok is False

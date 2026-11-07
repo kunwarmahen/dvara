@@ -354,3 +354,40 @@ def test_a_held_step_is_not_a_refused_one():
               tools=[ToolStep("write_file", HELD), ToolStep("bash", "user")])
     assert run.refused_tools == ["bash"]
 
+
+
+# ---- "approve all for this task" on a held turn -------------------------------
+
+
+def test_a_hold_keeps_what_its_calls_were_asked_because_of(tmp_path):
+    from dvara.telegram import FOR_TURN_BUTTON, _hold_buttons
+    book = HoldBook(tmp_path / "holds.sqlite3")
+    read = ("an email from billing@evil.example",)
+    hold = book.keep(key="k", actor="mahen", agent="minder", thread="t", run_id="r",
+                     held_at=datetime.now(UTC),
+                     calls=[Waiting("c1", "send", "send it", read=read),
+                            Waiting("c2", "archive", "archive it", read=read)])
+    again = HoldBook(tmp_path / "holds.sqlite3").get(hold.id)     # after a restart
+    assert again.for_task and again.read == frozenset(read)
+    assert again.as_dict()["for_task"] is True
+    assert [b["text"] for row in _hold_buttons(again)["inline_keyboard"] for b in row] == [
+        "approve all", "refuse all", FOR_TURN_BUTTON]
+    mixed = book.keep(key="k2", actor="mahen", agent="minder", thread="t", run_id="r",
+                      held_at=datetime.now(UTC),
+                      calls=[Waiting("c1", "send", "send it", read=read),
+                             Waiting("c3", "buy", "buy it")])          # a spend asks for itself
+    assert not mixed.for_task
+    assert len(_hold_buttons(mixed)["inline_keyboard"]) == 1
+
+
+def test_a_hold_kept_before_it_remembered_its_reading_still_reads(tmp_path):
+    import json
+    import sqlite3
+    book = HoldBook(tmp_path / "holds.sqlite3")
+    hold = book.keep(key="k", actor="mahen", agent="minder", thread="t", run_id="r",
+                     held_at=datetime.now(UTC), calls=[Waiting("c1", "send", "send it")])
+    db = sqlite3.connect(tmp_path / "holds.sqlite3")
+    db.execute("UPDATE holds SET calls = ?", (json.dumps([["c1", "send", "send it"]]),))
+    db.commit()
+    again = HoldBook(tmp_path / "holds.sqlite3").get(hold.id)
+    assert [c.call_id for c in again.calls] == ["c1"] and not again.for_task

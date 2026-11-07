@@ -343,24 +343,41 @@ function holdCard(hd) {
       h("div.choices", {}, h("label", {}, allow, " Allow"), h("label", {}, refuse, " Refuse"),
         why));
   });
-  go.addEventListener("click", async () => {
-    const missing = hd.calls.filter((c) => !(c.id in choice));
-    if (missing.length) { say.textContent = "Choose Allow or Refuse for each one first."; return; }
+  // every call asked only because of what it read: one yes for all of them
+  // and the rest of this task (Hold.for_task)
+  const task = hd.for_task
+    ? h("button.btn", { type: "button", title: "allow these, and what the rest of this "
+        + "task asks because of the same reading; something new read asks again" },
+        "Allow all for this task")
+    : null;
+  const carry = async (answers, forTask = false) => {
     go.disabled = true;
+    if (task) task.disabled = true;
     say.textContent = "Carrying on… (this runs the rest of the turn)";
     try {
-      const r = await api(`/api/holds/${encodeURIComponent(hd.id)}`, { answers: choice });
+      const r = await api(`/api/holds/${encodeURIComponent(hd.id)}`,
+                          { answers, ...(forTask ? { for_turn: true } : {}) });
       say.replaceChildren(h("b", {}, "Agent: "), r.text || "(no reply)");
     } catch (err) {
       say.textContent = `Couldn't: ${err.message}`;
       go.disabled = false;
+      if (task) task.disabled = false;
     }
     waitingKey = null;
+  };
+  if (task) {
+    task.addEventListener("click", () =>
+      carry(Object.fromEntries(hd.calls.map((c) => [c.id, true])), true));
+  }
+  go.addEventListener("click", async () => {
+    const missing = hd.calls.filter((c) => !(c.id in choice));
+    if (missing.length) { say.textContent = "Choose Allow or Refuse for each one first."; return; }
+    await carry(choice);
   });
   return h("article.run.ask", {},
     h("div.run-head", {}, h("span.run-who", {}, `${hd.agent} stopped to ask you`),
       h("span.run-meta", { title: hd.held_at }, `held ${ago(hd.held_at)}`)),
-    ...rows, h("div.actions", {}, go), say);
+    ...rows, h("div.actions", {}, go, task), say);
 }
 
 async function drawWaiting() {

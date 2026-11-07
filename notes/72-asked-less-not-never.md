@@ -57,6 +57,28 @@ Over HTTP it's `"for_turn": true` beside `"approve": true` on
 with a 400, the same rule as `approve`. A `for_turn` on a question that
 didn't offer it is a plain yes.
 
+### On a held turn
+
+A turn nobody answered in time can be held (`--on-timeout hold`,
+[notes/16](16-kept-for-when-you-are-back.md)), and its card waits a day. When every
+call waiting on it was asked only because of what the turn read, that
+card offers the same third answer: **approve all for this task** on
+Telegram, *Allow all for this task* on Dvara's page, *Yes to all for
+this task* in Sarathi's chat. Over HTTP it's `"for_turn": true` beside
+the answers on `POST /holds/ID` or `/web/holds/ID`.
+
+**THE YES WAITS FOR THE RESUMED TURN'S FIRST QUESTION.** A held turn
+carries on as a new turn, with a new id, so the yes can't be filed under
+an id that doesn't exist yet. The hold keeps what each call was asked
+because of (`Waiting.read`, on disk with the hold, so a restart keeps
+it). Answering it "for this task" puts that reading on the desk by
+conversation, for as long as the resume runs (`AskDesk.carry_task`). The
+resumed turn's first question asked for the same reason takes it as its
+own turn's yes (`take_carried`), and from there it is the yes above:
+nothing read since, no spend, no other turn. When the resume ends, an
+unused yes goes with it, so it never reaches the next task. A hold with
+one call that asks for itself (a spend next to a send) doesn't offer it.
+
 ## Sources a person trusts
 
 `trusted` in `actors.toml` names servers whose answers are that person's
@@ -133,4 +155,9 @@ offer it is a plain yes; a no is never for the task; and `trusted` is
 read as written, empty by default, and refuses a wildcard or a non-list.
 `tests/test_telegram.py`: the third button only where it's offered, and
 a press lands as a yes for the task. `tests/test_http.py`: a `for_turn`
-that isn't a boolean is a 400.
+that isn't a boolean is a 400. `tests/test_holds.py`: a hold keeps what
+its calls were asked because of across a restart and offers the third
+button only when every call was; a hold filed before that still reads.
+`tests/test_outside_text.py`: a held card's yes becomes the resumed
+turn's at its first question, asks again for a new read, never reaches
+past its resume, and is another conversation's nothing.

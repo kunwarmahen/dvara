@@ -657,7 +657,7 @@ def create_app(service: Service, *, token: str,
                 detail="answers must map each waiting call's id to true, "
                        "false, or a reason")
         try:
-            web.carry_on(hold_id, body["actor"], answers)
+            web.carry_on(hold_id, body["actor"], answers, for_task=_for_turn(body))
         except NotYourHold:
             raise HTTPException(status_code=403,
                                 detail="that held turn ran as somebody else") from None
@@ -1082,7 +1082,8 @@ def create_app(service: Service, *, token: str,
                        "false, or a reason")
         try:
             reply = await service.resume(hold_id, answers=answers,
-                                         actor=actor, door=door)
+                                         actor=actor, door=door,
+                                         for_task=_for_turn(body))
         except NotYourHold:
             raise HTTPException(
                 status_code=403,

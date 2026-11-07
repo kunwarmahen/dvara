@@ -738,7 +738,10 @@ Three rules hold it up, and the third is the one worth carrying away:
   ([notes/58](notes/58-outside-text-asks.md)). A change asked only
   because of a read can be answered **approve all for this task**: the
   rest of that turn's such questions then run, until it reads something
-  new; a spend is never covered ([notes/72](notes/72-asked-less-not-never.md)).
+  new; a spend is never covered. A held turn whose every waiting call
+  asked for that reason offers it too, and the resumed turn's questions
+  for the same reading are then answered
+  ([notes/72](notes/72-asked-less-not-never.md)).
 
 `--policy` is required if you name it and optional as `policy.toml`
 beside the actors file (`~/dvara/policy.toml` by default), so a typo in

@@ -129,8 +129,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from contextlib import suppress
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
@@ -302,6 +302,11 @@ class AskDesk:
         #: and the rest of this task". In memory, like the questions: a
         #: turn does not outlive the process either. The newest few only.
         self._for_turn: dict[str, frozenset[str]] = {}
+        #: (actor, agent, thread) -> what a held turn had read when its
+        #: person answered it "for this task": the resumed turn's id is
+        #: made as it starts, so the yes waits here for its first
+        #: question. Only while that resume runs (``carry_task``).
+        self._carried: dict[tuple[str, str, str], frozenset[str]] = {}
         #: Take-downs in flight. Held so the garbage collector cannot take
         #: one mid-edit, and emptied by their own callbacks.
         self._withdrawing: set[asyncio.Task] = set()
@@ -560,6 +565,30 @@ class AskDesk:
         that the person was not shown when they gave it."""
         seen = self._for_turn.get(turn_id) if turn_id else None
         return seen is not None and frozenset(read) <= seen
+
+    @contextmanager
+    def carry_task(self, actor: str, agent: str, thread: str,
+                   read: Sequence[str]) -> Iterator[None]:
+        """A held turn answered "for this task", while it carries on.
+
+        The yes was given on the held card, which named what had been
+        read; the resumed turn gets a new id as it starts, so the yes is
+        kept by conversation and bound to that id at the turn's first
+        question for the same reason (``take_carried``). It goes when the
+        resume ends, used or not: never to the next task."""
+        where = (actor, agent, thread)
+        self._carried[where] = frozenset(read)
+        try:
+            yield
+        finally:
+            self._carried.pop(where, None)
+
+    def take_carried(self, actor: str, agent: str, thread: str,
+                     turn_id: str) -> None:
+        """Bind a held card's "for this task" to the resumed turn's id."""
+        read = self._carried.pop((actor, agent, thread), None)
+        if read is not None:
+            self.yes_for_turn(turn_id, read)
 
 
 async def _quietly(undo: Awaitable[None]) -> None:

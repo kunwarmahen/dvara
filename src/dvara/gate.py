@@ -381,6 +381,10 @@ async def put(desk: AskDesk, request: PermissionRequest, *, actor: str,
     # (``only_after_reading`` is False) and is never covered.
     for_turn = bool(getattr(request, "only_after_reading", False)
                     and request.turn_id)
+    if for_turn:
+        # a held turn answered "for this task" is carrying on: its yes
+        # becomes this (new) turn's, read as the held card named it
+        desk.take_carried(actor, agent, thread, request.turn_id)
     if for_turn and desk.covered_for_turn(request.turn_id, request.after_reading):
         if decisions is not None:
             decisions.for_turn(request.call_id)

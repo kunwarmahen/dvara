@@ -393,7 +393,8 @@ class WebChannel:
             new=not attachments and fresh.is_new_word(text))
         return line
 
-    def carry_on(self, hold_id: str, actor: str, answers: dict) -> None:
+    def carry_on(self, hold_id: str, actor: str, answers: dict, *,
+                 for_task: bool = False) -> None:
         """Answer a held turn from the page; what it comes to is a line.
 
         The two refusals that need no turn are raised here, before
@@ -407,7 +408,8 @@ class WebChannel:
         live = Live()
         self._start(actor, hold.agent, self.service.past.here(hold.key) or "",
                     self.service.resume(
-            hold_id, answers=answers, actor=actor, door=KIND, watch=live), live)
+            hold_id, answers=answers, actor=actor, door=KIND, watch=live,
+            for_task=for_task), live)
 
     def _start(self, actor: str, agent: str, conversation: str, turn,
                live: Live | None = None, *, new: bool = False) -> None:

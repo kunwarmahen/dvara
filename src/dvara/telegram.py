@@ -969,8 +969,9 @@ class TelegramBot:
         query_id = query.get("id", "")
         native = query.get("from", {}).get("id")
         verdict, _, ask_id = str(query.get("data", "")).partition(":")
-        if verdict in ("h", "x") and ask_id:
-            await self._carry_on(query, ask_id, approve=verdict == "h")
+        if verdict in ("h", "x", "g") and ask_id:
+            await self._carry_on(query, ask_id, approve=verdict != "x",
+                                 for_task=verdict == "g")
             return
         if verdict in ("k", "d") and ask_id:
             await self._skill(query, ask_id, keep=verdict == "k")
@@ -1136,7 +1137,7 @@ class TelegramBot:
                              "text": word})
 
     async def _carry_on(self, query: dict, hold_id: str, *,
-                        approve: bool) -> None:
+                        approve: bool, for_task: bool = False) -> None:
         """A press on a held turn: answer every waiting call, and send
         what the turn comes to into the conversation it belongs to.
 
@@ -1169,7 +1170,8 @@ class TelegramBot:
         try:
             reply = await self.service.resume(hold_id, actor=actor,
                                               answers=answers,
-                                              door="telegram", watch=steps)
+                                              door="telegram", watch=steps,
+                                              for_task=for_task)
         except (NotYourHold, NoSuchHold, Refused) as exc:
             self.outbox.settled(row)
             await self._toast(query_id, str(exc))
@@ -1478,11 +1480,14 @@ def _remember_left(markup: dict | None, waiting: set[str], agent: str) -> dict |
 
 
 def _hold_buttons(hold: Hold) -> dict:
-    """"approve all" and "refuse all", under a reply that stopped to wait."""
+    """"approve all" and "refuse all", under a reply that stopped to wait,
+    and "approve all for this task" when every call waiting was asked
+    only because of what the turn read (``Hold.for_task``)."""
     return {"inline_keyboard": [[
         {"text": "approve all", "callback_data": f"h:{hold.id}"},
         {"text": "refuse all", "callback_data": f"x:{hold.id}"},
-    ]]}
+    ], *([[{"text": FOR_TURN_BUTTON, "callback_data": f"g:{hold.id}"}]]
+         if hold.for_task else [])]}
 
 
 def _chat_of(hold: Hold, pressed: dict) -> int:

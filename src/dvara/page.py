@@ -224,9 +224,11 @@ class Door:
                           body={"actor": self.owner, "approve": approve,
                                 **({"for_turn": True} if for_turn else {})})
 
-    def carry_on(self, hold_id: str, answers: dict[str, bool | str]) -> tuple[int, dict]:
+    def carry_on(self, hold_id: str, answers: dict[str, bool | str],
+                 for_task: bool = False) -> tuple[int, dict]:
         return self._call("POST", f"/holds/{quote(hold_id, safe='')}",
-                          body={"actor": self.owner, "answers": answers},
+                          body={"actor": self.owner, "answers": answers,
+                                **({"for_turn": True} if for_task else {})},
                           timeout=RESUME_TIMEOUT)
 
 
@@ -324,7 +326,7 @@ class Api:
         try:
             code, data = (door.answer(item, approve, body.get("for_turn") is True)
                           if kind == "asks"
-                          else door.carry_on(item, answers))
+                          else door.carry_on(item, answers, body.get("for_turn") is True))
         except httpx.HTTPError as exc:
             raise ApiError(502, f"the door didn't answer ({type(exc).__name__})") from None
         if code >= 400:

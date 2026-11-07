@@ -95,6 +95,10 @@ class Waiting:
     call_id: str
     tool: str
     summary: str
+    #: What the turn had read when this call was asked, when it was asked
+    #: ONLY because of that reading (Yantra's ``only_after_reading``);
+    #: empty for a call that asks for itself (a spend, a phone's confirm).
+    read: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,17 @@ class Hold:
     def age(self, now: datetime | None = None) -> float:
         return ((now or datetime.now(UTC)) - self.held_at).total_seconds()
 
+    @property
+    def for_task(self) -> bool:
+        """Whether "approve all for this task" may be offered: every call
+        waiting was asked only because of what the turn read."""
+        return bool(self.calls) and all(c.read for c in self.calls)
+
+    @property
+    def read(self) -> frozenset[str]:
+        """Everything the waiting calls were asked because of."""
+        return frozenset(r for c in self.calls for r in c.read)
+
     def as_dict(self, now: datetime | None = None) -> dict:
         """The wire shape, for ``GET /holds`` and a held ``/message``.
 
@@ -124,7 +139,8 @@ class Hold:
                 "held_at": self.held_at.isoformat(timespec="seconds"),
                 "age": round(self.age(now)),
                 "calls": [{"id": c.call_id, "tool": c.tool,
-                           "summary": c.summary} for c in self.calls]}
+                           "summary": c.summary} for c in self.calls],
+                "for_task": self.for_task}
 
 
 class NoSuchHold(Refused):
@@ -177,7 +193,8 @@ class HoldBook:
                 "held_at, calls) VALUES (?,?,?,?,?,?,?,?)",
                 (hold.id, key, actor, agent, thread, run_id,
                  _stamp(held_at),
-                 json.dumps([[c.call_id, c.tool, c.summary] for c in calls])))
+                 json.dumps([[c.call_id, c.tool, c.summary, list(c.read)]
+                             for c in calls])))
             self._db.commit()
         return hold
 
@@ -257,8 +274,10 @@ def _stamp(when: datetime) -> str:
 
 def _row_to_hold(row: tuple) -> Hold:
     try:
-        calls = [Waiting(*map(str, c[:3])) for c in json.loads(row[7])
-                 if isinstance(c, list) and len(c) >= 3]
+        calls = [Waiting(*map(str, c[:3]),
+                         read=tuple(map(str, c[3])) if len(c) > 3
+                         and isinstance(c[3], list) else ())
+                 for c in json.loads(row[7]) if isinstance(c, list) and len(c) >= 3]
     except ValueError:
         calls = []
     return Hold(id=row[0], key=row[1], actor=row[2], agent=row[3],
