@@ -142,3 +142,80 @@ def test_the_menu_offers_routines_only_when_vidhi_is_on():
         mcp = ()
     assert "routines" not in [w for w, _ in menu(Spec())]
     assert "routines" in [w for w, _ in menu(Spec(), routines=True)]
+
+
+# -- choices and typed words (a question that isn't yes or no) ----------------------
+
+
+def test_a_choice_is_sent_by_its_number_and_typed_words_whole(vidhi):
+    _say(vidhi, "mahen", "/routines pick K7Q2MX 2", via="telegram", is_owner=True)
+    _say(vidhi, "mahen", "/routines say K7Q2MX turn the  porch light on", is_owner=True)
+    answers = [a[:3] for a in _log(vidhi) if a[0] == "answer"]
+    assert ["answer", "K7Q2MX", "2"] in answers
+    assert ["answer", "K7Q2MX", "turn the porch light on"] in answers
+
+
+def test_pick_or_say_with_nothing_after_says_how():
+    said = asyncio.run(Routines("/bin/true").answer("asha", "/routines say K7Q2MX"))
+    assert said == "/routines say CODE your words"
+
+
+def test_each_kind_of_question_says_its_own_words_to_answer_it():
+    from dvara.routines import how_to_answer
+    assert how_to_answer({"code": "K7", "kind": "choice", "choices": ["Heat", "Cool"]}) == (
+        "/routines pick K7 1 for Heat  or  /routines pick K7 2 for Cool")
+    assert how_to_answer({"code": "K7", "kind": "words"}) == "/routines say K7 your words"
+    assert how_to_answer({"code": "K7"}) == "/routines yes K7  or  /routines no K7"
+
+
+# -- the same buttons on a phone's ntfy notification -------------------------------
+# The bias: A BUTTON ON A NOTIFICATION IS READ BY WHOEVER READS THE TOPIC, so
+# it carries no token, answers only the routine question its words name, for
+# only the person it was made for, and never says anything else to the agent.
+
+
+def test_a_routine_question_on_ntfy_has_marked_buttons_and_no_key(tmp_path):
+    from dvara.push import Pusher
+    pusher = Pusher("http://ntfy.house", tmp_path, click="http://house:8760/#chat")
+    actions = pusher.tap_actions("asha", [
+        {"word": "/routines pick K7Q2MX 1", "label": "Heat"},
+        {"word": "/routines pick K7Q2MX 2", "label": "Cool"},
+        {"word": "/skills keep 4638", "label": "Sneaky"}])
+    assert [a["label"] for a in actions] == ["Heat", "Cool"]
+    body = json.loads(actions[0]["body"])
+    assert body["word"] == "/routines pick K7Q2MX 1" and body["offer"] == "tap"
+    assert actions[0]["url"] == "http://house:8760/api/push/answer"
+    assert "token" not in json.dumps(actions).lower()
+    assert Pusher("http://ntfy.house", tmp_path).tap_actions("asha", [
+        {"word": "/routines yes K7Q2MX", "label": "Yes"}]) == []
+
+
+def test_a_routine_button_press_answers_as_that_person_only(make_service, vidhi):
+    from fastapi.testclient import TestClient
+
+    from dvara import push
+    from dvara.actors import ActorBook
+    from dvara.http import create_app
+
+    actors = ActorBook.from_dict({"actor": {
+        "owner": {"channel": [{"kind": "telegram", "id": "42"}]},
+        "ravi": {"channel": [{"kind": "telegram", "id": "43"}]}}})
+    service = make_service(actors=actors, web=True, ntfy="http://127.0.0.1:9",
+                           ntfy_click="http://house:8760/", vidhi=str(vidhi),
+                           owner="owner")
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    word = "/routines yes K7Q2MX"
+    good = push.mark(service.state, "owner", push.TAP_AGENT, push.TAP, word)
+    press = {"actor": "owner", "agent": push.TAP_AGENT, "offer": push.TAP, "word": word,
+             "mark": good}
+    with TestClient(create_app(service, token=token)) as client:
+        for wrong in ({**press, "word": "/routines no K7Q2MX"},     # another answer
+                      {**press, "actor": "ravi"},                   # another person
+                      {**press, "word": "/new", "mark": push.mark(
+                          service.state, "owner", push.TAP_AGENT, push.TAP, "/new")}):
+            assert client.post("/push/answer", headers=auth, json=wrong).status_code == 403
+        ok = client.post("/push/answer", headers=auth, json=press)
+        assert ok.status_code == 200 and ok.json()["said"].startswith('Yes to "Send it?"')
+    answer = next(a for a in _log(vidhi) if a[0] == "answer")
+    assert answer[:3] == ["answer", "K7Q2MX", "yes"] and "--via=ntfy" in answer

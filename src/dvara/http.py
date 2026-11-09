@@ -520,7 +520,8 @@ def create_app(service: Service, *, token: str,
     async def push_answer(request: Request,
                           authorization: str | None = Header(default=None)) -> dict:
         """Keep or Not now, pressed on a phone's ntfy notification (push.py):
-        ``{actor, agent, offer, word, mark}``. Only a mark made for exactly
+        ``{actor, agent, offer, word, mark}``. An offer of ``tap`` is a
+        routine's question answered (``/routines yes CODE``). Only a mark made for exactly
         those is taken; then it is the same word the page's button sends,
         in the person's page chat. An offer of ``remember:MARKS`` is a look
         back's Keep or No: the facts kept or turned down by their words, as
@@ -529,8 +530,21 @@ def create_app(service: Service, *, token: str,
         body = await request.json()
         if service.push is None or service.web is None:
             raise HTTPException(status_code=404, detail="no push here")
-        from dvara.push import marked
+        from dvara.push import TAP, marked, tapped
         fields = [str(body.get(f) or "") for f in ("actor", "agent", "offer", "word")]
+        if fields[2] == TAP and all(fields):
+            # a routine's question, answered from the notification: the
+            # same /routines words the chat's buttons send, never a turn
+            actor, word = fields[0], fields[3]
+            if not tapped(service.state, actor, word, body.get("mark") or ""):
+                raise HTTPException(status_code=403, detail="that button isn't one of ours")
+            if service.vidhi is None:
+                raise HTTPException(status_code=404, detail="no routines here")
+            said = await service.routines.answer(actor, word, via="ntfy",
+                                                 is_owner=actor == service.owner)
+            with suppress(Exception):    # the answer, back on the phone
+                await service.push.notice(service.push.topic(actor), said)
+            return {"said": said}
         if not all(fields) or not marked(service.state, *fields, body.get("mark") or ""):
             raise HTTPException(status_code=403, detail="that button isn't one of ours")
         actor, agent, offer, word = fields

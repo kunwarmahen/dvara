@@ -50,6 +50,16 @@ go where the tap already opens (``--ntfy-click``, the home page's
 address on the house network); without one, the words still say what
 to type.
 
+A ROUTINE'S QUESTION GETS ITS BUTTONS TOO. A notice that carries taps
+(Vidhi's Yes and No, or a question's choices: ``/routines yes CODE``)
+has them drawn as ntfy buttons, each with a mark over this person and
+that exact word, in the ``tap`` offer's place. Only ``/routines`` words
+are drawn: a pressed one is answered by Dvara's ``/routines`` as if the
+person had typed it (routines.py), never a turn, and Vidhi still takes
+it only for that person's own question, once. Copied, a button answers
+that one question the one way its words say -- what reading the
+notification already lets one do by typing.
+
 A SERVER DOWN IS NOT A CRASH. A post that fails is recorded as failed
 for that notice (notices.py), and the other channels still get it.
 """
@@ -107,6 +117,8 @@ REMEMBER_ALL = "Keep all"
 QUIET = 2
 #: Where on the home page a button's press goes.
 ANSWER_PATH = "/api/push/answer"
+#: A notice's own button (a slash word), in the offer's and agent's places.
+TAP, TAP_AGENT = "tap", "routines"
 
 
 def mark(state: Path, actor: str, agent: str, offer: str, word: str) -> str:
@@ -118,6 +130,14 @@ def mark(state: Path, actor: str, agent: str, offer: str, word: str) -> str:
 
 def marked(state: Path, actor: str, agent: str, offer: str, word: str, given: str) -> bool:
     return word in WORDS and hmac.compare_digest(mark(state, actor, agent, offer, word),
+                                                 str(given))
+
+
+def tapped(state: Path, actor: str, word: str, given: str) -> bool:
+    """A notice's own button: its mark, made for this person and exactly
+    this word, and a ``/routines`` word."""
+    from dvara.routines import word_of
+    return word_of(word) and hmac.compare_digest(mark(state, actor, TAP_AGENT, TAP, word),
                                                  str(given))
 
 
@@ -151,7 +171,32 @@ class Pusher:
                 await asyncio.to_thread(self._post, address, said, buttons, quiet=n > 0)
             return
         actions = self.actions(actor, extra.get("offer")) if actor else []
+        if actor and not actions and extra.get("taps"):
+            actions = self.tap_actions(actor, extra["taps"])
         await asyncio.to_thread(self._post, address, words, actions)
+
+    def tap_actions(self, actor: str, taps: list[dict]) -> list[dict]:
+        """A notice's buttons (``/routines yes CODE``) as ntfy draws them,
+        each marked for this person and its word; none that isn't a
+        ``/routines`` word, and none without a home page to press to."""
+        from dvara.routines import word_of
+        if not self.click:
+            return []
+        place = urlsplit(self.click)
+        url = f"{place.scheme}://{place.netloc}{ANSWER_PATH}"
+        out = []
+        for tap in taps[:3]:
+            word = str(tap.get("word") or "")
+            if not word_of(word):
+                continue
+            out.append({"action": "http", "label": str(tap.get("label") or word)[:24],
+                        "url": url, "method": "POST", "clear": True,
+                        "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"actor": actor, "agent": TAP_AGENT,
+                                            "offer": TAP, "word": word,
+                                            "mark": mark(self.state, actor, TAP_AGENT,
+                                                         TAP, word)})})
+        return out
 
     def actions(self, actor: str, offer: dict | None) -> list[dict]:
         """Keep and Not now for a skill offered, when a phone can reach the

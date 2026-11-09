@@ -23,8 +23,8 @@ press only for words it knows (`/routines` among them).
 
 Telegram draws them side by side under the notice's last part; Sarathi's
 home page draws them under the notice, and a press goes to the agent
-chosen in the chat, since a notice has none of its own. ntfy carries the
-words, not buttons.
+chosen in the chat, since a notice has none of its own. ntfy draws the
+same buttons (below).
 
 ## `/routines`
 
@@ -77,5 +77,24 @@ pressed on a real phone yet; that comes with the house's rebuild.
 ## Not here
 
 * **Drawing a routine from a chat.** That's Vidhi's page.
-* **Buttons on ntfy.** The notice carries the words; pressing is on
-  Telegram or the page.
+* ~~**Buttons on ntfy.**~~ Drawn (below).
+
+## Choices, words, and the same buttons on ntfy
+
+A question can offer two or three choices, or take a few typed words
+(Vidhi's notes/05). Their words are `/routines pick CODE N` (the
+buttons, one a choice, labelled with it) and `/routines say CODE the
+wifi is HouseGuest` (no buttons: typed). `/routines` lists a waiting
+question with the words that answer its kind.
+
+**ON A NOTIFICATION, A MARK, NEVER A KEY.** ntfy's buttons are sent from
+the phone, so whatever they carry is in the notification for anyone who
+reads the topic. A notice with taps gets them as ntfy http actions to
+the home page's `/api/push/answer`, each carrying a mark: an HMAC under
+`ntfy.key` over this person and that exact word, in the `tap` offer's
+place (push.py). Only `/routines` words are drawn. A press is checked
+(`tapped`), then answered by `/routines` as if the person typed it, never
+a turn, and the answer goes back to the phone. A copied button answers
+that one question the one way its words say, which is what reading the
+notification already lets one do by typing. Tested with Dvara's own
+test client and a stand-in Vidhi; not yet pressed on a real phone.

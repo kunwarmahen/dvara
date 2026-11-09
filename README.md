@@ -162,7 +162,7 @@ day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
 read aloud on this machine, after the words, for whoever wants to hear
 them, in their own voice or one for the answer's language — covered by
-1298 tests. The API is not stable.
+1303 tests. The API is not stable.
 
 ## The shape of it
 
@@ -1370,7 +1370,10 @@ dvara --ask --vidhi /path/to/vidhi serve --port 8765
   them side by side; Sarathi's home page under the notice.
   `/routines yes CODE` answers, once, only for its own person; for the
   owner, a routine installed at the computer (`local`) answers too
-  ([notes/83](notes/83-routines-from-the-chat.md)).
+  ([notes/83](notes/83-routines-from-the-chat.md)). A question with
+  choices has a button for each (`/routines pick CODE 2`); one that takes
+  words is `/routines say CODE ...`. On ntfy the same buttons are drawn,
+  each with a mark for that person and word, never a key.
 * Each of their turns starts `vidhi mcp --for <them> --agent <this
   agent> --runner dvara`: their agent runs a routine or installs a ready
   one after their yes on a card that lists everything it touches, and
@@ -1675,7 +1678,7 @@ reads that person's key from `<state>/memory.json`
 | `fresh.py` | `/new`: the person's conversation with this agent forgotten, never a turn, never under a running one; the ledger and their folder stay ([notes/28](notes/28-starting-over.md)) |
 | `remembering.py` | `/memory`, `/memory forget ID`, `/remember`: what is kept about a person, theirs to see and take back, or turn down for good; the look back at `/new` and what a turn noticed, listed and kept only on their word ([notes/38](notes/38-what-they-said-in-passing.md)); `/remember declined` and `/remember undo N`, and the page's `/web/declined`, to see and take back what they turned down ([notes/68](notes/68-what-you-turned-down.md)); a look back's notice carries the facts it listed, and the page's Keep and No answer them by their words (`POST /web/remember`), never a number that has moved ([notes/80](notes/80-one-menu-and-a-keep-button.md)), and Telegram's and a phone's buttons by a short mark of the words (`fact_mark`), one answer at a time for each person ([notes/81](notes/81-keep-on-every-road.md)); what the model kept on its own, named under the answer and by the look back ([notes/77](notes/77-kept-and-told.md)) |
 | `signins.py` | a sign-in that ran out, found by `setu check` once a day and told once to whoever can fix it ([notes/39](notes/39-while-nobody-is-writing.md)) |
-| `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it; **Keep** / **Not now** on a skill offered, a mark per button in place of any key (`POST /push/answer`) ([notes/40](notes/40-a-notice-on-their-phone.md)); what a look back noticed as one notification per fact, each with **Keep** / **No** (and **Keep all**), one buzz for the lot, by the facts' marks ([notes/81](notes/81-keep-on-every-road.md)) |
+| `push.py` | ntfy on the house's own server: each person's unguessable topic, every notice posted to it; **Keep** / **Not now** on a skill offered, a mark per button in place of any key (`POST /push/answer`) ([notes/40](notes/40-a-notice-on-their-phone.md)); what a look back noticed as one notification per fact, each with **Keep** / **No** (and **Keep all**), one buzz for the lot, by the facts' marks ([notes/81](notes/81-keep-on-every-road.md)); a routine's question with its buttons, each marked for its person and words ([notes/83](notes/83-routines-from-the-chat.md)) |
 | `settings.py`, `tomledit.py` | `dvara settings`: people, rules and agents changed from a page, each checked by the code that reads it, the rest of the file kept byte for byte, the old one as `.bak` ([notes/41](notes/41-the-owners-files-from-a-page.md)) |
 | `unlocked.py` | `/lock`, `/unlock`: the passphrase to Setu only, the key held in memory for the days asked, sealed again when they are up ([notes/21](notes/21-a-passphrase-only-they-know.md)) |
 | `roster.py` | agents resolved by NAME from one owner-controlled root |
@@ -1710,7 +1713,7 @@ reads that person's key from `<state>/memory.json`
 | `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
 | `menu.py` | the words an agent answers, as one list: Telegram's `/` menu at the bot's start, and the web channel's `words` on a page's first look, so the page's + menu and `/` list are the same words ([notes/28](notes/28-starting-over.md)); `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); one list for both roads ([notes/80](notes/80-one-menu-and-a-keep-button.md)); `/routines` when Vidhi is on ([notes/83](notes/83-routines-from-the-chat.md)) |
-| `routines.py` | `/routines`: a person's routines from Vidhi, how one went, `run N`, and a run's question answered (`yes|no CODE`, the buttons' words), as them ([notes/83](notes/83-routines-from-the-chat.md)) |
+| `routines.py` | `/routines`: a person's routines from Vidhi, how one went, `run N`, and a run's question answered (`yes|no CODE`, `pick CODE N`, `say CODE words`: the buttons' words), as them ([notes/83](notes/83-routines-from-the-chat.md)) |
 | `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--vidhi`, `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 

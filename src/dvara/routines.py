@@ -9,12 +9,17 @@ of these is a turn -- no model, no allowance spent:
     /routines run 2           start it now
     /routines yes K7Q2MX      answer a run's question (the buttons send this)
     /routines no K7Q2MX
+    /routines pick K7Q2MX 2   one of its choices (by number, or its words)
+    /routines say K7Q2MX ...  a question that takes a few typed words
     /routines stop RUN        stop a run that is going or waiting
 
 A QUESTION IS ANSWERED FROM ANY CHANNEL. A run that stopped to ask puts
-its question on the person's channels with two buttons, Yes and No,
-which send ``/routines yes CODE`` as if typed -- by the person who
-pressed. Vidhi takes an answer only for its own person's question
+its question on the person's channels with buttons -- Yes and No, or
+its two or three choices -- which send ``/routines yes CODE`` (``pick
+CODE N``) as if typed, by the person who pressed. One that takes words
+has no buttons: the words are typed after ``/routines say CODE``. On a
+phone's ntfy notification the same buttons come marked, never with a
+token (push.py). Vidhi takes an answer only for its own person's question
 (``vidhi answer --as``), and only once: a second press says what the
 first one decided.
 
@@ -63,6 +68,11 @@ class Routines:
         verb = words[0].lower() if words else ""
         if verb in ("yes", "no") and len(words) == 2:
             return await self._answer(program, people, words[1], verb, via)
+        if verb in ("pick", "say") and len(words) >= 3:
+            return await self._answer(program, people, words[1], " ".join(words[2:]), via)
+        if verb in ("pick", "say"):
+            return (f"/routines {verb} CODE "
+                    + ("N (the number of the choice)" if verb == "pick" else "your words"))
         if verb == "run" and len(words) >= 2:
             return await self._start(program, people, words[1], via)
         if verb == "stop" and len(words) == 2:
@@ -94,8 +104,7 @@ class Routines:
         if asks:
             out.append("Waiting for your answer:")
             for q in asks:
-                out.append(f"  {q.get('text')}  (/routines yes {q.get('code')}  or  "
-                           f"/routines no {q.get('code')})")
+                out.append(f"  {q.get('text')}  ({how_to_answer(q)})")
             out.append("")
         if not cards:
             out.append("You have no routines yet. Ask me for a morning brief, or anything a "
@@ -160,7 +169,10 @@ class Routines:
                 run = said.get("run") or {}
                 follow = ("it carries on now" if run.get("state") in ("queued", "running")
                           else f"the run is {run.get('state')}" if run else "")
-                return (f"{word.capitalize()} to \"{question.get('text')}\""
+                kept = str(question.get("answer") or word)
+                head = kept.capitalize() if question.get("kind", "yesno") == "yesno" \
+                    else f"\"{kept}\""
+                return (f"{head} to \"{question.get('text')}\""
                         + (f" — {follow}." if follow else "."))
             if "no question" not in trouble:
                 break
@@ -175,6 +187,17 @@ class Routines:
             if "no run" not in trouble:
                 break
         return trouble
+
+
+def how_to_answer(question: dict) -> str:
+    """The words that answer a question, as a person types them."""
+    code = question.get("code")
+    if question.get("kind") == "choice":
+        return "  or  ".join(f"/routines pick {code} {n} for {c}"
+                             for n, c in enumerate(question.get("choices") or [], 1))
+    if question.get("kind") == "words":
+        return f"/routines say {code} your words"
+    return f"/routines yes {code}  or  /routines no {code}"
 
 
 def _which(cards: list[dict], which: str) -> dict | None:
