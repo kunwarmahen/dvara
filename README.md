@@ -1343,7 +1343,9 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
 * `/indriyas` lists the readings they may use (their own, then the
   ones shared with the house), each with its value and age; `/indriyas
   2` says what happened to the second, reading by reading, with what
-  their watches decided. Their agent
+  their watches decided (a value sent in with its own time says
+  *measured …*; a decision from before looks kept their reading says
+  *matched by time*). Their agent
   is told the same readings exist, and answers *"how cold is it out?"*
   from one instead of calling the weather again
   ([notes/42](notes/42-seeing-the-work.md#tools-schedules-and-watches-by-asking)).
