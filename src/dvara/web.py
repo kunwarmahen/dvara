@@ -302,7 +302,9 @@ class WebChannel:
                              # what a look back noticed, for Keep and No
                              "remember": (extra or {}).get("remember"),
                              # "always": it plays by itself on the page too
-                             "speak": (extra or {}).get("speak")})
+                             "speak": (extra or {}).get("speak"),
+                             # words to send as buttons (a routine's Yes, No)
+                             "taps": (extra or {}).get("taps")})
 
     # -- the person, on the page ---------------------------------------------
 

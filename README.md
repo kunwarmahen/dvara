@@ -156,7 +156,8 @@ the person keeps for themselves, and `/tools`, `/schedules`,
 `/watches` and `/indriyas` answered from the record (`/watches every 2
 6h` changes how often one looks, `/watches pause 2` and `resume 2`
 whether it does; `/indriyas` lists the readings watches share); and with `--prahari`, its owner's agent offers to tell
-them when something happens; and limits for a child (hours, messages a
+them when something happens; and with `--vidhi`, their routines on every
+channel (`/routines`, and a run's question answered with Yes and No); and limits for a child (hours, messages a
 day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
 read aloud on this machine, after the words, for whoever wants to hear
@@ -1347,6 +1348,34 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
   from one instead of calling the weather again
   ([notes/42](notes/42-seeing-the-work.md#tools-schedules-and-watches-by-asking)).
 
+### Routines, from the chat
+
+[Vidhi](https://github.com/kunwarmahen/vidhi) keeps routines a person
+drew once (a morning brief; a price check that asks before it plans).
+With `--vidhi`, they are a word away on every channel, and their agent
+can run them:
+
+```bash
+export VIDHI_DVARA_URL=http://127.0.0.1:8765 VIDHI_DVARA_TOKEN=$DVARA_TOKEN
+dvara --ask --vidhi /path/to/vidhi serve --port 8765
+#   dvara: routines through vidhi 2026.11.9.1 (/path/to/vidhi); it is running
+```
+
+* `/routines` lists their routines and any question a run is waiting
+  on; `/routines 2` says how the second one's last runs went, step by
+  step; `/routines run 2` starts it. None is a turn.
+* A run that stops to ask puts its question in their chat with **Yes**
+  and **No**: `/notify` takes `taps`, at most three slash words a
+  channel draws as buttons and a press sends as if typed. Telegram draws
+  them side by side; Sarathi's home page under the notice.
+  `/routines yes CODE` answers, once, only for its own person; for the
+  owner, a routine installed at the computer (`local`) answers too
+  ([notes/83](notes/83-routines-from-the-chat.md)).
+* Each of their turns starts `vidhi mcp --for <them> --agent <this
+  agent> --runner dvara`: their agent runs a routine or installs a ready
+  one after their yes on a card that lists everything it touches, and
+  never writes a routine's steps.
+
 ### Your phone, from the chat
 
 With [Sparsh](https://github.com/kunwarmahen/sparsh) installed and a
@@ -1681,7 +1710,8 @@ reads that person's key from `<state>/memory.json`
 | `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
 | `menu.py` | the words an agent answers, as one list: Telegram's `/` menu at the bot's start, and the web channel's `words` on a page's first look, so the page's + menu and `/` list are the same words ([notes/28](notes/28-starting-over.md)); `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); one list for both roads ([notes/80](notes/80-one-menu-and-a-keep-button.md)) |
-| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--sparsh` and `--memory` checked at the start |
+| `routines.py` | `/routines`: a person's routines from Vidhi, how one went, `run N`, and a run's question answered (`yes|no CODE`, the buttons' words), as them ([notes/83](notes/83-routines-from-the-chat.md)) |
+| `cli.py` | `agents`, `status`, `page`, `say`, `runs`, `held`, `resume`, `rules`, `case`, `telegram`, `serve`, `settings`; `--samay`, `--prahari` (`--prahari-for` narrows it), `--vidhi`, `--sparsh` and `--memory` checked at the start |
 | `errors.py` | `Refused` (answer the person) vs `ConfigProblem` (tell the owner) |
 
 ## Security, in four sentences

@@ -162,6 +162,14 @@ def build_parser() -> argparse.ArgumentParser:
                         dest="prahari_for",
                         help="only these people get watches, a comma list "
                              "(default: everyone; also DVARA_PRAHARI_FOR)")
+    parser.add_argument("--vidhi", nargs="?", const="on", default=None,
+                        metavar="PATH",
+                        help="let people run their routines (Vidhi) from a chat: "
+                             "/routines on every channel, a run's questions "
+                             "answered with buttons, and their agent able to "
+                             "start one or install a ready one after they say "
+                             "yes. Off unless asked for (PATH names the vidhi "
+                             "program; also DVARA_VIDHI)")
     parser.add_argument("--memory", default=None, metavar="FILE",
                         help="where people's memories are kept, for a package "
                              "that asks for memory: an MCP config naming one "
@@ -389,6 +397,7 @@ def _service(args) -> Service:
         getattr(args, "prahari", None) or os.environ.get("DVARA_PRAHARI"),
         getattr(args, "prahari_for", None) or os.environ.get("DVARA_PRAHARI_FOR"))
     sparsh = _sparsh(args.sparsh or os.environ.get("DVARA_SPARSH"))
+    vidhi = _vidhi(getattr(args, "vidhi", None) or os.environ.get("DVARA_VIDHI"))
     memory = _memory(args.memory or os.environ.get("DVARA_MEMORY"))
     try:
         return Service(
@@ -403,6 +412,7 @@ def _service(args) -> Service:
             samay=samay,
             prahari=prahari,
             prahari_for=prahari_for,
+            vidhi=vidhi,
             sparsh=sparsh,
             memory=memory,
             keep_unattended=args.keep_unattended * 86400,
@@ -485,6 +495,27 @@ def _prahari(asked: str | None, whose: str | None) -> tuple[str | None, tuple[st
           f"{'watching' if data.get('serving') else 'NOT running (prahari serve)'}",
           file=sys.stderr)
     return program, names
+
+
+def _vidhi(asked: str | None) -> str | None:
+    """The vidhi program, checked now. ASKED FOR OR OFF, like Prahari: a
+    routine runs as its person, through this door, so the owner turns it
+    on. Vidhi not running yet is said, not refused: a run waits for it."""
+    if not asked or asked.strip().lower() == "off":
+        return None
+    from yantra.vidhi_link import VidhiLinkError, load, resolve_mode
+
+    mode, path = resolve_mode(asked, "")
+    try:
+        found = load("on", path)
+    except VidhiLinkError as exc:
+        raise ConfigProblem(f"--vidhi: {exc}") from None
+    assert found is not None
+    data, program = found
+    print(f"dvara: routines through vidhi {data.get('version')} ({program}); it is "
+          f"{'running' if data.get('serving') else 'NOT running (vidhi serve)'}",
+          file=sys.stderr)
+    return program
 
 
 def _sparsh(asked: str | None) -> str | None:

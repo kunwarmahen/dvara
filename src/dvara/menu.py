@@ -31,7 +31,7 @@ from typing import Any
 
 
 def menu(spec: Any, *, schedules: bool = False, watches: bool = False,
-         phone: bool = False) -> list[tuple[str, str]]:
+         phone: bool = False, routines: bool = False) -> list[tuple[str, str]]:
     """``/`` menu entries for this agent, in the order a person needs them."""
     words = [("new", "Start our conversation over"),
              ("carry", "Carry on a job a restart stopped"),
@@ -65,6 +65,8 @@ def menu(spec: Any, *, schedules: bool = False, watches: bool = False,
     if watches:
         words += [("watches", "What I watch for you; /watches every N 6h, pause N, resume N"),
                   ("indriyas", "Readings for your watches; /indriyas N, what happened")]
+    if routines:
+        words += [("routines", "Your routines; /routines run N, /routines N how it went")]
     return words
 
 
@@ -75,6 +77,7 @@ def words_for(service: Any, spec: Any) -> list[tuple[str, str]]:
 
     return menu(spec, schedules=service.samay is not None,
                 watches=service.prahari is not None,
+                routines=getattr(service, "vidhi", None) is not None,
                 phone=service.sparsh is not None and works_phone(spec))
 
 

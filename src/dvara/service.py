@@ -140,6 +140,8 @@ from dvara.memory import PEOPLE_FILE, MemoryProblem, Person, Store, person
 from dvara.notices import NoticeDesk, Sent
 from dvara.roster import Roster
 from dvara.runs import Run, RunStore, ToolStep, asked_by, clean_label
+from dvara.routines import Routines
+from dvara.routines import word_of as routines_word
 from dvara.seen import Seen
 from dvara.watch import Safely, Watcher, shown
 
@@ -305,6 +307,7 @@ class Service:
                  sparsh: str | None = None,
                  prahari: str | None = None,
                  prahari_for: Sequence[str] = (),
+                 vidhi: str | None = None,
                  keep_unattended: float = KEEP_UNATTENDED,
                  web: bool = False,
                  memory: Store | None = None,
@@ -360,6 +363,11 @@ class Service:
         self.prahari_for = tuple(n.strip() for n in (
             prahari_for.split(",") if isinstance(prahari_for, str) else prahari_for)
             if n.strip())
+        #: The vidhi program, when the owner turned routines on (``--vidhi``):
+        #: each person's turns get their own routines' tools (``_routines``),
+        #: and ``/routines`` answers on every channel (routines.py).
+        self.vidhi = vidhi
+        self.routines = Routines(vidhi)
         #: The owner's memory store (``--memory``, memory.py): a package
         #: that asks for memory gets this one, for its person. None: the
         #: package's own choice, still filed under the person's name.
@@ -1078,6 +1086,12 @@ class Service:
             said = await self.learning.words(spec, who, key, text)
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="skills")
+        if not unattended and self.vidhi is not None and routines_word(text):
+            # Their routines, and a run's question answered: Vidhi's, not a turn.
+            said = await self.routines.answer(actor, text, via=came_by or "chat",
+                                              is_owner=actor == self.owner)
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="seen")
         if not unattended and (word := seen.word_of(text)):
             # What it can use, and what they scheduled: read, not a turn.
             said = (self.seen.tools(actor, agent) if word == seen.TOOLS else
@@ -1525,7 +1539,9 @@ class Service:
         remembering = (self.memory is not None and spec.memory == self.memory.name
                        and getattr(agent, "memory", None) is not None)
         packaged = bool(getattr(spec, "mcp", ()))
-        if not (accounts or schedules or watching or phone or remembering or packaged):
+        routining = self.vidhi is not None and not is_unattended()
+        if not (accounts or schedules or watching or phone or remembering or packaged
+                or routining):
             return None
         from yantra.mcp import MCPManager
 
@@ -1537,6 +1553,8 @@ class Service:
             await self._schedules(agent, manager, who=who, run=run)
         if watching:
             await self._watches(agent, manager, who=who, run=run)
+        if routining:
+            await self._routines(agent, manager, who=who, run=run)
         if phone:
             await self._phone(agent, manager, who=who,
                               asked=asked_by(run.came_by, run.label, who.id),
@@ -1803,6 +1821,30 @@ class Service:
             await asyncio.to_thread(link.connect, manager, agent)
         except (MCPError, PrahariLinkError) as exc:
             self._note(f"dvara: watches are off for this turn -- prahari: {exc}")
+
+    async def _routines(self, agent, manager, *, who: Actor, run: Run) -> None:
+        """Vidhi's tools for this turn's person (``--vidhi``).
+
+        ONE SERVER PER TURN, as for Prahari: ``vidhi mcp --for <actor>
+        --runner dvara`` starts beside the agent and stops with the turn. A
+        routine installed here runs as this person, on this road, with their
+        own accounts; starting or installing one is a write, asked about on
+        their channel with Yantra's card in words. The agent never writes a
+        routine's steps: those are drawn on Vidhi's page.
+
+        A SCHEDULED TURN GETS NONE, and a Vidhi that will not start costs the
+        turn its routines, never the turn."""
+        from yantra.mcp import MCPError
+        from yantra.vidhi_link import Vidhi, VidhiLinkError, load
+
+        try:
+            found = await asyncio.to_thread(load, "on", self.vidhi)
+            assert found is not None
+            link = Vidhi(mode="on", data=found[0], program=found[1], person=who.id,
+                         agent=run.agent, runner="dvara")
+            await asyncio.to_thread(link.connect, manager, agent)
+        except (MCPError, VidhiLinkError) as exc:
+            self._note(f"dvara: routines are off for this turn -- vidhi: {exc}")
 
     async def _phone(self, agent, manager, *, who: Actor,
                      grants: list[str] | None = None, only: tuple[str, ...] = (),

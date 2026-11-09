@@ -87,6 +87,28 @@ from dvara.holds import NoSuchHold, NotYourHold
 from dvara.service import Service
 
 
+#: Buttons a notice may carry, at most, and how long a word may be.
+TAPS_AT_MOST, TAP_WORD = 3, 60
+
+
+def _taps(raw) -> list[dict]:
+    """A notice's buttons, checked: slash words only, short, three at most."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) > TAPS_AT_MOST:
+        raise HTTPException(status_code=400, detail=f"taps is a list of at most "
+                                                    f"{TAPS_AT_MOST} {{word, label}}")
+    out = []
+    for tap in raw:
+        word = str((tap or {}).get("word") or "").strip() if isinstance(tap, dict) else ""
+        label = str((tap or {}).get("label") or "").strip() if isinstance(tap, dict) else ""
+        if not word.startswith("/") or len(word) > TAP_WORD or "\n" in word or not label:
+            raise HTTPException(status_code=400, detail=(
+                "each tap is {word, label}, its word a slash word (/routines yes K7Q2MX)"))
+        out.append({"word": word, "label": label[:24]})
+    return out
+
+
 def _whom(body: dict) -> tuple[str | None, Channel | None]:
     """Read who a request is about, in whichever of the two forms it used.
 
@@ -472,15 +494,23 @@ def create_app(service: Service, *, token: str,
         collect, or neither -- a person with no channel, said as
         ``nowhere: true`` rather than as an error, because the caller
         asked a fair question and that is its answer.
+
+        ``taps``: at most three ``{word, label}`` a channel draws as buttons
+        under it -- a press sends ``word`` as if the person typed it, so
+        it does only what typing it would (Vidhi's Yes and No are
+        ``/routines yes CODE``). Each word is a slash word: a button can
+        never say something to the agent in the person's name.
         """
         check(authorization)
         body = await request.json()
         text = body.get("text")
         if not isinstance(text, str) or not text.strip():
             raise HTTPException(status_code=400, detail="missing or empty: text")
+        taps = _taps(body.get("taps"))
         actor, via = _whom(body)
         try:
-            who, sent = await service.notify(text=text, actor=actor, via=via)
+            who, sent = await service.notify(text=text, actor=actor, via=via,
+                                             extra={"taps": taps} if taps else None)
         except Refused as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
         return {"actor": who, "sent": sent.sent, "kept": sent.kept,

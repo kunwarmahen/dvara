@@ -1,0 +1,183 @@
+"""A person's routines, from any channel: ``/routines``.
+
+Vidhi keeps routines a person drew once (a morning brief, a price check
+that asks before it plans). From a chat they are a word away, and none
+of these is a turn -- no model, no allowance spent:
+
+    /routines                 their routines, and any question waiting
+    /routines 2               how the second one's last runs went
+    /routines run 2           start it now
+    /routines yes K7Q2MX      answer a run's question (the buttons send this)
+    /routines no K7Q2MX
+    /routines stop RUN        stop a run that is going or waiting
+
+A QUESTION IS ANSWERED FROM ANY CHANNEL. A run that stopped to ask puts
+its question on the person's channels with two buttons, Yes and No,
+which send ``/routines yes CODE`` as if typed -- by the person who
+pressed. Vidhi takes an answer only for its own person's question
+(``vidhi answer --as``), and only once: a second press says what the
+first one decided.
+
+THE OWNER'S COMPUTER ROUTINES ARE THE OWNER'S. A routine installed at
+the computer is filed under ``local``, and its questions come to the
+owner's chat; so for the owner, ``/routines`` lists both, and an answer
+that isn't theirs by name is tried as ``local``.
+
+DRAWING ONE IS VIDHI'S PAGE. Nothing here writes a step: what a routine
+does is drawn by a person, on Vidhi's own page.
+"""
+
+from __future__ import annotations
+
+import shutil
+
+from dvara.seen import ask_json
+
+ROUTINES = "/routines"
+LOCAL = "local"
+#: Runs shown for one routine.
+RUNS_SHOWN = 3
+HOW = ("/routines N for how one went, /routines run N to start it. Ask me to set up one "
+       "of the ready ones; a new kind is drawn on Vidhi's page.")
+
+
+def word_of(text: str) -> bool:
+    first = text.strip().split(maxsplit=1)[:1]
+    return bool(first) and first[0].lower().split("@")[0] == ROUTINES
+
+
+class Routines:
+    def __init__(self, vidhi: str | None = None) -> None:
+        self.vidhi = vidhi
+
+    def program(self) -> str | None:
+        return self.vidhi or shutil.which("vidhi")
+
+    async def answer(self, actor: str, text: str, *, via: str = "chat",
+                     is_owner: bool = False) -> str:
+        program = self.program()
+        if not program:
+            return "Routines aren't set up on this computer (Vidhi isn't here)."
+        words = text.strip().split()[1:]
+        people = [actor] + ([LOCAL] if is_owner and actor != LOCAL else [])
+        verb = words[0].lower() if words else ""
+        if verb in ("yes", "no") and len(words) == 2:
+            return await self._answer(program, people, words[1], verb, via)
+        if verb == "run" and len(words) >= 2:
+            return await self._start(program, people, words[1], via)
+        if verb == "stop" and len(words) == 2:
+            return await self._stop(program, people, words[1])
+        listing = await self._list(program, people)
+        if isinstance(listing, str):
+            return listing
+        if words:
+            return await self._runs(program, listing, words[0])
+        return await self._overview(program, people, listing)
+
+    # -- seeing ---------------------------------------------------------------------
+
+    async def _list(self, program: str, people: list[str]) -> list[dict] | str:
+        found: list[dict] = []
+        for person in people:
+            cards, trouble = await ask_json([program, "list", f"--as={person}", "--json"])
+            if trouble:
+                return trouble
+            found += [c for c in cards or [] if isinstance(c, dict)]
+        return found
+
+    async def _overview(self, program: str, people: list[str], cards: list[dict]) -> str:
+        out: list[str] = []
+        asks = []
+        for person in people:
+            open_now, _ = await ask_json([program, "questions", f"--as={person}", "--json"])
+            asks += [q for q in open_now or [] if isinstance(q, dict)]
+        if asks:
+            out.append("Waiting for your answer:")
+            for q in asks:
+                out.append(f"  {q.get('text')}  (/routines yes {q.get('code')}  or  "
+                           f"/routines no {q.get('code')})")
+            out.append("")
+        if not cards:
+            out.append("You have no routines yet. Ask me for a morning brief, or anything a "
+                       "ready one does; a new kind is drawn on Vidhi's page.")
+            return "\n".join(out)
+        out.append("Your routines:")
+        for n, card in enumerate(cards, 1):
+            paused = "" if card.get("state") == "active" else f" ({card.get('state')})"
+            out.append(f"{n}. {card.get('title')}{paused} — {card.get('cost')}")
+        out += ["", HOW]
+        return "\n".join(out)
+
+    async def _runs(self, program: str, cards: list[dict], which: str) -> str:
+        card = _which(cards, which)
+        if card is None:
+            return f"You have no routine {which}. Send /routines to see them."
+        runs, trouble = await ask_json([program, "runs", str(card["name"]),
+                                        f"--as={card['owner']}", f"--limit={RUNS_SHOWN}",
+                                        "--json"])
+        if trouble:
+            return trouble
+        if not runs:
+            return f"{card.get('title')} hasn't run yet. /routines run {which} starts it."
+        out = [f"{card.get('title')}, last runs:"]
+        for run in runs:
+            out.append(f"• {run.get('created_at', '')[:16].replace('T', ' ')} — "
+                       f"{run.get('state')}" + (f": {run.get('detail')}"
+                                                 if run.get("detail") else ""))
+            for step in run.get("steps") or []:
+                if step.get("state") in ("pending",):
+                    continue
+                said = step.get("why") or step.get("detail") or ""
+                out.append(f"    {step.get('title')}: {step.get('state')}"
+                           + (f" ({said})" if said else ""))
+        return "\n".join(out)
+
+    # -- doing ----------------------------------------------------------------------
+
+    async def _start(self, program: str, people: list[str], which: str, via: str) -> str:
+        cards = await self._list(program, people)
+        if isinstance(cards, str):
+            return cards
+        card = _which(cards, which)
+        if card is None:
+            return f"You have no routine {which}. Send /routines to see them."
+        run, trouble = await ask_json([program, "start", str(card["name"]),
+                                       f"--as={card['owner']}", f"--by=dvara:{via}",
+                                       "--json"])
+        if trouble:
+            return trouble
+        return (f"Started {card.get('title')} (run {run.get('id')}). What it finds comes "
+                "here; if it has a question, it asks with two buttons.")
+
+    async def _answer(self, program: str, people: list[str], code: str, word: str,
+                      via: str) -> str:
+        trouble = ""
+        for person in people:
+            said, trouble = await ask_json([program, "answer", code, word,
+                                            f"--as={person}", f"--via={via}", "--json"])
+            if not trouble:
+                question = said.get("question") or {}
+                run = said.get("run") or {}
+                follow = ("it carries on now" if run.get("state") in ("queued", "running")
+                          else f"the run is {run.get('state')}" if run else "")
+                return (f"{word.capitalize()} to \"{question.get('text')}\""
+                        + (f" — {follow}." if follow else "."))
+            if "no question" not in trouble:
+                break
+        return trouble
+
+    async def _stop(self, program: str, people: list[str], run: str) -> str:
+        trouble = ""
+        for person in people:
+            _, trouble = await ask_json([program, "stop", run, f"--as={person}", "--json"])
+            if not trouble:
+                return f"Stopped run {run}."
+            if "no run" not in trouble:
+                break
+        return trouble
+
+
+def _which(cards: list[dict], which: str) -> dict | None:
+    if which.isdigit() and 1 <= int(which) <= len(cards):
+        return cards[int(which) - 1]
+    return next((c for c in cards if c.get("name") == which), None)

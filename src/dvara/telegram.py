@@ -167,6 +167,7 @@ from dvara import carrying, past, remembering, spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.menu import remembers as _remembers
+from dvara.routines import word_of as routines_word
 from dvara.menu import words_for
 from dvara.menu import writes_files as _writes_files
 from dvara.files import is_file_word
@@ -888,9 +889,12 @@ class TelegramBot:
             await self._send_file(chat, file, caption=elide(text, CAPTION_LIMIT))
         else:
             offer, noticed = extra.get("offer"), extra.get("remember")
+            taps = extra.get("taps") or []
             buttons = (_offer_buttons(offer) if offer
                        else _remember_buttons(noticed) if noticed
                        else _carry_button() if self._carries(extra.get("carry"), chat)
+                       # a routine's Yes and No: a press sends the word as typed
+                       else _row_buttons([(t["label"], t["word"]) for t in taps]) if taps
                        else None)
             parts = split_message(text)
             for count, part in enumerate(parts, start=1):
@@ -1130,7 +1134,7 @@ class TelegramBot:
         query_id = query.get("id", "")
         pressed = query.get("message") or {}
         chat = pressed.get("chat", {}).get("id")
-        if not chat or not (is_command(word) or past.is_word(word)):
+        if not chat or not (is_command(word) or past.is_word(word) or routines_word(word)):
             await self._toast(query_id, "that button means nothing here")
             return
         await self._toast(query_id, word)
@@ -1443,6 +1447,14 @@ def _choice_buttons(choices) -> dict:
     return {"inline_keyboard": [[{"text": label, "callback_data": f"w:{word}"}]
                                 for label, word in choices
                                 if len(f"w:{word}".encode()) <= CALLBACK_LIMIT]}
+
+
+def _row_buttons(choices) -> dict:
+    """Buttons side by side (a routine's Yes and No): pressing one sends
+    its words, as a sign-in word's button does (``_tapped``)."""
+    return {"inline_keyboard": [[{"text": label, "callback_data": f"w:{word}"}
+                                 for label, word in choices
+                                 if len(f"w:{word}".encode()) <= CALLBACK_LIMIT]]}
 
 
 def _offer_buttons(offer: dict) -> dict:
