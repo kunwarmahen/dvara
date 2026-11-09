@@ -278,10 +278,13 @@ def fake_prahari(tmp_path, cards, readings=()) -> str:
     often)."""
     (tmp_path / "watches.json").write_text(json.dumps(cards))
     (tmp_path / "indriyas.json").write_text(json.dumps(list(readings)))
+    (tmp_path / "history.json").write_text(json.dumps(HISTORY))
     program = tmp_path / "prahari"
     program.write_text(
         "#!/bin/sh\n"
         f"if [ \"$1\" = list ]; then cat {tmp_path}/watches.json; exit 0; fi\n"
+        f"if [ \"$1\" = indriya ] && [ \"$2\" = readings ]; then echo \"$@\" >> "
+        f"{tmp_path}/asked-history; cat {tmp_path}/history.json; exit 0; fi\n"
         f"if [ \"$1\" = indriya ]; then echo \"$@\" >> {tmp_path}/asked-readings; "
         f"cat {tmp_path}/indriyas.json; exit 0; fi\n"
         f"echo \"$@\" >> {tmp_path}/asked\n"
@@ -425,6 +428,19 @@ READINGS = [
 ]
 
 
+HISTORY = [
+    {"at": "2026-11-09T14:00:00+00:00", "outcome": "failed", "value": "",
+     "came_by": "silence", "came_words": "nothing came in time",
+     "why": "Nothing was sent in within its every", "decided": [
+         {"name": "Maya's balcony", "outcome": "failed", "notified": False}],
+     "others": 0},
+    {"at": "2026-11-09T13:00:00+00:00", "outcome": "read", "value": "56.9",
+     "came_by": "clock", "came_words": "on its clock", "why": "Read 56.9",
+     "decided": [{"name": "Maya's balcony", "outcome": "fired", "notified": True}],
+     "others": 1},
+]
+
+
 class TestReadings:
     def test_readings_off_says_so(self, make_service):
         service = make_service([], actors=PEOPLE)
@@ -463,6 +479,23 @@ class TestReadings:
         assert "1. outside-temp: 56.9 (4 min ago)\n" in reply.text
         assert ("Your watches on it: Heat the guestroom (and 1 watch of someone else's)."
                 in reply.text)
+
+    def test_a_number_says_what_happened_to_it(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, owner="owner",
+                               prahari=fake_prahari(tmp_path, [], READINGS))
+        reply, = run(service, say(service, "/indriyas 1", actor="maya", agent="greeter"))
+        assert (tmp_path / "asked-history").read_text().split() == [
+            "indriya", "readings", "outside-temp", "--as", "maya", "--limit", "5", "--json"]
+        assert reply.text.startswith("What happened to outside-temp, newest first:")
+        assert "• failed (Mon 9 Nov" in reply.text and "— nothing came in time" in reply.text
+        assert "  Nothing was sent in within its every" in reply.text
+        assert "  → Maya's balcony: fired, told you" in reply.text
+        assert "  → and 1 of other people's watches" in reply.text
+        by_name, = run(service, say(service, "/indriyas outside-temp", actor="maya",
+                                    agent="greeter"))
+        assert by_name.text.startswith("What happened to outside-temp")
+        none, = run(service, say(service, "/indriyas 9", actor="maya", agent="greeter"))
+        assert none.text.startswith("You have no reading 9.")
 
     def test_none_yet_says_what_one_is_for(self, make_service, tmp_path):
         service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, []))

@@ -149,6 +149,24 @@ it*), because another person's watch names are theirs. Seeing only:
 making one, changing how often it reads, or removing one is asking the
 agent, which shows a card first.
 
+`/indriyas 2` is what happened to the second one: its last five
+readings, each with how it came (*on its clock*, *sent in*, *nothing
+came in time*) and what the person's own watches decided on it (*→
+Guestroom too cold: fired, told you*), other people's only as a count.
+Live, on a store where Home Assistant had sent 64.2, 61.5 and then
+`unavailable`:
+
+```
+What happened to guestroom-temp, newest first:
+• broken (Mon 9 Nov 09:13) — sent in
+  The sender said it has no value ('unavailable'): the sensor behind it may be off or out of reach
+  → Guestroom too cold: failed
+• read 61.5 (Mon 9 Nov 09:13) — sent in
+  → Guestroom too cold: fired
+• read 64.2 (Mon 9 Nov 09:13) — sent in
+  → Guestroom too cold: learned
+```
+
 `/watches every 1 6h` on a watch that senses a reading changes nothing,
 and says why: how often belongs to the reading
 (*"Heat the guestroom" doesn't look by itself: it goes by the reading

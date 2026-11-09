@@ -1340,7 +1340,9 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
   stops it looking, kept, and `/watches resume 2` starts it again
   ([notes/42](notes/42-seeing-the-work.md)).
 * `/indriyas` lists the readings they may use (their own, then the
-  ones shared with the house), each with its value and age. Their agent
+  ones shared with the house), each with its value and age; `/indriyas
+  2` says what happened to the second, reading by reading, with what
+  their watches decided. Their agent
   is told the same readings exist, and answers *"how cold is it out?"*
   from one instead of calling the weather again
   ([notes/42](notes/42-seeing-the-work.md#tools-schedules-and-watches-by-asking)).

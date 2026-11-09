@@ -1088,7 +1088,7 @@ class Service:
                     await self.seen.indriyas(actor, self.prahari,
                                              enabled=self.watches_for(actor),
                                              is_owner=actor == self.owner,
-                                             owner=self.owner or "")
+                                             owner=self.owner or "", text=text)
                     if word == seen.INDRIYAS else
                     await self.seen.schedules(actor, self.samay,
                                               enabled=self.samay is not None))

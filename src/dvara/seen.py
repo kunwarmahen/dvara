@@ -41,7 +41,10 @@ shared with the house -- each with its value and how old it is, as
 Prahari decides (``prahari indriya list --as``), so a private one never
 shows on someone else's list. Which watches sense it is said for their
 own watches only: another person's watch names are theirs. Changing one
-goes through the agent, which asks.
+goes through the agent, which asks. ``/indriyas 2`` is what happened to
+the second: its last readings, each with how it came and what their own
+watches decided on it (Prahari's history, asked as them, so somebody
+else's watches are only a count).
 """
 
 from __future__ import annotations
@@ -206,7 +209,7 @@ class Seen:
         return "\n".join(out)
 
     async def indriyas(self, actor: str, prahari: str | None, *, enabled: bool,
-                       is_owner: bool = False, owner: str = "") -> str:
+                       is_owner: bool = False, owner: str = "", text: str = "") -> str:
         """The readings they may read, as Prahari says them: their own, then
         the house's. Seeing only; changing one is asking the agent."""
         if not enabled:
@@ -218,6 +221,10 @@ class Seen:
                                          "--json"])
         if trouble or not isinstance(cards, list):
             return trouble or "Prahari didn't list its readings. Try again soon."
+        rest = text.strip().split()[1:]
+        if rest:
+            return await self._history(program, actor, [c for c in cards
+                                                        if isinstance(c, dict)], rest)
         if not cards:
             return ("You have no readings. When two watches would look at the same "
                     "number — heat the guestroom below 60 outside, cool it above 70 — "
@@ -248,7 +255,37 @@ class Seen:
                 out.append(f"  {elsewhere[0].upper()}{elsewhere[1:]} "
                            f"{'goes' if others == 1 else 'go'} by it.")
         out.append("")
-        out.append("To make one, change how often one reads, or remove one, just ask me.")
+        out.append("To see what happened to one: /indriyas NUMBER. To make one, change "
+                   "how often one reads, or remove one, just ask me.")
+        return "\n".join(out)
+
+    async def _history(self, program: str, actor: str, cards: list[dict],
+                       words: list[str]) -> str:
+        which = words[0]
+        card = (cards[int(which) - 1] if which.isdigit() and 1 <= int(which) <= len(cards)
+                else next((c for c in cards if c.get("name") == which.lower()), None))
+        if card is None or len(words) > 1:
+            return (f"You have no reading {' '.join(words)}. Send /indriyas to see their "
+                    "numbers." if cards else "You have no readings.")
+        rows, trouble = await ask_json([program, "indriya", "readings", str(card["name"]),
+                                        "--as", actor, "--limit", str(HISTORY_SHOWN),
+                                        "--json"])
+        if trouble or not isinstance(rows, list):
+            return trouble or "Prahari didn't say. Try again soon."
+        if not rows:
+            return f"{card['name']} hasn't read anything yet."
+        out = [f"What happened to {card['name']}, newest first:"]
+        for row in rows:
+            value = f" {row.get('value')}" if row.get("value") else ""
+            out.append(f"• {row.get('outcome')}{value}{_when(row.get('at'))} — "
+                       f"{row.get('came_words') or row.get('came_by') or ''}")
+            if row.get("outcome") != "read" and row.get("why"):
+                out.append(f"  {row['why']}")
+            for look in row.get("decided") or []:
+                told = ", told you" if look.get("notified") else ""
+                out.append(f"  → {look.get('name')}: {look.get('outcome')}{told}")
+            if row.get("others"):
+                out.append(f"  → and {row['others']} of other people's watches")
         return "\n".join(out)
 
     async def _every(self, program: str, mine: list[dict], words: list[str]) -> str:
@@ -300,6 +337,8 @@ class Seen:
         return f"Looking again. \"{changed.get('name')}\": {changed.get('sentence') or ''}."
 
 
+#: How many readings /indriyas N shows.
+HISTORY_SHOWN = 5
 #: How to change how often, said wherever it helps.
 EVERY_HOW = "To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d)."
 #: How to stop and start one.
