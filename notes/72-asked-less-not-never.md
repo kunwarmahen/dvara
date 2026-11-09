@@ -126,6 +126,10 @@ questions put: 2
 
 The second write ran without asking, and the record says why.
 
+The third button on the house's own Telegram bot did the same: one
+press of **approve all for this task**, and the rest of that turn ran
+without another card.
+
 ## The other cause: the house's own rung
 
 `web_fetch` was asked about at all in that run because the scratch

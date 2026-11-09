@@ -55,8 +55,9 @@ which topic was refused. An answer outside its topic beats no answer.
 
 ## Receipt
 
-Tests only, against a stand-in Bot API. The house bot doesn't have
-topics mode on, so this hasn't run against a real one.
+On the house's own bot, with topics mode turned on in BotFather: each
+topic answered inside itself, and kept its own conversation.
+
 `tests/test_telegram_topics.py`: a chat and its topic told apart, and a
 reply thread not taken for a topic; the answer and the *typing* go back
 into the topic it was asked in; two topics are two conversations, and

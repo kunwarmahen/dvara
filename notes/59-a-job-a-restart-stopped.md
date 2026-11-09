@@ -116,6 +116,10 @@ $ dvara runs
 The carried-on run read b and c, not a again. The session's newest
 version is finished now.
 
+The Telegram button, on the house's own bot after a real restart: the
+notice came with **Carry on** under it, one press picked the job up where
+it stopped, and the button came off.
+
 ## What was deliberately not built
 
 * ~~**A Carry on button on Telegram.**~~ Built: *One press on
