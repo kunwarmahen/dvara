@@ -1085,6 +1085,11 @@ class Service:
                                             enabled=self.watches_for(actor),
                                             is_owner=actor == self.owner)
                     if word == seen.WATCHES else
+                    await self.seen.indriyas(actor, self.prahari,
+                                             enabled=self.watches_for(actor),
+                                             is_owner=actor == self.owner,
+                                             owner=self.owner or "")
+                    if word == seen.INDRIYAS else
                     await self.seen.schedules(actor, self.samay,
                                               enabled=self.samay is not None))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,

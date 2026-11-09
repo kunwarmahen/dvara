@@ -5,9 +5,9 @@ person behind this service had no way to see either: "what can you do?"
 got the model's own guess, and a schedule made last month was found only
 by asking the agent to list it, in words it chose.
 
-``/tools``, ``/schedules`` and ``/watches`` answer from the record
-instead, on every channel, and none is a turn: no model, no allowance
-spent.
+``/tools``, ``/schedules``, ``/watches`` and ``/indriyas`` answer from
+the record instead, on every channel, and none is a turn: no model, no
+allowance spent.
 
 TOOLS AS THEY WERE ON YOUR LAST TURN. What an agent may use depends on
 the package, the owner's rules, the person's accounts, the phone, and
@@ -34,6 +34,14 @@ which asks. A watch is
 found among THEIR OWN first (Prahari files them under the person's name,
 and the owner's made at the computer under ``local``), so a number or an
 id from somebody else's list finds nothing.
+
+READINGS, AS THEY SEE THEM. ``/indriyas`` lists the readings Prahari
+keeps that this person may read -- their own, then the ones someone
+shared with the house -- each with its value and how old it is, as
+Prahari decides (``prahari indriya list --as``), so a private one never
+shows on someone else's list. Which watches sense it is said for their
+own watches only: another person's watch names are theirs. Changing one
+goes through the agent, which asks.
 """
 
 from __future__ import annotations
@@ -51,6 +59,7 @@ from typing import Any
 TOOLS = "/tools"
 SCHEDULES = "/schedules"
 WATCHES = "/watches"
+INDRIYAS = "/indriyas"
 #: What the owner made at the computer is filed under this (checkup.py).
 LOCAL = "local"
 #: Longest description line shown for a tool.
@@ -60,7 +69,7 @@ SAID_AT_MOST = 110
 def word_of(text: str) -> str | None:
     first = text.strip().split(maxsplit=1)[:1]
     word = first[0].lower().split("@")[0] if first else ""
-    return word if word in (TOOLS, SCHEDULES, WATCHES) else None
+    return word if word in (TOOLS, SCHEDULES, WATCHES, INDRIYAS) else None
 
 
 class Seen:
@@ -196,6 +205,52 @@ class Seen:
         out.append(EVERY_HOW + " " + PAUSE_HOW + " To mend or remove one, just ask me.")
         return "\n".join(out)
 
+    async def indriyas(self, actor: str, prahari: str | None, *, enabled: bool,
+                       is_owner: bool = False, owner: str = "") -> str:
+        """The readings they may read, as Prahari says them: their own, then
+        the house's. Seeing only; changing one is asking the agent."""
+        if not enabled:
+            return "Watches aren't switched on here, so there are no readings either."
+        program = prahari or shutil.which("prahari")
+        if not program:
+            return "I can't find Prahari on this computer just now."
+        cards, trouble = await ask_json([program, "indriya", "list", "--as", actor,
+                                         "--json"])
+        if trouble or not isinstance(cards, list):
+            return trouble or "Prahari didn't list its readings. Try again soon."
+        if not cards:
+            return ("You have no readings. When two watches would look at the same "
+                    "number — heat the guestroom below 60 outside, cool it above 70 — "
+                    "ask me to keep one reading for both, so it's looked at once.")
+        names = {actor} | ({LOCAL} if is_owner else set())
+        out = ["Readings I keep up to date (indriyas):"]
+        for n, card in enumerate((c for c in cards if isinstance(c, dict)), 1):
+            value = (f"{card.get('value')} ({card.get('age')})" if card.get("read_at")
+                     else "not read yet")
+            # what the owner made at the computer is filed as local: say who
+            keeper = owner if card.get("owner") == LOCAL and owner else card.get("owner")
+            whose = ("" if card.get("owner") in names
+                     else f" — {keeper}'s, shared with the house")
+            out.append(f"{n}. {card.get('name')}: {value}{whose}")
+            out.append(f"  {card.get('sentence') or ''}.")
+            if card.get("state") != "active":
+                out.append(f"  Paused: {card.get('paused_because') or 'by hand'}.")
+            sensed = card.get("sensed_by") or []
+            theirs = [w.get("name") or w.get("id") for w in sensed
+                      if w.get("owner") in names]
+            others = len(sensed) - len(theirs)
+            elsewhere = ("1 watch of someone else's" if others == 1
+                         else f"{others} watches of other people's")
+            if theirs:
+                out.append("  Your watches on it: " + ", ".join(map(str, theirs))
+                           + (f" (and {elsewhere})" if others else "") + ".")
+            elif others:
+                out.append(f"  {elsewhere[0].upper()}{elsewhere[1:]} "
+                           f"{'goes' if others == 1 else 'go'} by it.")
+        out.append("")
+        out.append("To make one, change how often one reads, or remove one, just ask me.")
+        return "\n".join(out)
+
     async def _every(self, program: str, mine: list[dict], words: list[str]) -> str:
         if len(words) == 1 and len(mine) == 1:
             words = ["1", *words]         # the one watch they have
@@ -206,6 +261,11 @@ class Seen:
         if card is None:
             return (f"You have no watch {which}. Send /watches to see their numbers."
                     if mine else "You have no watches.")
+        if card.get("sense"):
+            reading = card.get("sense_name") or "its reading"
+            return (f"\"{card.get('name')}\" doesn't look by itself: it goes by the "
+                    f"reading {reading}, so how often is the reading's. Send /indriyas "
+                    f"to see it, and ask me to change how often it reads.")
         if not card.get("every"):
             return (f"\"{card.get('name')}\" doesn't look on a clock: it hears when "
                     f"something is sent to it, so there's no how often to change.")

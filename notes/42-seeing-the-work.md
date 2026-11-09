@@ -93,8 +93,8 @@ uses are still counted.
 
 ## Tools, schedules and watches, by asking
 
-`/tools`, `/schedules` and `/watches` are not turns: no model, no allowance spent
-(`seen.py`).
+`/tools`, `/schedules`, `/watches` and `/indriyas` are not turns: no
+model, no allowance spent (`seen.py`).
 
 **TOOLS AS THEY WERE ON YOUR LAST TURN.** What an agent may use depends
 on the package, the owner's rules, the person's accounts, the phone and
@@ -133,6 +133,39 @@ person's own watches (Prahari files them under the person's name), so a
 number from somebody else's list, or their id, finds nothing and nothing
 is changed. The owner's list also has what they made at the computer,
 filed as `local`, as `/doctor` counts it.
+
+**READINGS, AS THEY SEE THEM.** A watch can *sense* an indriya instead
+of looking: a reading Prahari keeps up to date with one call, which any
+number of watches decide on (Prahari's notes/06). `/indriyas` lists the
+ones the person may read, numbered, each with its value and how old it
+is, what it reads, and whether it's paused. Prahari is asked as the
+person (`prahari indriya list --as maya`), so their own come first, then
+those someone shared with the house, and a private one never shows on
+anyone else's list. A shared one says whose it is, and what the owner
+made at the computer is said by the owner's name, not as `local`. Which
+watches go by it is said for the person's own watches by name, and for
+everyone else's as a count only (*1 watch of someone else's goes by
+it*), because another person's watch names are theirs. Seeing only:
+making one, changing how often it reads, or removing one is asking the
+agent, which shows a card first.
+
+`/watches every 1 6h` on a watch that senses a reading changes nothing,
+and says why: how often belongs to the reading
+(*"Heat the guestroom" doesn't look by itself: it goes by the reading
+outside-temp*).
+
+Live, against a real Prahari holding one house reading and the owner's
+watch on it, asked as someone else:
+
+```
+Readings I keep up to date (indriyas):
+1. outside-temp: 49.2 (1 min ago) — mahen's, shared with the house
+  reads the outside temperature every 15 minutes: looks at
+  api.open-meteo.com/v1/forecast (with web_fetch); shared with the house.
+  1 watch of someone else's goes by it.
+
+To make one, change how often one reads, or remove one, just ask me.
+```
 
 ## The words are the way in
 

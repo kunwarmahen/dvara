@@ -808,7 +808,8 @@ class TelegramBot:
         lines.append("Send /tools to see what I can use"
                      + (", /schedules for your schedules"
                         if self.service.samay is not None else "")
-                     + (", /watches for what I keep an eye on for you"
+                     + (", /watches for what I keep an eye on for you, /indriyas "
+                        "for the readings they go by"
                         if self.service.prahari is not None else "")
                      + ".")
         if getattr(self.spec, "skills", None):

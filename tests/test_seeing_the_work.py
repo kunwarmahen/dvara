@@ -17,6 +17,9 @@ Designed against:
 * **``/watches every`` reaching somebody else's watch.** A number or an id
   is looked up among the person's own; the owner's also counts what was
   made at the computer (``local``), nobody else's does.
+* **``/indriyas`` showing what isn't theirs.** Prahari is asked as the
+  person (``--as``), so a private reading never reaches another list, and
+  another person's watch names on a shared one are counted, not named.
 """
 
 from __future__ import annotations
@@ -268,14 +271,19 @@ class TestToolsAndSchedules:
         assert "Last time: ok" in reply.text and "maya's own" not in reply.text
 
 
-def fake_prahari(tmp_path, cards) -> str:
-    """A prahari that lists ``cards``, and on ``edit ID --every X`` writes
-    down what it was asked and answers like Prahari (``1m`` too often)."""
+def fake_prahari(tmp_path, cards, readings=()) -> str:
+    """A prahari that lists ``cards`` (and ``readings`` for ``indriya
+    list``, writing down who it was asked as), and on ``edit ID --every
+    X`` writes down what it was asked and answers like Prahari (``1m`` too
+    often)."""
     (tmp_path / "watches.json").write_text(json.dumps(cards))
+    (tmp_path / "indriyas.json").write_text(json.dumps(list(readings)))
     program = tmp_path / "prahari"
     program.write_text(
         "#!/bin/sh\n"
         f"if [ \"$1\" = list ]; then cat {tmp_path}/watches.json; exit 0; fi\n"
+        f"if [ \"$1\" = indriya ]; then echo \"$@\" >> {tmp_path}/asked-readings; "
+        f"cat {tmp_path}/indriyas.json; exit 0; fi\n"
         f"echo \"$@\" >> {tmp_path}/asked\n"
         "if [ \"$4\" = 1m ]; then echo 'error: nothing is looked at more often than "
         "every 5 minutes; '\\''1m'\\'' is too often' >&2; exit 1; fi\n"
@@ -398,6 +406,79 @@ class TestWatches:
         assert reply.text == "\"ALAB under $50\" is already looking."
         reply, = run(service, say(service, "/watches pause w3", actor="maya", agent="greeter"))
         assert reply.text.startswith("You have no watch w3.")        # the owner's, not maya's
+        assert not (tmp_path / "asked").exists()
+
+
+READINGS = [
+    {"id": "i1", "name": "outside-temp", "owner": "owner", "share": "house",
+     "state": "active", "value": "56.9", "age": "4 min ago",
+     "read_at": "2026-11-08T17:23:00+00:00",
+     "sentence": "reads the outside temperature every 15 minutes: looks at "
+                 "api.open-meteo.com/v1/forecast (with web_fetch); shared with the house",
+     "sensed_by": [{"id": "w7", "name": "Heat the guestroom", "owner": "owner"},
+                   {"id": "w8", "name": "Maya's balcony", "owner": "maya"}]},
+    {"id": "i2", "name": "pool-temp", "owner": "maya", "share": "mine",
+     "state": "paused", "paused_because": "3 readings in a row failed",
+     "value": "", "age": "", "read_at": None,
+     "sentence": "reads the pool temperature every 1 hour: looks with ha_state",
+     "sensed_by": []},
+]
+
+
+class TestReadings:
+    def test_readings_off_says_so(self, make_service):
+        service = make_service([], actors=PEOPLE)
+        reply, = run(service, say(service, "/indriyas", agent="greeter"))
+        assert reply.text.startswith("Watches aren't switched on here")
+
+    def test_asked_as_them_and_said_with_value_and_age(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, owner="owner",
+                               prahari=fake_prahari(tmp_path, [], READINGS))
+        reply, = run(service, say(service, "/indriyas", actor="maya", agent="greeter"))
+        assert reply.stop_reason == "seen"
+        assert (tmp_path / "asked-readings").read_text().split() == [
+            "indriya", "list", "--as", "maya", "--json"]
+        assert ("1. outside-temp: 56.9 (4 min ago) — owner's, shared with the house"
+                in reply.text)
+        assert "2. pool-temp: not read yet\n" in reply.text
+        assert "Paused: 3 readings in a row failed." in reply.text
+        # their own watch by name; the owner's counted, never named
+        assert "Your watches on it: Maya's balcony (and 1 watch of someone else's)." in reply.text
+        assert "Heat the guestroom" not in reply.text
+
+    def test_one_made_at_the_computer_is_said_as_the_owners(self, make_service, tmp_path):
+        made_here = [{**READINGS[0], "owner": "local", "sensed_by": [
+            {"id": "w7", "name": "Heat the guestroom", "owner": "local"}]}]
+        service = make_service([], actors=PEOPLE, owner="owner",
+                               prahari=fake_prahari(tmp_path, [], made_here))
+        reply, = run(service, say(service, "/indriyas", actor="maya", agent="greeter"))
+        assert "56.9 (4 min ago) — owner's, shared with the house" in reply.text
+        assert "local" not in reply.text
+        assert "1 watch of someone else's goes by it." in reply.text
+
+    def test_the_owner_sees_their_own_watches_on_it(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, owner="owner",
+                               prahari=fake_prahari(tmp_path, [], READINGS[:1]))
+        reply, = run(service, say(service, "/indriyas", agent="greeter"))
+        assert "1. outside-temp: 56.9 (4 min ago)\n" in reply.text
+        assert ("Your watches on it: Heat the guestroom (and 1 watch of someone else's)."
+                in reply.text)
+
+    def test_none_yet_says_what_one_is_for(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, []))
+        reply, = run(service, say(service, "/indriyas", agent="greeter"))
+        assert reply.text.startswith("You have no readings.") and "once" in reply.text
+
+    def test_a_watch_that_senses_has_its_how_often_on_its_reading(self, make_service,
+                                                                   tmp_path):
+        sensing = [{"id": "w7aa", "owner": "maya", "name": "Heat the guestroom",
+                    "every": "", "sense": "i1", "sense_name": "outside-temp",
+                    "sentence": "senses outside-temp (every 15 minutes)",
+                    "state": "active"}]
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, sensing))
+        reply, = run(service, say(service, "/watches every 1 6h", actor="maya",
+                                  agent="greeter"))
+        assert "goes by the reading outside-temp" in reply.text and "/indriyas" in reply.text
         assert not (tmp_path / "asked").exists()
 
 
