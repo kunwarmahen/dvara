@@ -438,6 +438,11 @@ HISTORY = [
      "came_by": "clock", "came_words": "on its clock", "why": "Read 56.9",
      "decided": [{"name": "Maya's balcony", "outcome": "fired", "notified": True}],
      "others": 1},
+    {"at": "2026-11-08T13:00:00+00:00", "measured_at": "2026-11-08T12:20:00+00:00",
+     "outcome": "read", "value": "55.1", "came_by": "pushed", "came_words": "sent in",
+     "why": "Pushed in: 55.1", "matched_by_time": True,
+     "decided": [{"name": "Maya's balcony", "outcome": "quiet", "notified": False,
+                  "matched_by_time": True}], "others": 0},
 ]
 
 
@@ -491,6 +496,8 @@ class TestReadings:
         assert "  Nothing was sent in within its every" in reply.text
         assert "  → Maya's balcony: fired, told you" in reply.text
         assert "  → and 1 of other people's watches" in reply.text
+        assert "— sent in, measured Sun 8 Nov" in reply.text      # its own time
+        assert "  → Maya's balcony: quiet (matched by time)" in reply.text
         by_name, = run(service, say(service, "/indriyas outside-temp", actor="maya",
                                     agent="greeter"))
         assert by_name.text.startswith("What happened to outside-temp")

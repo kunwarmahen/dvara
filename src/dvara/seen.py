@@ -277,13 +277,17 @@ class Seen:
         out = [f"What happened to {card['name']}, newest first:"]
         for row in rows:
             value = f" {row.get('value')}" if row.get("value") else ""
+            measured = (f", measured {_when(row['measured_at']).strip(' ()')}"
+                        if row.get("measured_at") and row["measured_at"] != row.get("at")
+                        else "")
             out.append(f"• {row.get('outcome')}{value}{_when(row.get('at'))} — "
-                       f"{row.get('came_words') or row.get('came_by') or ''}")
+                       f"{row.get('came_words') or row.get('came_by') or ''}{measured}")
             if row.get("outcome") != "read" and row.get("why"):
                 out.append(f"  {row['why']}")
             for look in row.get("decided") or []:
                 told = ", told you" if look.get("notified") else ""
-                out.append(f"  → {look.get('name')}: {look.get('outcome')}{told}")
+                matched = " (matched by time)" if look.get("matched_by_time") else ""
+                out.append(f"  → {look.get('name')}: {look.get('outcome')}{told}{matched}")
             if row.get("others"):
                 out.append(f"  → and {row['others']} of other people's watches")
         return "\n".join(out)
