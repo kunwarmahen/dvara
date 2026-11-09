@@ -156,7 +156,7 @@ class Routines:
         if trouble:
             return trouble
         return (f"Started {card.get('title')} (run {run.get('id')}). What it finds comes "
-                "here; if it has a question, it asks with two buttons.")
+                "here; if it has a question, it asks with buttons.")
 
     async def _answer(self, program: str, people: list[str], code: str, word: str,
                       via: str) -> str:
