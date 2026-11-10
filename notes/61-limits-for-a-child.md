@@ -142,6 +142,12 @@ You have no accounts connected here. Send /connect khanacademy to connect one.
 The first `/accounts` said *"Send /connect gmail"*, the old default, to
 someone who may not; it now names a site on their list.
 
+On the house's own bot, from an iPhone, with `connectors = ["google"]`
+on the owner for the test: `/connect amazon` was refused in those
+words, the agent didn't send them to connect it, `/connect google` went
+ahead, and with the line taken out `/connect amazon` sent the window's
+link again.
+
 ## Receipt
 
 `gemma4:12b` on Ollama, a scratch Dvara on port 8798 (`--ask --owner

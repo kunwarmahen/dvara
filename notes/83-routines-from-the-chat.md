@@ -79,8 +79,15 @@ press Yes." — it carries on now."*), **Cool** pressed from three choices
 (*""Cool" to …"*), and the typed one answered both as `/routines say
 CODE blue door` and, once the code alone was read (below), as
 `/routines CODE blue door`; the run's last step said *"Got: yes / Cool /
-blue door"*. The home page and ntfy buttons haven't been pressed on a
-real phone yet.
+blue door"*. A reply to the question, typed back, answered it too.
+
+The home page's bell showed the same question with nothing to press:
+it drew a skill's Keep and a fact's No, never a notice's `taps`. It now
+draws them, and a box for typed words (Sarathi's page). On the iPhone,
+tapping the ntfy notification opened the home page's sign-in, and the
+buttons, which ntfy shows only on a long-press, went unseen; a
+notification with buttons is now posted with no link, so a tap opens
+the ntfy app, where they are drawn (push.py, NO LINK UNDER BUTTONS).
 
 ## Not here
 
