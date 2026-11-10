@@ -155,6 +155,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -212,6 +213,16 @@ CAPTION_LIMIT = 1024
 #: limit for one; a bigger one, or another kind, goes as a document.
 PHOTO_LIMIT = 10 * 1024 * 1024
 PHOTO_KINDS = (".jpg", ".jpeg", ".png", ".webp")
+#: The most pictures Telegram puts in one album.
+ALBUM_MOST = 10
+
+
+def _albumable(path) -> bool:
+    """A picture Telegram would take as a photo, and so in an album."""
+    try:
+        return path.suffix.lower() in PHOTO_KINDS and path.stat().st_size <= PHOTO_LIMIT
+    except OSError:
+        return False
 
 #: A typing indicator lasts five seconds at Telegram's end, so it has to
 #: be renewed. The only feedback a turn-shaped medium has while a model
@@ -698,7 +709,14 @@ class TelegramBot:
         # What the agent sent with send_file, after the words that
         # explain it. Not owed: a crash here loses the file, and the
         # answer already said it was sent -- the person can ask again.
-        for path in reply.files:
+        files = list(reply.files)
+        if reply.stop_reason != "phone":
+            # SEVERAL PICTURES ARE ONE ALBUM: a row of them, not a stream
+            pictures = [p for p in files if _albumable(p)]
+            if len(pictures) >= 2:
+                sent = await self._send_album(chat, pictures)
+                files = [p for p in files if p not in sent]
+        for path in files:
             try:
                 if reply.stop_reason == "phone":    # the screen, to look at
                     await self._send_photo(chat, path.read_bytes(), caption="")
@@ -707,6 +725,33 @@ class TelegramBot:
             except (TelegramError, httpx.HTTPError, OSError) as exc:
                 self._note(f"telegram: sending {path.name} failed: {exc}")
         self.outbox.settled(row)
+
+    async def _send_album(self, chat: int, pictures: list) -> list:
+        """Two to ten pictures at a time as one album (``sendMediaGroup``),
+        each captioned with its name. Returns the ones that went; any that
+        didn't (Telegram refused the album) go one by one after, as before."""
+        sent: list = []
+        for start in range(0, len(pictures), ALBUM_MOST):
+            group = pictures[start:start + ALBUM_MOST]
+            if len(group) < 2:
+                break                               # one left over: a photo of its own
+            media, uploads = [], []
+            for n, path in enumerate(group):
+                media.append({"type": "photo", "media": f"attach://p{n}",
+                              "caption": path.name})
+                uploads.append((f"p{n}", (path.name, path.read_bytes())))
+            async with self._pacer.lock(chat):
+                await self._pacer.wait(chat)
+                try:
+                    await self._api("sendMediaGroup", uploads=uploads, chat_id=chat,
+                                    media=json.dumps(media))
+                    sent += group
+                except (TelegramError, httpx.HTTPError) as exc:
+                    self._note(f"telegram: {len(group)} pictures went one by one, not "
+                               f"as an album -- {exc}")
+                finally:
+                    self._pacer.sent(chat)
+        return sent
 
     async def _answer_with_file(self, chat: int, row: int, text: str,
                                 path) -> None:
@@ -1338,7 +1383,7 @@ class TelegramBot:
             finally:
                 self._pacer.sent(chat)
 
-    async def _api(self, method: str, *, upload=None, **payload):
+    async def _api(self, method: str, *, upload=None, uploads=None, **payload):
         """One Bot API call, with the two failures that are not ours.
 
         ``retry_after`` is obeyed as an instruction and only up to
@@ -1361,15 +1406,15 @@ class TelegramBot:
             # the topic it was asked in: the answer goes back into it
             fields["message_thread_id"] = topic
         for attempt in (1, 2, 3):
-            if upload is None:
+            if upload is None and not uploads:
                 response = await self._client.post(url, json=fields)
             else:
                 # A file is the one thing JSON cannot carry: multipart, with
-                # every other field as a form value.
-                field, content = upload
+                # every other field as a form value (an album: several files).
+                parts = dict(uploads or [upload])
                 response = await self._client.post(
                     url, data={k: str(v) for k, v in fields.items()},
-                    files={field: content})
+                    files=parts)
             if response.status_code == 429 and attempt == 1:
                 wait = _retry_after(response)
                 if wait <= MAX_RETRY_AFTER:

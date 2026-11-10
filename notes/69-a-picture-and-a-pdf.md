@@ -134,5 +134,18 @@ still escaped, and marks that overlap still nesting.
   (above). Tables still print as typed.
 * **A PDF in the terminal or on Yantra's page.** Both have a browser in
   front of them, and its print window already does this.
-* **A photo album.** Several pictures in one answer go one by one, not
-  as one `sendMediaGroup`.
+* ~~**A photo album.**~~ Two to ten pictures in one answer go as one
+  album (*Several pictures, one album*, below).
+
+## Several pictures, one album
+
+An answer with the front and back of a card, or four shelf photos, came
+as a stream of separate photos, each its own message. **SEVERAL PICTURES
+ARE ONE ALBUM.** Two or more pictures among an answer's files go as one
+`sendMediaGroup`, ten at most each (Telegram's limit), each captioned with
+its file name; one left over after a full ten goes as a photo of its own.
+Files that aren't pictures still follow as documents. An album Telegram
+refuses goes one by one, as before, and the owner's log says why. A
+phone's screen (`stop_reason == "phone"`) is still one photo under its
+words. Tested against the stand-in Bot API (`tests/test_telegram.py`);
+not yet sent on the house's real bot.

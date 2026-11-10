@@ -958,6 +958,48 @@ def test_a_file_the_agent_sent_follows_its_answer(make_bot, make_service, actors
     assert 'filename="report.md"' in fake.of("sendDocument")[0]["multipart"]
 
 
+def _two_pictures(make_bot, make_service, actors, agents_root, fake):
+    from dvara.asks import AskDesk
+    from dvara.gate import Policy
+    from dvara.rules import Rule, RuleBook
+    from tests.conftest import calls
+    write_package(agents_root, "courier", body=(
+        '[agent]\nname = "courier"\nprompt = "prompt.md"\n'
+        '[tools]\nallow = ["send_file"]\n[permissions]\nmode = "ask"\n'))
+    service = make_service(
+        [calls("send_file", {"path": "front.png"}), calls("send_file", {"path": "back.png"}),
+         calls("send_file", {"path": "notes.md"}), says("Both sides, and the notes.")],
+        actors=actors, asks=AskDesk(timeout=5),
+        policy=Policy(rules=RuleBook([Rule(tool="send_file", verdict="allow")])))
+    for name in ("front.png", "back.png"):
+        (_folder(service, agent="courier") / name).write_bytes(b"\x89PNG\r\n\x1a\n" + b"\0" * 32)
+    (_folder(service, agent="courier") / "notes.md").write_text("# notes\n")
+    asyncio.run(make_bot(fake, service=service, agent="courier").run())
+
+
+def test_two_pictures_with_an_answer_go_as_one_album(make_bot, make_service, actors,
+                                                     agents_root):
+    # one by one they were a stream of separate photos
+    fake = FakeTelegram([message("send me both sides of the card")])
+    _two_pictures(make_bot, make_service, actors, agents_root, fake)
+    [album] = fake.of("sendMediaGroup")
+    assert 'filename="front.png"' in album["multipart"]
+    assert 'filename="back.png"' in album["multipart"]
+    assert '"media": "attach://p0"' in album["multipart"]
+    assert fake.of("sendPhoto") == []
+    assert 'filename="notes.md"' in fake.of("sendDocument")[0]["multipart"]
+
+
+def test_an_album_telegram_refuses_goes_one_by_one(make_bot, make_service, actors,
+                                                   agents_root):
+    fake = FakeTelegram([message("send me both sides of the card")])
+    fake.status["sendMediaGroup"] = [httpx.Response(
+        400, json={"ok": False, "description": "Bad Request: wrong file"})]
+    _two_pictures(make_bot, make_service, actors, agents_root, fake)
+    assert len(fake.of("sendMediaGroup")) == 1
+    assert len(fake.of("sendPhoto")) == 2
+
+
 # ---- the / menu ------------------------------------------------------------
 
 
