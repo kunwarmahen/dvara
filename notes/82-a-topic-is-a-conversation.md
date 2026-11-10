@@ -72,13 +72,22 @@ the chat back to one conversation, answered at once. So topics mode is
 the owner's to turn on with that known: threads made with the + button
 are answered inside themselves, threads typed into New Chat may not be.
 
+**SAID, NOT SILENT.** When Telegram refuses a thread, the answer still
+goes to the chat itself, but first, once, a line says why: *"Telegram
+wouldn't let me answer inside that thread, so my answer is here
+instead."* with the way round it (the + button, or topics off). That
+thread isn't tried again until Dvara restarts, so a long answer's later
+parts and the next turn don't each fail and say it again. A refused
+*typing* says nothing: it isn't an answer.
+
 `tests/test_telegram_topics.py`: a chat and its topic told apart, and a
 reply thread not taken for a topic; the answer and the *typing* go back
 into the topic it was asked in; two topics are two conversations, and
 one's history isn't the other's; Telegram's own *topic created* note
 isn't answered; a chat without topics sends no
 `message_thread_id`; a topic Telegram refuses is answered in the chat
-itself, with a line in the owner's log.
+itself, after one line saying so, and not tried again, with a line in
+the owner's log.
 
 Continues [notes/78](78-carried-on-where-it-was-written.md) (carried on
 where it was written) and [notes/79](79-each-conversation-its-own-chat.md)

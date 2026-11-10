@@ -418,6 +418,9 @@ class TelegramBot:
         self.outbox = outbox or Outbox(service.state / "outbox.sqlite3")
         self._owns_outbox = outbox is None
         self._turns: set[asyncio.Task] = set()
+        #: (chat, topic) pairs Telegram refused to send into: told once,
+        #: then sent to the chat itself without asking again.
+        self._refused_topics: set[tuple[int, int]] = set()
         self._stopping = asyncio.Event()
 
     # ---- the loop ----------------------------------------------------------
@@ -1353,7 +1356,8 @@ class TelegramBot:
         url = f"{self._url}/{method}"
         fields = {k: v for k, v in payload.items() if v is not None}
         topic = getattr(fields.get("chat_id"), "topic", None)
-        if topic and method not in NO_TOPIC:
+        place = (int(fields["chat_id"]), topic) if topic else None
+        if topic and method not in NO_TOPIC and place not in self._refused_topics:
             # the topic it was asked in: the answer goes back into it
             fields["message_thread_id"] = topic
         for attempt in (1, 2, 3):
@@ -1392,6 +1396,15 @@ class TelegramBot:
                 self._note(f"telegram: {method}: topic {topic} refused "
                            f"({body.get('description')}); sent to the chat itself")
                 fields.pop("message_thread_id")
+                if (place is not None and method != "sendChatAction"
+                        and place not in self._refused_topics):
+                    # SAID, NOT SILENT. Outside the thread it was asked in,
+                    # an answer is one the person may never find, while
+                    # that thread looks busy for good. Told once; the
+                    # topic isn't tried again.
+                    self._refused_topics.add(place)
+                    await self._api("sendMessage", chat_id=int(fields["chat_id"]),
+                                    text=TOPIC_REFUSED)
                 continue
             if response.status_code != 200 or not body.get("ok", False):
                 raise TelegramError(
@@ -1400,6 +1413,11 @@ class TelegramBot:
             return body.get("result")
         raise TelegramError(f"{method}: gave up after a rate limit")
 
+
+#: Said once, in the chat itself, when Telegram won't send into a topic.
+TOPIC_REFUSED = ("Telegram wouldn't let me answer inside that thread, so my answer is "
+                 "here instead. (A thread started by typing in New Chat can do this; "
+                 "start one with the + button, or turn topics off in BotFather.)")
 
 #: What a person sends that isn't words, a picture or a file: answered
 #: with one sentence. Anything else with no words is Telegram's own note

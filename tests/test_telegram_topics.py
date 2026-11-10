@@ -119,11 +119,18 @@ def test_a_chat_without_topics_is_unchanged(bot):
 
 
 def test_a_topic_telegram_refuses_is_answered_in_the_chat_itself(bot):
-    made = bot([says("Still answered.")], refuse=True)
+    from dvara.telegram import TOPIC_REFUSED
+    made = bot([says("Still answered."), says("And again.")], refuse=True)
     asyncio.run(made._handle(in_topic("hi", 7)))
     landed = [p for p in made.wire.sent() if "message_thread_id" not in p]
-    assert [p["text"] for p in landed] == ["Still answered."]
+    # said once, before the answer, so it isn't silently somewhere else
+    assert [p["text"] for p in landed] == [TOPIC_REFUSED, "Still answered."]
     assert any("topic 7 refused" in n for n in made.notes)
+    # the same topic again: not tried, not told twice
+    asyncio.run(made._handle(in_topic("more", 7, 2)))
+    later = made.wire.sent()[len(made.wire.sent()) - 1:]
+    assert [p["text"] for p in later] == ["And again."]
+    assert sum(p["text"] == TOPIC_REFUSED for p in made.wire.sent()) == 1
 
 
 def test_telegrams_own_topic_note_is_not_answered(bot):
