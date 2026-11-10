@@ -57,6 +57,17 @@ here that does. With none here for that language, nothing is read --
 never a voice that can't say the words -- and the owner is told which
 voice to add.
 
+EACH PART IN ITS OWN VOICE. An answer that is mostly English with a
+Hindi sentence in it ("Your bill is due Friday. Kal subah yaad dila
+doongi.") was read whole in one voice, and one of the two languages was
+lost. The answer is cut into sentences, each told its language as the
+whole is; a sentence whose language can't be told goes with the one
+before it. Where the parts need different voices, each part is read by
+its own and the pieces are joined into one note (at the first voice's
+sample rate, by ffmpeg when a voice's differs). A part in a language with
+no voice here is not read by a voice that can't say it: "(a part in
+Telugu, in the message)" is said in its place.
+
 HINDI IN LATIN LETTERS IS WRITTEN IN DEVANAGARI FIRST. Piper's Hindi
 voice reads only Devanagari, so "kal kya hai" goes to it as "कल क्या है"
 (romanised.py); read as typed, by either voice, it was heard back as
@@ -348,33 +359,20 @@ def make(text: str, out: Path, *, telegram: bool = False,
          voice: Voice | str | None = None) -> Path:
     """``text`` read aloud into ``out``: WAV, or (``telegram``) OGG Opus,
     the one kind Telegram shows as a voice note. ``voice`` is the one to
-    use, or the person's choice by name (``pick`` decides). Unspoken in
-    words when it can't be."""
+    use, or the person's choice by name (``parts`` decides, sentence by
+    sentence). Unspoken in words when it can't be."""
     why = can_speak()
     if why is not None:
         raise Unspoken(why)
     words = aloud(text)
     if not words:
         raise Unspoken("there were no words in it to read")
-    if not isinstance(voice, Voice):
-        voice = pick(words, voice)
-    if voice.family == "hi":
-        latin = _latin(words)
-        words = romanised.numbers(words)
-        if latin:
-            words = romanised.devanagari(words)
-    command = piper()
+    runs = [(voice, words)] if isinstance(voice, Voice) else parts(words, voice)
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dvara-spoken-") as tmp:
-        wav = Path(tmp) / "answer.wav"
-        try:
-            done = subprocess.run([*command, "-m", str(voice.path), "-f", str(wav)],
-                                  input=words, capture_output=True, text=True,
-                                  timeout=WITHIN)
-        except subprocess.TimeoutExpired:
-            raise Unspoken(f"Piper took longer than {WITHIN:.0f}s") from None
-        if done.returncode != 0 or not wav.is_file() or wav.stat().st_size == 0:
-            raise Unspoken(f"Piper didn't read it: {(done.stderr or '').strip()[-200:]}")
+        pieces = [_read(one, said, Path(tmp) / f"part-{n}.wav")
+                  for n, (one, said) in enumerate(runs)]
+        wav = pieces[0] if len(pieces) == 1 else _joined(pieces, Path(tmp) / "answer.wav")
         if not telegram:
             shutil.copyfile(wav, out)
             return out
@@ -387,6 +385,91 @@ def make(text: str, out: Path, *, telegram: bool = False,
         if done.returncode != 0 or not out.is_file():
             raise Unspoken(f"ffmpeg couldn't make the voice note: "
                            f"{(done.stderr or '').strip()[-200:]}")
+    return out
+
+
+def parts(words: str, preferred: str | None = None) -> list[tuple[Voice, str]]:
+    """``words`` as runs of sentences, each with the voice for its language:
+    one run, the whole in one voice (``pick``), unless parts of it are
+    clearly in a language that voice doesn't speak and a voice here does."""
+    main = pick(words, preferred)
+    # their own voice first, for a part in its language too
+    every = sorted(voices(), key=lambda v: v.name != preferred)
+    runs: list[tuple[Voice | None, str]] = []
+    for sentence in _SENTENCE.split(words):
+        langs = languages_of(sentence)
+        if langs is None or main.family in langs:
+            one: Voice | str | None = None if langs is None else main
+        else:
+            one = next((v for lang in langs for v in every if v.family == lang), None) \
+                or LANGUAGES.get(langs[0], langs[0])
+        runs.append((one, sentence))
+    told: list[tuple[Voice, str]] = []
+    for one, sentence in runs:
+        if isinstance(one, str):               # no voice here for its language
+            sentence, one = f"(a part in {one}, in the message).", None
+        if one is None:                        # can't be told: goes with the one before
+            one = told[-1][0] if told else next(
+                (v for v, _ in runs if isinstance(v, Voice)), main)
+        if told and told[-1][0] == one:
+            told[-1] = (one, f"{told[-1][1]} {sentence}")
+        else:
+            told.append((one, sentence))
+    return told
+
+
+def _read(voice: Voice, words: str, wav: Path) -> Path:
+    """One run of words read by one voice into ``wav``."""
+    if voice.family == "hi":
+        latin = _latin(words)
+        words = romanised.numbers(words)
+        if latin:
+            words = romanised.devanagari(words)
+    try:
+        done = subprocess.run([*piper(), "-m", str(voice.path), "-f", str(wav)],
+                              input=words, capture_output=True, text=True,
+                              timeout=WITHIN)
+    except subprocess.TimeoutExpired:
+        raise Unspoken(f"Piper took longer than {WITHIN:.0f}s") from None
+    if done.returncode != 0 or not wav.is_file() or wav.stat().st_size == 0:
+        raise Unspoken(f"Piper didn't read it: {(done.stderr or '').strip()[-200:]}")
+    return wav
+
+
+def _joined(pieces: list[Path], out: Path) -> Path:
+    """Several WAVs as one, at the first one's rate; a short pause between."""
+    import wave
+
+    with wave.open(str(pieces[0]), "rb") as first:
+        shape = first.getparams()
+    frames = []
+    for piece in pieces:
+        with wave.open(str(piece), "rb") as w:
+            params = w.getparams()
+        if (params.nchannels, params.sampwidth, params.framerate) != \
+                (shape.nchannels, shape.sampwidth, shape.framerate):
+            piece = _resampled(piece, shape.framerate, shape.nchannels)
+        with wave.open(str(piece), "rb") as w:
+            frames.append(w.readframes(w.getnframes()))
+    pause = b"\0" * (shape.sampwidth * shape.nchannels * (shape.framerate // 4))
+    with wave.open(str(out), "wb") as w:
+        w.setnchannels(shape.nchannels)
+        w.setsampwidth(shape.sampwidth)
+        w.setframerate(shape.framerate)
+        w.writeframes(pause.join(frames))
+    return out
+
+
+def _resampled(wav: Path, rate: int, channels: int) -> Path:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise Unspoken("two voices at different rates need ffmpeg to join them")
+    out = wav.with_name(wav.stem + "-at-rate.wav")
+    done = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(wav), "-ar",
+                           str(rate), "-ac", str(channels), "-sample_fmt", "s16", str(out)],
+                          capture_output=True, text=True, timeout=WITHIN)
+    if done.returncode != 0 or not out.is_file():
+        raise Unspoken(f"ffmpeg couldn't join the voices: {(done.stderr or '').strip()[-200:]}")
     return out
 
 

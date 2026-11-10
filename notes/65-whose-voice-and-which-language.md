@@ -147,6 +147,38 @@ voice whose card names anything but `espeak` or `text` is left out of
 or, with none, not read and the owner told why, never a failure on
 every answer.
 
+## Each part in its own voice
+
+*"Your bill is due on Friday and it is 40 dollars. Kal subah main aapko
+yaad dila doongi, theek hai na? Is that all right with you?"* is mostly
+English, so the whole of it went to the English voice, and the Hindi
+sentence came out as noise. **EACH SENTENCE IS TOLD ITS LANGUAGE**, the
+same way the whole answer is (script, then small words), and read by the
+voice for it. A sentence that can't be told (*"OK."*) goes with the one
+before it, so a short word never hops voices. Runs in one voice stay one
+run; an answer in one language is read exactly as before, in one go.
+The pieces are joined into one note with a quarter-second between them,
+at the first voice's rate (a voice at another rate is brought to it by
+ffmpeg). The person's own voice is used for a part in its language too.
+A part in a language with no voice here is not read by one that can't
+say it: *"(a part in Telugu, in the message)"* is said in its place.
+
+Receipt, this computer's Piper (`en_US-lessac-medium`,
+`hi_IN-pratham-medium`), heard back by the house's Whisper
+(`faster-whisper-small`), 7.3 seconds:
+
+```
+parts: en  "Your bill is due on Friday and it is 40 dollars."
+       hi  "Kal subah main aapko yaad dila doongi, theek hai na?"   (read as कल सुबह मैं आपको याद दिला दूंगी, ठीक है ना?)
+       en  "Is that all right with you?"
+heard (told English): Your bill is due on Friday and it is $40. I will remind you
+                      tomorrow morning. Is that all right with you?
+heard (told Hindi):   … कल सुब हमना आपको याद दिलाद दूगी, तीखेना …
+```
+
+Told it was English, Whisper translated the Hindi part rather than
+mishearing it, which is the sign it was Hindi a listener could follow.
+
 ## What the tests hold
 
 `tests/test_spoken.py`, with a folder of stand-in voices so the voices
@@ -161,7 +193,10 @@ listing the voices, `default` going back to the file's; the first
 name; Settings listing the voices and keeping a person's; a Hindi answer
 on Telegram read in the Hindi voice; a notice marked only for `always`
 and carrying their voice; a notice on Telegram as words then a voice
-note; a notice on the page playing by itself.
+note; a notice on the page playing by itself; an English answer with a
+Hindi sentence read in three runs and joined into one note (the Hindi
+one handed Devanagari), one language one run, an untold sentence going
+with the one before, and a part with no voice said to be in the message.
 
 ## What is not here yet
 
@@ -173,5 +208,7 @@ note; a notice on the page playing by itself.
 * **A voice that only says it can't be read.** A voice left out for its
   card isn't named anywhere; the owner sees only that the language has
   no voice.
-* **Two languages in one answer, each in its own voice.** The answer's
-  main language picks one voice for all of it.
+* ~~**Two languages in one answer, each in its own voice.**~~ Each
+  sentence in its own (above).
+* **Two languages inside one sentence.** A sentence is read in one voice,
+  by its own majority.

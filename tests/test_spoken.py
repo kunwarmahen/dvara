@@ -522,3 +522,62 @@ def test_a_notice_on_the_page_plays_by_itself_for_always(make_service, voiced):
     asyncio.run(service.notices.send("mahen", [("web", "mahen")], "Good morning."))
     line = service.web.look("mahen")["lines"][-1]
     assert line["who"] == "notice" and line["speak"] is True
+
+
+# ---- each part in its own voice ----------------------------------------------------
+# The bias: ONE OF TWO LANGUAGES LOST. An answer mostly in English with a Hindi
+# sentence in it was read whole by the English voice, the Hindi as noise.
+
+MIXED = ("Your bill is due on Friday and it is 40 dollars. Kal subah main aapko "
+         "yaad dila doongi, theek hai na? Is that all right with you?")
+
+
+def test_each_sentence_is_read_by_the_voice_for_its_language(shelf):
+    runs = [(v.name, w) for v, w in spoken.parts(spoken.aloud(MIXED))]
+    assert runs == [
+        ("en_US-lessac-medium", "Your bill is due on Friday and it is 40 dollars."),
+        ("hi_IN-pratham-medium", "Kal subah main aapko yaad dila doongi, theek hai na?"),
+        ("en_US-lessac-medium", "Is that all right with you?")]
+
+
+def test_one_language_is_one_run_and_an_untold_sentence_joins_the_one_before(shelf):
+    one = spoken.parts("Your bill is due on Friday. Is that all right?")
+    assert [v.name for v, _ in one] == ["en_US-lessac-medium"]
+    runs = spoken.parts("आपका बिल शुक्रवार को है। OK. Thanks for asking, and you can pay it.")
+    assert [(v.family, w) for v, w in runs] == [
+        ("hi", "आपका बिल शुक्रवार को है। OK."),                # "OK." can't be told
+        ("en", "Thanks for asking, and you can pay it.")]
+
+
+def test_a_part_with_no_voice_here_is_said_to_be_in_the_message(shelf):
+    runs = spoken.parts("The trash goes out on Tuesday, and that is all for the week. "
+                        "చెత్త మంగళవారం బయటకు వెళ్తుంది.")
+    assert [(v.family, w) for v, w in runs] == [
+        ("en", "The trash goes out on Tuesday, and that is all for the week. "
+               "(a part in Telugu, in the message).")]
+
+
+def test_the_parts_are_read_one_by_one_and_joined_into_one_note(shelf, tmp_path,
+                                                                 monkeypatch):
+    import sys
+    import wave
+    piper = tmp_path / "piper"
+    piper.write_text(f"#!{sys.executable}\n" + '''
+import sys, wave
+words = sys.stdin.read()
+open(__file__ + ".read", "a").write(words + "\\n")
+out = sys.argv[sys.argv.index("-f") + 1]
+with wave.open(out, "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050)
+    w.writeframes(b"\\1\\0" * 2205)
+''')
+    piper.chmod(0o755)
+    monkeypatch.setattr(spoken, "piper", lambda: [str(piper)])
+    out = spoken.make(MIXED, tmp_path / "a.wav")
+    read = (tmp_path / "piper.read").read_text().splitlines()
+    assert read == ["Your bill is due on Friday and it is 40 dollars.",
+                    "कल सुबह मैं आपको याद दिला दूंगी, ठीक है ना?",
+                    "Is that all right with you?"]
+    with wave.open(str(out), "rb") as w:
+        # three tenths of a second each, and a quarter-second pause between
+        assert w.getnframes() == 3 * 2205 + 2 * (22050 // 4)
