@@ -125,10 +125,22 @@ rate, so it is read as a number.
 *3rd* are typed in Hindi answers as in English. Hindi says पहला, दूसरा,
 तीसरा, चौथा, छठा, and the rest as the number with -वाँ (सातवाँ,
 पच्चीसवाँ). Before a month, in Latin letters or Devanagari, a date is
-said as a count, as Hindi says it: *2nd November* is दो नवंबर. The
-masculine form is said every time. Whether *3rd reminder* wants तीसरा
-or *3rd meeting* wants तीसरी is the sentence's gender, and that is a
-model's job, not the step before a voice.
+said as a count, as Hindi says it: *2nd November* is दो नवंबर.
+
+**AN ORDINAL AGREES WITH WHAT FOLLOWS IT.** Said masculine every time,
+*3rd kist* was तीसरा किस्त: understood, and wrong to any Hindi ear. A
+Hindi ordinal is an adjective, so the word after it decides. A short
+list of feminine nouns an answer uses with an ordinal (तारीख, बार,
+किस्त, मीटिंग, कक्षा, बैठक, सीट, लाइन... in Devanagari, in Latin letters,
+and the English words said in Hindi: *meeting*, *class*, *dose*, *date*)
+makes it -ी: तीसरी किस्त, सातवीं बार, पच्चीसवीं meeting. Any other noun
+with a postposition after it (में, से, पर, को, तक, का/की/के, and *mein*,
+*se*, *par*...) is masculine oblique, -े: पहले दिन से, चौथे floor पर.
+Anything else is said as before. A noun the list doesn't know is read
+masculine: a guess from its ending (-ी is often feminine) would be wrong
+as often as right (पानी, आदमी), and a wrong gender is still understood.
+The next word is looked at, not taken, so *3rd and 4th baar* gives
+तीसरा and चौथी.
 
 Receipt, the Hindi voice in Sarathi's Dvara container
 (`hi_IN-pratham-medium`) heard back by the house's Whisper:
@@ -139,6 +151,15 @@ read:  आपका बिल्ल एक हज़ार पाँच सौ �
 heard: आपका बिल्ल एक हजार पाज सो रुपाई हैं और यहाँ तीसरा रेमी देर है दो नूवीम बेर को मिलेंगे
 ```
 
+And the agreement, the same Hindi voice on this computer's Piper, heard
+back by the house's Whisper (`faster-whisper-small`):
+
+```
+Aapki 3rd kist 11th tareekh tak hai, aur yeh 7th baar hai. 1st din se shuru.
+read:  आपकी तीसरी किस्त ग्यारहवीं तरीख तक है, और यह सातवीं बार है. पहले दिन से शुरु.
+heard: अपकी तीस्री किस्त गयारहवी तरीख तक है और यह साथबी बार है पहले दिन सी शुरू
+```
+
 ## Tests
 
 `tests/test_spoken.py`: romanised Hindi told as Hindi, and an English
@@ -147,13 +168,14 @@ rules' (long final *a* and *i*, *a* before a vowel, *n* before a
 consonant) spelt as said, a number and Devanagari left as they were; a
 Hindi voice handed Devanagari by `make`, an English answer handed to its
 voice as written; numbers to a hundred from the table, lakh and crore,
-a time, a decimal and a code; the Hindi voice handed *नौ* for *9*; money with its name after (rupees and paise, dollars and cents, a rate left a number); ordinals in Hindi's words and a date before a month as its count.
+a time, a decimal and a code; the Hindi voice handed *नौ* for *9*; money with its name after (rupees and paise, dollars and cents, a rate left a number); ordinals in Hindi's words and a date before a month as its count; an ordinal feminine before a feminine noun, oblique before a postposition, and the word after it still read.
 
 ## What is not here yet
 
 * ~~**Numbers said in Hindi.**~~ Written as words first (above).
 * ~~**Ordinals and money in Hindi**~~ (*4th*, *₹*): said as Hindi says them (above).
-* **An ordinal's gender** (तीसरा or तीसरी): always the masculine.
+* ~~**An ordinal's gender**~~ (तीसरा or तीसरी): by the noun after it (above).
+* **A feminine noun the list doesn't know** is read masculine.
 * **Romanised Hindi heard.** This is the voice. A voice note *spoken*
   in Hindi is heard as the hearing model writes it, in Devanagari
   ([notes/47](47-a-voice-note.md)).

@@ -236,14 +236,37 @@ def _said(match: re.Match) -> str:
 # typed in Hindi answers as in English; Hindi says पहला, दूसरा, तीसरा,
 # चौथा, छठा, and the rest as the number with -वाँ (सातवाँ, पच्चीसवाँ).
 # Before a month a date is said as a count, as Hindi does: "2nd November"
-# is दो नवंबर. The masculine form is said; the gender of what follows is
-# a model's job, not this step's.
+# is दो नवंबर.
+#
+# AN ORDINAL AGREES WITH WHAT FOLLOWS IT. Hindi's ordinal is an adjective:
+# तीसरी तारीख, तीसरा दिन, and तीसरे दिन से before a postposition. The
+# word after the ordinal is looked up in a short list of feminine nouns
+# an answer uses with one (तारीख, बार, किस्त, मीटिंग, कक्षा, and their
+# romanised and English spellings: tareekh, baar, kist, meeting, class,
+# dose...): feminine is -ी (तीसरी, सातवीं). A noun not on the list, with
+# a postposition after it (में, से, पर, को, तक, का/की/के, and mein, se...),
+# is masculine oblique: -े (तीसरे, सातवें). Anything else is said as
+# before, masculine. A noun the list doesn't know is read masculine: a
+# wrong gender is still understood; a guess from the word's ending would
+# be wrong as often as right (पानी, आदमी, बात).
 
 _MONEY = re.compile(
     r"(?:(₹|\bRs\.?|\bINR|\$|\bUSD)\s?)(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.(\d{1,2}))?(?![\d\w])")
 _CURRENCY = {"₹": ("रुपया", "रुपये", "पैसा", "पैसे"),
              "$": ("डॉलर", "डॉलर", "सेंट", "सेंट")}
-_ORDINAL = re.compile(r"(?<![\w.])(\d{1,3})(?:st|nd|rd|th)\b(\s+([^\s,.;:!?]+))?", re.IGNORECASE)
+_ORDINAL = re.compile(r"(?<![\w.])(\d{1,3})(?:st|nd|rd|th)\b(\s+([^\s,.;:!?]+))?"
+                      r"(?=(\s+([^\s,.;:!?]+))?)", re.IGNORECASE)
+#: Nouns an ordinal is used with that are feminine in Hindi, as an answer
+#: spells them: Devanagari, romanised, and English words said in Hindi.
+_FEMININE = set(
+    "तारीख तारीख़ बार किस्त क़िस्त किश्त मंज़िल मंजिल कक्षा बैठक मीटिंग गाड़ी ट्रेन "
+    "बस रात चीज़ चीज किताब पंक्ति लाइन सीट कॉल पोस्ट सालगिरह वर्षगांठ जगह कोशिश "
+    "तस्वीर फ़ोटो फोटो डोज़ खुराक तिमाही पारी किस्म सूची लिस्ट क्लास रैंक पोज़िशन "
+    "tareekh tarikh taarikh tareek baar kist kisht qist manzil kaksha baithak meeting "
+    "gaadi gadi train bus raat cheez chiz kitaab kitab line seat call post saalgirah "
+    "jagah koshish tasveer photo dose khurak list class rank position date".split())
+#: Postpositions: a masculine noun before one takes the oblique (तीसरे).
+_POSTPOSITIONS = set("में से पर को तक का की के ने mein me se par pe ko tak ka ki ke ne".split())
 _FIRST_ORDINALS = {1: "पहला", 2: "दूसरा", 3: "तीसरा", 4: "चौथा", 6: "छठा"}
 _MONTHS = set(
     "january february march april may june july august september october november "
@@ -264,19 +287,29 @@ def _money(match: re.Match) -> str:
     return said
 
 
-def hindi_ordinal(n: int) -> str:
-    """``n``-th as Hindi says it: 1 पहला, 7 सातवाँ, 25 पच्चीसवाँ."""
+def hindi_ordinal(n: int, form: str = "") -> str:
+    """``n``-th as Hindi says it: 1 पहला, 7 सातवाँ, 25 पच्चीसवाँ. ``form``
+    "f" is feminine (पहली, सातवीं), "o" masculine oblique (पहले, सातवें)."""
     if n in _FIRST_ORDINALS:
-        return _FIRST_ORDINALS[n]
-    said = hindi_number(n)
-    return said[:-1] + "वाँ" if said.endswith("ा") else said + "वाँ"
+        said = _FIRST_ORDINALS[n]
+    else:
+        number = hindi_number(n)
+        said = (number[:-1] if number.endswith("ा") else number) + "वाँ"
+    if form == "f":
+        return said[:-3] + "वीं" if said.endswith("वाँ") else said[:-1] + "ी"
+    if form == "o":
+        return said[:-3] + "वें" if said.endswith("वाँ") else said[:-1] + "े"
+    return said
 
 
 def _ordinal(match: re.Match) -> str:
     n, after, word = int(match.group(1)), match.group(2) or "", match.group(3) or ""
+    next_word = (match.group(5) or "").lower()     # looked at, not taken
     if word.lower() in _MONTHS:
         return f"{hindi_number(n)}{after}"
-    return f"{hindi_ordinal(n)}{after}"
+    form = ("f" if word.lower() in _FEMININE
+            else "o" if word and next_word in _POSTPOSITIONS else "")
+    return f"{hindi_ordinal(n, form)}{after}"
 
 
 def numbers(text: str) -> str:

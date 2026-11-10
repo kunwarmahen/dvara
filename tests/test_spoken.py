@@ -363,6 +363,21 @@ def test_ordinals_are_hindis_own_words_and_a_date_is_its_count():
     assert numbers("4th floor") == "चौथा floor"
 
 
+def test_an_ordinal_agrees_with_the_noun_after_it():
+    # "3rd kist" read masculine was तीसरा किस्त: understood, but wrong
+    from dvara.romanised import hindi_ordinal, numbers
+    assert [hindi_ordinal(n, "f") for n in (1, 2, 3, 6, 7, 25)] == \
+        ["पहली", "दूसरी", "तीसरी", "छठी", "सातवीं", "पच्चीसवीं"]
+    assert [hindi_ordinal(n, "o") for n in (1, 4, 9)] == ["पहले", "चौथे", "नौवें"]
+    assert numbers("Aapki 3rd kist kal hai") == "Aapki तीसरी kist kal hai"
+    assert numbers("7th baar") == "सातवीं baar"
+    assert numbers("11th तारीख तक") == "ग्यारहवीं तारीख तक"           # feminine wins
+    assert numbers("1st din se shuru") == "पहले din se shuru"         # oblique
+    assert numbers("4th floor par 5th seat") == "चौथे floor par पाँचवीं seat"
+    assert numbers("3rd and 4th baar") == "तीसरा and चौथी baar"        # the next one too
+    assert numbers("2nd November ko") == "दो November ko"             # a date, a count
+
+
 def test_the_hindi_voice_is_handed_numbers_as_words(shelf, tmp_path, monkeypatch):
     piper = tmp_path / "piper"
     piper.write_text("#!/bin/sh\ncat >> \"$(dirname \"$0\")/read.txt\"\n"
