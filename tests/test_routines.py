@@ -257,3 +257,28 @@ def test_a_reply_to_the_question_is_its_answer():
     assert replied_answer(yes_no, "what is this for?") is None
     assert replied_answer(words, "/new") is None
     assert replied_answer("Here is your brief.", "thanks") is None
+
+
+def test_a_notification_with_buttons_has_no_link_to_open(tmp_path, monkeypatch):
+    # on an iPhone a tap opens the link and the buttons need a long-press: a
+    # question tapped went to the home page's sign-in. No link, the ntfy app.
+    from dvara import push
+    sent = []
+
+    class Answer:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b""
+
+    def urlopen(request, timeout=None):
+        sent.append((request.full_url, request.data, dict(request.headers)))
+        return Answer()
+
+    monkeypatch.setattr(push.urllib.request, "urlopen", urlopen)
+    pusher = push.Pusher("http://ntfy", tmp_path, click="http://house:8760/")
+    buttons = pusher.tap_actions("owner", [{"word": "/routines yes K7Q2MX", "label": "Yes"}])
+    pusher._post("topic", "Send it?", buttons)
+    pusher._post("topic", "Your brief is ready.")
+    with_buttons = json.loads(sent[0][1])
+    assert with_buttons["actions"] and "click" not in with_buttons
+    assert sent[1][2].get("Click") == "http://house:8760/"

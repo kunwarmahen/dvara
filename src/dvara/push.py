@@ -259,8 +259,10 @@ class Pusher:
                     "tags": ["speech_balloon"], "actions": actions}
             if quiet:
                 body["priority"] = QUIET
-            if self.click:
-                body["click"] = self.click
+            # NO LINK UNDER BUTTONS. On an iPhone a tap opens the link, and
+            # the buttons only show on a long-press: a question tapped went
+            # to the home page's sign-in, never answered. With no link, a
+            # tap opens the ntfy app, where the buttons are drawn.
             request = urllib.request.Request(self.url, data=json.dumps(body).encode(),
                                              method="POST",
                                              headers={"Content-Type": "application/json"})
