@@ -570,7 +570,9 @@ def listing(agent: str, rows: list[Kept], words: str = "", *,
                    f"message{'s' if row.turns != 1 else ''}")
         if row.snippet:
             snip = " ".join(row.snippet.replace(HIT, "*").replace(END, "*").split())
-            out.append(f"    {snip}")
+            where = "in what a tool returned: " if getattr(row, "found_in", "") == "tools" \
+                else ""
+            out.append(f"    {where}{snip}")
     if len(rows) > SHOWN_ROWS:
         out.append(f"… and {len(rows) - SHOWN_ROWS} older. Add a word to find one: "
                    f"/chats trip")

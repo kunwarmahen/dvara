@@ -17,6 +17,8 @@ all keep conversations the same way.
 ```
 /chats                  every conversation with this agent, newest first
 /chats boiler           only the ones that say "boiler", the word marked
+                        (then any where only a tool's output did: "in what
+                        a tool returned: …", Yantra's notes/130)
 /chats 2                go back into that one
 /chats open 2           the same, as Yantra's terminal says it
 /chats delete 2         asks: "Delete … for good? Send /chats delete 2 sure"
@@ -63,6 +65,7 @@ a chat word:
 
 ```
 GET    /web/chats?actor=A&q=WORDS     every agent's, newest first; q searches
+                                      (a row found only in a tool's output: found_in "tools")
 GET    /web/chats/ID?actor=A          one, to read: entries (tools too) + transcript
 GET    /web/chats/ID/export?actor=A   one as a Markdown file, to share
 DELETE /web/chats/ID?actor=A          gone for good; 409 if open in a chat now

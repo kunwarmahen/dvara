@@ -85,6 +85,17 @@ def test_words_find_a_conversation_and_keep_its_number(make_service):
     assert "None of your conversations" in say(service, "/chats zebra").text
 
 
+def test_a_match_only_in_a_tools_output_is_said_so():
+    from yantra.history import END, HIT, Kept
+
+    from dvara.past import listing
+    row = Kept("a", "where is my parcel?", "telegram", "minder", "m", 2,
+               "2026-11-10T09:00:00+00:00", "2026-11-10T09:01:00+00:00",
+               snippet=f"tracking {HIT}1Z999{END}", found_in="tools")
+    text = listing("minder", [row], "1Z999")
+    assert "in what a tool returned: tracking *1Z999*" in text
+
+
 def test_a_number_that_is_not_there_is_said(make_service):
     service = make_service([says("x")])
     say(service, "a")
