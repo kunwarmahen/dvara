@@ -910,7 +910,7 @@ class TelegramBot:
                        # a routine's Yes and No: a press sends the word as typed
                        else _row_buttons([(t["label"], t["word"]) for t in taps]) if taps
                        else None)
-            parts = split_message(text + reply_hint(text, "telegram"))
+            parts = split_message(text + reply_hint(text))
             for count, part in enumerate(parts, start=1):
                 more = ({"reply_markup": buttons}
                         if buttons and count == len(parts) else {})

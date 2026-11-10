@@ -863,6 +863,14 @@ def test_a_notice_arrives_in_the_persons_own_chat(make_bot):
     assert "parse_mode" not in fake.sent()[0]
 
 
+def test_a_routines_question_says_a_reply_answers_it(make_bot):
+    fake = FakeTelegram()
+    bot = make_bot(fake)
+    asked = "Brief asks: a colour?\n\nAnswer in a few words: /routines say W2R7ZH your words"
+    asyncio.run(bot._deliver_notice(str(KNOWN), asked))
+    assert fake.texts() == [asked + "\nOr reply to this message with your answer."]
+
+
 def test_a_long_notice_is_split_like_an_answer(make_bot):
     fake = FakeTelegram()
     bot = make_bot(fake)

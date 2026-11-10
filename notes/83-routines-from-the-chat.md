@@ -96,7 +96,9 @@ in ntfy: its buttons send fixed words and have no box to type in.
 
 * **Drawing a routine from a chat.** That's Vidhi's page.
 * ~~**Buttons on ntfy.**~~ Drawn (below).
-* ~~**A reply on the home page.**~~ Built (*A reply on the page*, below).
+* **A reply on the home page.** Not needed: a question reaches the page
+  under the bell, never in a chat window, with its buttons and, for words,
+  a box of its own (Sarathi's page).
 * **A typed answer from ntfy.** Its buttons send fixed words; there is no
   box to type in, so a question that takes words is answered from a chat.
 
@@ -154,26 +156,15 @@ poll and the like get that sentence now (`UNREAD`); any other message
 with no words is Telegram's and gets nothing.
 
 
-## A reply on the page, and the words say so
+## The question says a reply works
 
-Telegram took a reply as the answer, but the question never said so,
-and the home page had no reply at all: a typed answer there meant
-copying `/routines say CODE` by hand, or finding the box under the bell.
-
-**A REPLY CARRIES THE LINE IT ANSWERS.** `POST /web/message` takes
-`reply_to`, the id of one of that person's own lines. When that line is a
-routine's question, the words go through the same `replied_answer` a
-Telegram reply does: *"yes"* under a yes-or-no question is
-`/routines yes K7Q2MX`, *"blue door"* under a words question is
-`/routines say W2R7ZH blue door`. Their own line keeps what they typed
-(*yes*); only the turn gets the answer's words. A reply to any other
-line, or anything a question doesn't take, is a message to the agent as
-ever. Sarathi's chat draws **Reply** under a question and shows
-*Replying to: …* above the box until it's sent.
+Telegram took a reply as the answer, but nothing in the question said
+so; a person who didn't know copied `/routines say CODE` by hand.
 
 **SAID WHERE IT WORKS, AND ONLY THERE.** A question delivered to
 Telegram ends *"Or reply to this message with your answer."* (*"…with yes
-or no."* for a yes-or-no one); on the page, *"Or press Reply under this
-and type your answer."* (`reply_hint`). An ntfy notification gets
-neither: nothing typed reaches it. The line is never added twice, and a
-message that isn't a question gets none.
+or no."* for a yes-or-no one; `reply_hint`). The home page gets no such
+line: there the question sits under the bell with its own buttons and a
+box for words, and a page line saying "reply" would point at nothing. An
+ntfy notification gets none either: nothing typed reaches it. The line is
+never added twice, and a message that isn't a question gets none.

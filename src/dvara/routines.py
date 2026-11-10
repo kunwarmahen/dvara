@@ -82,24 +82,20 @@ def replied_answer(asked: str, text: str) -> str | None:
     return f"{ROUTINES} {verb} {code} {said}"
 
 
-#: What a reply looks like on each channel where one answers.
-_REPLY = {"telegram": "Or reply to this message with your answer.",
-          "page": "Or press Reply under this and type your answer."}
-_REPLY_YES = {"telegram": "Or reply to this message with yes or no.",
-              "page": "Or press Reply under this and type yes or no."}
+#: The line under a routine's question where a reply answers it.
+REPLY_HINT = "Or reply to this message with your answer."
+REPLY_HINT_YES = "Or reply to this message with yes or no."
 
 
-def reply_hint(text: str, channel: str) -> str:
-    """The line saying a reply answers, for a routine's question on a
-    channel where one does (Telegram, the home page). Empty for any other
-    message, and for a channel with no reply (an ntfy notification: there
-    the buttons answer, and words go to a chat)."""
+def reply_hint(text: str) -> str:
+    """The line saying a reply answers, for a routine's question sent to
+    Telegram, the one channel where a reply does (replied_answer). The
+    home page's bell draws the buttons and a box instead, and ntfy can't
+    take typed words. Empty for any other message, and never twice."""
     found = ASKED.search(text or "")
-    if not found or channel not in _REPLY or (text or "").rstrip().endswith(
-            (_REPLY[channel], _REPLY_YES[channel])):
+    if not found or (text or "").rstrip().endswith((REPLY_HINT, REPLY_HINT_YES)):
         return ""
-    said = _REPLY_YES if found.group(1) == "yes" else _REPLY
-    return "\n" + said[channel]
+    return "\n" + (REPLY_HINT_YES if found.group(1) == "yes" else REPLY_HINT)
 
 
 def word_of(text: str) -> bool:
