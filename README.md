@@ -869,7 +869,10 @@ did not ask about — a schedule's finding — straight to their chat
 **Topics.** Turn on topics mode for the bot in BotFather, and the person
 can start topics in its chat, like a forum's: each topic is then its own
 conversation, answered inside it, so two can run at once. A topic
-Telegram won't send into gets its answer in the chat itself
+Telegram won't send into gets its answer in the chat itself, after one
+line saying so. On an iPhone, a thread started by typing in the bot's
+*New Chat* view is one Telegram may refuse; start topics with the +
+button, or leave topics mode off
 ([notes/82](notes/82-a-topic-is-a-conversation.md)).
 
 The bot runs the service **in its own process** and reaches the ask desk
@@ -1374,8 +1377,13 @@ dvara --ask --vidhi /path/to/vidhi serve --port 8765
   owner, a routine installed at the computer (`local`) answers too
   ([notes/83](notes/83-routines-from-the-chat.md)). A question with
   choices has a button for each (`/routines pick CODE 2`); one that takes
-  words is `/routines say CODE ...`. On ntfy the same buttons are drawn,
-  each with a mark for that person and word, never a key.
+  words is `/routines say CODE ...`. The code alone answers too
+  (`/routines CODE blue door`), the way the question's kind takes, and on
+  Telegram so does a reply to the question. On ntfy the same buttons are
+  drawn, each with a mark for that person and word, never a key; a
+  notification with buttons has no link, so a tap opens the ntfy app,
+  where they are (an iPhone shows them on a long-press). ntfy can't take
+  typed words.
 * Each of their turns starts `vidhi mcp --for <them> --agent <this
   agent> --runner dvara`: their agent runs a routine or installs a ready
   one after their yes on a card that lists everything it touches, and
@@ -1673,7 +1681,7 @@ reads that person's key from `<state>/memory.json`
 | `marked.py` | an answer's Markdown as Telegram entities: the plain words, and beside them which are bold, italic, code or a link, counted in UTF-16; a mark only where it opens and closes against a word, so `snake_case` and `rm *.log` stay as typed; refused, the words go as written ([notes/70](notes/70-bold-not-asterisks.md)) |
 | `printed.py` | a conversation as a PDF for `/chats export N pdf` and `?as=pdf`: an escaped HTML page with nothing to fetch, printed by the machine's own headless Chrome so every script prints; an answer's bold, italics, code, lists and links read by `marked.py` as Telegram's are; no browser, the Markdown file and why ([notes/69](notes/69-a-picture-and-a-pdf.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
-| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds, `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); one conversation open on several chats, each taking the row again when another wrote it, the turn holding the conversation's lock, rename and pin, each row's `here` for the page's own chat ([notes/71](notes/71-one-conversation-two-chats.md)); words carried on in the conversation they were written under, waiting for a chat still answering, and which conversation each Telegram message was in, for a reply to carry it on ([notes/78](notes/78-carried-on-where-it-was-written.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
+| `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds (in the words, then in what a tool returned, said so), `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); one conversation open on several chats, each taking the row again when another wrote it, the turn holding the conversation's lock, rename and pin, each row's `here` for the page's own chat ([notes/71](notes/71-one-conversation-two-chats.md)); words carried on in the conversation they were written under, waiting for a chat still answering, and which conversation each Telegram message was in, for a reply to carry it on ([notes/78](notes/78-carried-on-where-it-was-written.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
 | `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat; an answer's own on a page's chat, by its line (`web.py`) ([notes/60](notes/60-a-run-step-by-step.md)) |
 | `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)); `/doctor every morning`, a Samay schedule whose run says only what's new ([notes/75](notes/75-a-check-every-morning.md)) |
 | `carrying.py` | `/carry`: a job a restart stopped part way, told to its person once as the door starts (`carry-told.json`) and carried on from its last step; a schedule's or a watch's run left to Samay and Prahari ([notes/59](notes/59-a-job-a-restart-stopped.md)) |

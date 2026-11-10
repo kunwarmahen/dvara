@@ -1721,7 +1721,12 @@ With `--ntfy-click` set to the home page's address, a skill offered
 (§24) arrives with **Keep** and **Not now** under it. Press one on the
 phone: the notification goes, and the chat on the home page shows the
 answer. The button carries no password, only a mark made for that one
-offer, so anyone reading the notice can do no more than press it.
+offer, so anyone reading the notice can do no more than press it. A
+notification with buttons carries no link to the home page, so tapping
+it opens the ntfy app, where the buttons are; on an iPhone they also
+show when you long-press the notification. A routine's question
+(`/routines`) comes with its Yes and No, or its choices, the same way;
+one that takes typed words can't be answered in ntfy.
 
 What a look back noticed (§21) comes with buttons too, one
 notification for each fact, since ntfy shows three buttons at most:
