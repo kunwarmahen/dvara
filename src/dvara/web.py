@@ -84,6 +84,7 @@ from typing import TYPE_CHECKING
 
 from dvara import fresh, spoken
 from dvara.accounts import tap_label, taps
+from dvara.routines import replied_answer, reply_hint
 from dvara.attached import Attachment, safe_name
 from dvara.errors import Refused
 from dvara.holds import NoSuchHold, NotYourHold
@@ -296,7 +297,7 @@ class WebChannel:
         """A notice for ``address`` (the actor id): a line, kept. A skill
         offered rides on it (``offer``), and what a look back noticed
         (``remember``), for the page's buttons."""
-        self.book.add(address, "notice", text,
+        self.book.add(address, "notice", text + reply_hint(text, "page"),
                       extra={"files": [str(file)] if file else [],
                              "offer": (extra or {}).get("offer"),
                              # what a look back noticed, for Keep and No
@@ -360,13 +361,17 @@ class WebChannel:
 
     def say(self, actor: str, agent: str, text: str,
             attachments: list[Attachment] | None = None,
-            conversation: str | None = None, new: bool = False) -> Line:
+            conversation: str | None = None, new: bool = False,
+            reply_to: int | None = None) -> Line:
         """Write down what they said and start the turn behind it. Files
         sent with it are named on their line (kept in their folder by
         the turn: attached.py). ``conversation``: the one it was written
         under, carried on in its own chat; ``new`` starts one in a chat of
         its own, its id on the line. Neither is the one page chat every
-        message went to before conversations had chats of their own."""
+        message went to before conversations had chats of their own.
+        ``reply_to``: the id of their own line it answers -- a routine's
+        question there takes these words as its answer, as a Telegram
+        reply does (routines.replied_answer); anything else is a message."""
         from yantra.history import new_id
 
         who = self.service.actors.get(actor)
@@ -374,6 +379,12 @@ class WebChannel:
             raise Refused(f"you have no agent called {agent!r} here")
         if not text.strip() and not attachments:
             raise Refused("say something and I will answer it")
+        # their line keeps their words ("blue door"); the turn gets the answer
+        meant = text
+        if reply_to is not None:
+            asked = self.book.get(actor, reply_to)
+            if asked is not None and asked.who != "you":
+                meant = replied_answer(asked.text, text) or text
         sent = [safe_name(a.name) for a in attachments or []]
         begin = new and not conversation
         conversation = new_id() if begin else conversation
@@ -389,10 +400,10 @@ class WebChannel:
 
         self._start(actor, agent, conversation or "", self.service.deliver(
             actor=actor, agent=agent,
-            thread=page_thread(conversation) if conversation else THREAD, text=text,
+            thread=page_thread(conversation) if conversation else THREAD, text=meant,
             came_by=KIND, watch=watch, attachments=attachments or (),
             conversation=conversation, begin=begin), live,
-            new=not attachments and fresh.is_new_word(text))
+            new=not attachments and fresh.is_new_word(meant))
         return line
 
     def carry_on(self, hold_id: str, actor: str, answers: dict, *,

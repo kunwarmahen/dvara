@@ -167,7 +167,7 @@ from dvara import carrying, past, remembering, spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.menu import remembers as _remembers
-from dvara.routines import replied_answer
+from dvara.routines import replied_answer, reply_hint
 from dvara.routines import word_of as routines_word
 from dvara.menu import words_for
 from dvara.menu import writes_files as _writes_files
@@ -910,7 +910,7 @@ class TelegramBot:
                        # a routine's Yes and No: a press sends the word as typed
                        else _row_buttons([(t["label"], t["word"]) for t in taps]) if taps
                        else None)
-            parts = split_message(text)
+            parts = split_message(text + reply_hint(text, "telegram"))
             for count, part in enumerate(parts, start=1):
                 more = ({"reply_markup": buttons}
                         if buttons and count == len(parts) else {})

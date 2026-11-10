@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -282,3 +283,71 @@ def test_a_notification_with_buttons_has_no_link_to_open(tmp_path, monkeypatch):
     with_buttons = json.loads(sent[0][1])
     assert with_buttons["actions"] and "click" not in with_buttons
     assert sent[1][2].get("Click") == "http://house:8760/"
+
+
+# -- a reply on the home page, and words that say a reply works -----------------------
+# The bias: A REPLY WORKS ONLY WHERE NOBODY SAYS SO. Telegram took a reply as the
+# answer but the question never said it would; the home page had no reply at all,
+# so a typed answer there meant copying "/routines say CODE" by hand.
+
+
+def test_a_question_says_a_reply_answers_where_one_does_and_nowhere_else():
+    from dvara.routines import reply_hint
+    words = ("Button test asks: type a colour\n\n"
+             "Answer in a few words: /routines say W2R7ZH your words")
+    yes_no = "Answer: /routines yes BAFP4F   or   /routines no BAFP4F"
+    assert reply_hint(words, "telegram") == "\nOr reply to this message with your answer."
+    assert reply_hint(yes_no, "page") == "\nOr press Reply under this and type yes or no."
+    assert reply_hint(words, "ntfy") == ""                 # no reply on a notification
+    assert reply_hint("Your brief is ready.", "telegram") == ""
+    said = words + reply_hint(words, "telegram")
+    assert reply_hint(said, "telegram") == ""              # never twice
+
+
+def test_a_reply_on_the_page_answers_the_question_and_keeps_their_words(
+        make_service, vidhi):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+
+    service = make_service(web=True, vidhi=str(vidhi), owner="owner")
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    asked = "Brief asks: Send it?\n\nAnswer: /routines yes K7Q2MX   or   /routines no K7Q2MX"
+    with TestClient(create_app(service, token=token)) as client:
+        client.post("/notify", headers=auth, json={"actor": "owner", "text": asked})
+        notice = client.get("/web?actor=owner", headers=auth).json()["lines"][-1]
+        assert notice["text"].endswith("Or press Reply under this and type yes or no.")
+        said = client.post("/web/message", headers=auth, json={
+            "actor": "owner", "agent": "greeter", "text": "yes", "reply_to": notice["id"]})
+        assert said.status_code == 200 and said.json()["line"]["text"] == "yes"
+        log = Path(str(vidhi) + ".log")
+        for _ in range(200):
+            if log.exists() and any(a[0] == "answer" for a in _log(vidhi)):
+                break
+            time.sleep(0.02)
+    answer = next(a for a in _log(vidhi) if a[0] == "answer")
+    assert answer[:3] == ["answer", "K7Q2MX", "yes"]
+
+
+def test_a_reply_to_an_ordinary_line_is_only_a_message(make_service):
+    from fastapi.testclient import TestClient
+
+    from dvara.http import create_app
+    from tests.conftest import says
+
+    service = make_service([says("Hello.")], web=True)
+    token = "a-token-long-enough-to-be-real"
+    auth = {"Authorization": f"Bearer {token}"}
+    with TestClient(create_app(service, token=token)) as client:
+        client.post("/notify", headers=auth, json={"actor": "owner", "text": "2 new mails"})
+        notice = client.get("/web?actor=owner", headers=auth).json()["lines"][-1]
+        assert notice["text"] == "2 new mails"             # no Reply line on it
+        client.post("/web/message", headers=auth, json={
+            "actor": "owner", "agent": "greeter", "text": "yes", "reply_to": notice["id"]})
+        for _ in range(200):
+            lines = client.get("/web?actor=owner", headers=auth).json()
+            if not lines["busy"] and lines["lines"][-1]["who"] == "agent":
+                break
+            time.sleep(0.02)
+    assert lines["lines"][-1]["text"] == "Hello."          # the agent answered it

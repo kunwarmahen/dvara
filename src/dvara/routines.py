@@ -82,6 +82,26 @@ def replied_answer(asked: str, text: str) -> str | None:
     return f"{ROUTINES} {verb} {code} {said}"
 
 
+#: What a reply looks like on each channel where one answers.
+_REPLY = {"telegram": "Or reply to this message with your answer.",
+          "page": "Or press Reply under this and type your answer."}
+_REPLY_YES = {"telegram": "Or reply to this message with yes or no.",
+              "page": "Or press Reply under this and type yes or no."}
+
+
+def reply_hint(text: str, channel: str) -> str:
+    """The line saying a reply answers, for a routine's question on a
+    channel where one does (Telegram, the home page). Empty for any other
+    message, and for a channel with no reply (an ntfy notification: there
+    the buttons answer, and words go to a chat)."""
+    found = ASKED.search(text or "")
+    if not found or channel not in _REPLY or (text or "").rstrip().endswith(
+            (_REPLY[channel], _REPLY_YES[channel])):
+        return ""
+    said = _REPLY_YES if found.group(1) == "yes" else _REPLY
+    return "\n" + said[channel]
+
+
 def word_of(text: str) -> bool:
     first = text.strip().split(maxsplit=1)[:1]
     return bool(first) and first[0].lower().split("@")[0] == ROUTINES

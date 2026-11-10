@@ -656,7 +656,9 @@ def create_app(service: Service, *, token: str,
             line = web.say(body["actor"], body["agent"], body.get("text") or "",
                            attachments, conversation=body.get("conversation")
                            if isinstance(body.get("conversation"), str) else None,
-                           new=body.get("new") is True)
+                           new=body.get("new") is True,
+                           reply_to=body["reply_to"] if isinstance(body.get("reply_to"), int)
+                           and not isinstance(body.get("reply_to"), bool) else None)
         except Refused as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         return {"line": line.as_dict()}
