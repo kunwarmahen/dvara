@@ -58,10 +58,25 @@ which topic was refused. An answer outside its topic beats no answer.
 On the house's own bot, with topics mode turned on in BotFather: each
 topic answered inside itself, and kept its own conversation.
 
+**A thread made by typing in New Chat can't be answered in.** On an
+iPhone, a message typed in the bot's *New Chat* view starts a thread of
+its own. Three such threads in one evening (1377, 1379, 1388) came to
+Dvara with their `message_thread_id`, but Telegram refused every answer
+into them, *"Bad Request: message thread not found"*; asked directly,
+the Bot API refused a message into thread 1388 and a reply to the
+messages around it the same way. The person's own message kept its
+sending clock, and the thread looked busy for good, because its answer
+had gone to the chat itself, outside every thread. Clearing the chat's
+history made no difference. Turning topics mode off in BotFather put
+the chat back to one conversation, answered at once. So topics mode is
+the owner's to turn on with that known: threads made with the + button
+are answered inside themselves, threads typed into New Chat may not be.
+
 `tests/test_telegram_topics.py`: a chat and its topic told apart, and a
 reply thread not taken for a topic; the answer and the *typing* go back
 into the topic it was asked in; two topics are two conversations, and
-one's history isn't the other's; a chat without topics sends no
+one's history isn't the other's; Telegram's own *topic created* note
+isn't answered; a chat without topics sends no
 `message_thread_id`; a topic Telegram refuses is answered in the chat
 itself, with a line in the owner's log.
 
