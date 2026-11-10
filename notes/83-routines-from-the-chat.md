@@ -71,8 +71,16 @@ Tested here with a stand-in `vidhi` that prints what Vidhi prints
 (`tests/test_routines.py`): the owner sees the computer's question,
 answers it as `local` after their own name finds nothing, and a guest
 pressing the same code is refused. The real Vidhi was run through its
-own page and CLI (Vidhi's notes/02 and 03). The buttons haven't been
-pressed on a real phone yet; that comes with the house's rebuild.
+own page and CLI (Vidhi's notes/02 and 03).
+
+On the house's own bot, from an iPhone, a test routine of three
+questions asked at once: **Yes** pressed (*"Yes to "Button test 1 of 3:
+press Yes." — it carries on now."*), **Cool** pressed from three choices
+(*""Cool" to …"*), and the typed one answered both as `/routines say
+CODE blue door` and, once the code alone was read (below), as
+`/routines CODE blue door`; the run's last step said *"Got: yes / Cool /
+blue door"*. The home page and ntfy buttons haven't been pressed on a
+real phone yet.
 
 ## Not here
 
@@ -97,7 +105,8 @@ place (push.py). Only `/routines` words are drawn. A press is checked
 a turn, and the answer goes back to the phone. A copied button answers
 that one question the one way its words say, which is what reading the
 notification already lets one do by typing. Tested with Dvara's own
-test client and a stand-in Vidhi; not yet pressed on a real phone.
+test client and a stand-in Vidhi; not yet pressed on a real phone (Telegram's
+were, above).
 
 ## A reply, or the code alone
 
