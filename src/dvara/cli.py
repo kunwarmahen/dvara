@@ -20,6 +20,7 @@ how the receipts in the notes were produced.
     dvara telegram --agent researcher
     dvara status --json
     dvara keeps --json
+    dvara keeps --rehome OLD NEW     after a restore: paths under OLD now under NEW
     dvara page --as owner --port 8785
 
 ``--ask`` is where a front end becomes a channel. The escalating gate
@@ -224,6 +225,12 @@ def build_parser() -> argparse.ArgumentParser:
                       "for a backup")
     keeps.add_argument("--json", dest="json_out", action="store_true",
                        help="print dvara.keeps.v1")
+    keeps.add_argument("--rehome", nargs=2, metavar=("OLD", "NEW"),
+                       help="after a restore on a new home: move the paths under OLD to "
+                            "under NEW in Dvara's files and each person's Setu folder")
+    keeps.add_argument("--setu", default=None, metavar="PROGRAM",
+                       help="the setu program for the people's Setu folders "
+                            "(default: setu on PATH)")
 
     page = subs.add_parser(
         "page", help="the owner's page: people, agents, runs, spending, each "
@@ -543,8 +550,28 @@ def _sparsh(asked: str | None) -> str | None:
 def _keeps(args) -> int:
     """``dvara keeps``: the places a backup takes (keeps.py). Paths only,
     nothing opened: a running service's folder is left as it is."""
-    from dvara.keeps import report
+    import shutil
 
+    from dvara.keeps import rehome, report
+
+    if args.rehome:
+        try:
+            rows = rehome(*args.rehome, actors=Path(args.actors).expanduser(),
+                          state=Path(args.state).expanduser(), policy=_policy_path(args),
+                          setu=args.setu or shutil.which("setu"))
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if args.json_out:
+            print(json.dumps({"rehomed": rows}))
+            return 0
+        for row in rows:
+            print(f"{row['file']}: " + (f"{row['paths']} path(s) moved under "
+                                        f"{args.rehome[1]}" if "paths" in row
+                                        else row["problem"]))
+        if not rows:
+            print(f"nothing under {args.rehome[0]} in Dvara's files")
+        return 0
     said = report(Path(args.root).expanduser(), Path(args.actors).expanduser(),
                   Path(args.state).expanduser(), _policy_path(args))
     if args.json_out:
