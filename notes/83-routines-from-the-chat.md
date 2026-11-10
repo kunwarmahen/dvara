@@ -88,6 +88,9 @@ tapping the ntfy notification opened the home page's sign-in, and the
 buttons, which ntfy shows only on a long-press, went unseen; a
 notification with buttons is now posted with no link, so a tap opens
 the ntfy app, where they are drawn (push.py, NO LINK UNDER BUTTONS).
+After both, the bell answered all three, and Yes and Heat were pressed
+in ntfy on the iPhone. A question that takes words can't be answered
+in ntfy: its buttons send fixed words and have no box to type in.
 
 ## Not here
 
