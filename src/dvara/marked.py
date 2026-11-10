@@ -96,6 +96,14 @@ def marked(text: str) -> tuple[str, list[dict]]:
     No marks found is the text itself and an empty list, so a plain answer
     goes out exactly as it did before.
     """
+    plain, entities = spans(text)
+    return plain, _utf16(plain, entities)
+
+
+def spans(text: str) -> tuple[str, list[dict]]:
+    """``marked``'s words and marks, the marks' places in characters rather
+    than Telegram's UTF-16 units: for a page (a PDF, printed.py), which
+    reads them the same way Telegram does."""
     lines = text.split("\n")
     out: list[str] = []
     entities: list[dict] = []
@@ -145,7 +153,8 @@ def marked(text: str) -> tuple[str, list[dict]]:
                 put(_inline(line, at, entities))
         index += 1
     plain = "\n".join(out)
-    return plain, _utf16(plain, _merged_quotes(entities))
+    return plain, sorted((e for e in _merged_quotes(entities) if e["length"] > 0),
+                         key=lambda e: (e["offset"], -e["length"]))
 
 
 def _merged_quotes(entities: list[dict]) -> list[dict]:

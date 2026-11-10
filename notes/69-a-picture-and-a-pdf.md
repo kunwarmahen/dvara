@@ -47,8 +47,29 @@ installed. Which browser: `YANTRA_BROWSER_EXECUTABLE` when it names one
 
 **ONLY WHAT THE MARKDOWN FILE HOLDS.** The person's words, the agent's
 answers as written, and the tools' names — never what a tool returned.
-The same walk as Yantra's `export_markdown`. Answers keep their Markdown
-marks rather than being half-read by a renderer of our own.
+The same walk as Yantra's `export_markdown`.
+
+**AN ANSWER'S MARKS READ AS TELEGRAM READS THEM.** Printed as written, an
+answer was its asterisks and dashes. A renderer of our own would get
+them half right, so the PDF uses the reader Telegram's bold and italic
+already come from (`marked.spans`, notes/70): bold, italic, struck,
+code, a fenced block, a quote, a heading as a bold line, a list item as
+a •, and a link as its words with its address after it, since a page on
+paper can't be clicked. Whatever that reader leaves alone (`2 * 3`,
+`snake_case`) stays as typed here too. The words are escaped first; a
+mark only adds one of a handful of tags of ours, and tags always nest.
+
+```
+MINDER
+Three orders this week:                 <- "Three orders" in bold
+• Tea, arriving Thursday                <- "arriving Thursday" in italics
+• A phone case, $12.99                  <- in monospace
+• Batteries (https://amazon.com/gp/x)
+Say cancel 2 to cancel the case.
+Tools used: amazon_orders
+```
+
+(`pdftotext` of a PDF this computer's Chrome printed.)
 
 **A PAGE WITH NOTHING TO FETCH.** Every word is escaped, there is no
 script, and the page's own policy (`default-src 'none'`) forbids loading
@@ -103,13 +124,14 @@ original document. The PDF is printed from the words only, escaped, with
 nothing to fetch, kept in `shared/`; a tool's output never reaches the
 page; with no browser the Markdown file comes and says why; the page's
 `?as=pdf` answers with a PDF; and a real browser, where there is one,
-prints Devanagari and an emoji.
+prints Devanagari and an emoji; an answer's bold, italics, code, list
+items and links printed as such, what isn't a mark as typed, every word
+still escaped, and marks that overlap still nesting.
 
 ## Not here
 
-* **The answers' Markdown, read.** Bold, lists and headings print as
-  their marks. A renderer that got them half right would be worse than
-  none; the home page's print does render them.
+* ~~**The answers' Markdown, read.**~~ Read by Telegram's own reader
+  (above). Tables still print as typed.
 * **A PDF in the terminal or on Yantra's page.** Both have a browser in
   front of them, and its print window already does this.
 * **A photo album.** Several pictures in one answer go one by one, not

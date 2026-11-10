@@ -159,6 +159,25 @@ def test_a_tools_output_never_reaches_the_page():
     assert "read_file" in page and "hunter2" not in page
 
 
+def test_an_answers_markdown_is_printed_as_bold_and_lists_not_marks():
+    # printed as written, a PDF was a page of asterisks
+    page = printed.html_of({"title": "t", "started_at": "", "entries": [
+        {"who": "agent", "text": "**Done.** Your *three* orders:\n- tea, `$4`\n"
+                                 "- [the order](https://amazon.com/x)\n"
+                                 "2 * 3 and snake_case <script>alert(1)</script>"}]})
+    assert "<b>Done.</b>" in page and "<i>three</i>" in page and "<code>$4</code>" in page
+    assert "• tea" in page and "**" not in page and "- tea" not in page
+    assert "<span>the order</span> <span class='url'>(https://amazon.com/x)</span>" in page
+    assert "2 * 3 and snake_case" in page                       # not marks: as typed
+    assert "<script>" not in page and "&lt;script&gt;" in page   # still escaped
+
+
+def test_marks_always_nest_even_when_they_overlap():
+    html = printed.marked_html("**bold *both** italic*")
+    assert html.count("<b>") == html.count("</b>")
+    assert html.count("<i>") == html.count("</i>")
+
+
 def test_the_page_can_ask_for_the_pdf(make_service, fake_browser):
     from fastapi.testclient import TestClient
 

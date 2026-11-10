@@ -23,9 +23,17 @@ one (the browser tools' own setting), else the first of
 
 ONLY WHAT THE MARKDOWN FILE HOLDS: the person's words, the agent's
 answers and the tools' names, never what a tool returned -- the rule of
-Yantra's export_markdown, walked the same way. Answers are printed as
-written, Markdown marks and all, rather than half-read by a renderer
-of our own.
+Yantra's export_markdown, walked the same way.
+
+AN ANSWER'S MARKS READ AS TELEGRAM READS THEM. Printed as written, a PDF
+was a page of asterisks: **bold** with its stars, lists with their
+dashes. The marks are read by the one reader Dvara already has for them
+(marked.py, which Telegram's bold and italic come from): bold, italic,
+struck, code, a fenced block, a quote, a heading as a bold line, a list
+item as a •, a link as its words with the address after. What looks like
+a mark and isn't (``2 * 3``, ``snake_case``) stays as typed, as it does
+on Telegram. Every word is still escaped first: a mark only ever adds
+one of a handful of tags of ours.
 
 A PAGE WITH NOTHING TO FETCH. Every word is escaped, there is no
 script, and the page's own policy forbids loading anything: what is
@@ -67,6 +75,12 @@ h1 { font-size: 16pt; margin: 0 0 2pt; }
        letter-spacing: .04em; color: #444; margin: 0 0 2pt; }
 .you .who { color: #1a4f8a; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.text code, .text pre { font: 9.5pt/1.4 ui-monospace, "DejaVu Sans Mono", monospace; }
+.text pre { display: block; background: #f4f4f4; padding: 4pt 6pt; margin: 2pt 0;
+            white-space: pre-wrap; }
+.text blockquote { display: block; margin: 2pt 0; padding-left: 8pt;
+                   border-left: 2pt solid #bbb; color: #333; }
+.text .url { color: #555; font-size: 9pt; }
 .tools { color: #666; font-size: 9pt; font-style: italic; margin: -4pt 0 10pt; }
 """
 
@@ -93,6 +107,42 @@ def _used(names: list[str]) -> str:
     for name in names:
         counted[name] = counted.get(name, 0) + 1
     return ", ".join(f"{n} ×{c}" if c > 1 else n for n, c in counted.items())
+
+
+#: Each mark marked.py finds, as the tag that shows it here.
+_TAGS = {"bold": "b", "italic": "i", "strikethrough": "s", "code": "code",
+         "pre": "pre", "blockquote": "blockquote", "text_link": "span"}
+
+
+def marked_html(text: str) -> str:
+    """``text``'s Markdown as escaped HTML: the words escaped, then only
+    our own tags around what marked.py read as marks."""
+    from dvara.marked import spans
+
+    plain, marks = spans(text)
+    starts: dict[int, list[dict]] = {}
+    for mark in marks:
+        starts.setdefault(mark["offset"], []).append(mark)
+    out: list[str] = []
+    open_: list[tuple[dict, int]] = []          # (mark, where it ends)
+
+    def close_to(pos: int) -> None:
+        while open_ and open_[-1][1] <= pos:
+            mark, _ = open_.pop()
+            out.append(f"</{_TAGS[mark['type']]}>")
+            if mark["type"] == "text_link":
+                out.append(f" <span class='url'>({html.escape(mark.get('url', ''))})</span>")
+
+    for pos, char in enumerate(plain):
+        close_to(pos)
+        for mark in sorted(starts.get(pos, []), key=lambda m: -m["length"]):
+            # never past the mark it is inside: tags always nest
+            end = min(pos + mark["length"], open_[-1][1] if open_ else len(plain))
+            out.append(f"<{_TAGS[mark['type']]}>")
+            open_.append((mark, end))
+        out.append(html.escape(char))
+    close_to(len(plain))
+    return "".join(out)
 
 
 def html_of(kept: dict, *, agent: str = "Agent", zone: str | None = None) -> str:
@@ -127,7 +177,7 @@ def html_of(kept: dict, *, agent: str = "Agent", zone: str | None = None) -> str
             flush()
         out.append(f"<div class='turn {'you' if mine else 'agent'}'>"
                    f"<p class='who'>{html.escape('You' if mine else agent)}</p>"
-                   f"<p class='text'>{html.escape((entry.get('text') or '').strip())}</p>"
+                   f"<div class='text'>{marked_html((entry.get('text') or '').strip())}</div>"
                    "</div>")
     flush()
     out.append("</body></html>")
