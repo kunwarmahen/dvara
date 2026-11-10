@@ -219,3 +219,41 @@ def test_a_routine_button_press_answers_as_that_person_only(make_service, vidhi)
         assert ok.status_code == 200 and ok.json()["said"].startswith('Yes to "Send it?"')
     answer = next(a for a in _log(vidhi) if a[0] == "answer")
     assert answer[:3] == ["answer", "K7Q2MX", "yes"] and "--via=ntfy" in answer
+
+
+# -- the code alone, and a reply to the question ------------------------------------
+# The bias: A PERSON WHO WAS JUST ASKED IS TOLD THEY HAVE NO SUCH ROUTINE. Live on
+# Telegram, "/routines W2R7ZH blue door" (the verb left out) was read as a routine's
+# name, and a reply to the question was a message to the agent.
+
+
+def test_the_code_alone_answers_the_question_the_way_its_kind_takes(vidhi):
+    said = _say(vidhi, "mahen", "/routines k7q2mx Yes.", via="telegram", is_owner=True)
+    assert said == 'Yes to "Send it?" — it carries on now.'
+    assert ["answer", "K7Q2MX", "yes"] in [a[:3] for a in _log(vidhi) if a[0] == "answer"]
+
+
+def test_the_code_with_nothing_it_takes_says_how_to_answer_it(vidhi):
+    said = _say(vidhi, "mahen", "/routines K7Q2MX blue door", is_owner=True)
+    assert said == '"Send it?" -- answer it with /routines yes K7Q2MX  or  /routines no K7Q2MX'
+    assert not any(a[0] == "answer" for a in _log(vidhi))
+
+
+def test_a_code_nobody_was_asked_is_still_a_routine_name(vidhi):
+    said = _say(vidhi, "asha", "/routines K7Q2MX blue door")
+    assert said == "You have no routine K7Q2MX. Send /routines to see them."
+
+
+def test_a_reply_to_the_question_is_its_answer():
+    from dvara.routines import replied_answer
+    words = ("Button test asks: type a colour\n\n"
+             "Answer in a few words: /routines say W2R7ZH your words")
+    assert replied_answer(words, "blue  door") == "/routines say W2R7ZH blue door"
+    choice = "Answer: /routines pick SUCT7N 1 (Heat)   or   /routines pick SUCT7N 2 (Cool)"
+    assert replied_answer(choice, "Cool") == "/routines pick SUCT7N Cool"
+    yes_no = "Answer: /routines yes BAFP4F   or   /routines no BAFP4F"
+    assert replied_answer(yes_no, "No!") == "/routines no BAFP4F"
+    # not an answer: left as a message to the agent
+    assert replied_answer(yes_no, "what is this for?") is None
+    assert replied_answer(words, "/new") is None
+    assert replied_answer("Here is your brief.", "thanks") is None

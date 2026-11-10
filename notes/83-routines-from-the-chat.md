@@ -98,3 +98,36 @@ a turn, and the answer goes back to the phone. A copied button answers
 that one question the one way its words say, which is what reading the
 notification already lets one do by typing. Tested with Dvara's own
 test client and a stand-in Vidhi; not yet pressed on a real phone.
+
+## A reply, or the code alone
+
+The first real run on Telegram found two ways a person who had just been
+asked was told no. Question 3 of a test routine took typed words; the
+answer sent was `/routines W2R7ZH blue door`, the verb left out, and
+the code was read as a routine's name: *"You have no routine W2R7ZH."*
+Pressing reply on the question and typing the words was a message to
+the agent, which knew nothing of it. The run waited out its half hour
+and said *"Got: yes / Cool /"*.
+
+**THE CODE ALONE IS ENOUGH.** `/routines W2R7ZH blue door` answers the
+waiting question with that code the way its kind takes: the words, a
+choice (`/routines SUCT7N Cool`), or yes or no (`/routines BAFP4F
+yes`). A code with nothing it takes says how to answer it. A code
+nobody was asked is still read as a routine's name.
+
+**A REPLY IS AN ANSWER.** On Telegram, a reply to the question's own
+message answers it: the code is in the words the question gave to
+answer it (`/routines say W2R7ZH your words`), so nothing is kept to
+match a reply to a question, and Vidhi still checks the answer is this
+person's (`replied_answer`). A yes-or-no question takes yes or no (y,
+yep, nope...); anything else typed back is left as a message to the
+agent, as is a reply starting with `/`.
+
+**TELEGRAM'S OWN NOTE ISN'T ANSWERED.** With topics on (notes/82),
+typing outside a topic makes a new one, and Telegram sends *"topic
+created"* as a message with no words. Dvara answered it *"I can read
+words, pictures and files, not this."*, which read as if the person's
+own words couldn't be read. Only a sticker, a video, a location, a
+poll and the like get that sentence now (`UNREAD`); any other message
+with no words is Telegram's and gets nothing.
+

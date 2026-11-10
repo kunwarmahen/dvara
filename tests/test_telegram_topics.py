@@ -124,3 +124,39 @@ def test_a_topic_telegram_refuses_is_answered_in_the_chat_itself(bot):
     landed = [p for p in made.wire.sent() if "message_thread_id" not in p]
     assert [p["text"] for p in landed] == ["Still answered."]
     assert any("topic 7 refused" in n for n in made.notes)
+
+
+def test_telegrams_own_topic_note_is_not_answered(bot):
+    # a chat with topics on: typing outside one makes a topic, and Telegram
+    # sends "topic created" as a message with no words
+    made = bot([])
+    note = {"update_id": 5, "message": {
+        "message_id": 5, "from": {"id": ME}, "chat": {"id": ME},
+        "message_thread_id": 5, "is_topic_message": True,
+        "forum_topic_created": {"name": "/routines W2R7ZH blue door", "icon_color": 1}}}
+    asyncio.run(made._handle(note))
+    assert made.wire.sent() == []
+    sticker = in_topic("x", 7)
+    del sticker["message"]["text"]
+    sticker["message"]["sticker"] = {"file_id": "s"}
+    asyncio.run(made._handle(sticker))
+    assert [p["text"] for p in made.wire.sent()] == [
+        "I can read words, pictures and files, not this."]
+
+
+def test_a_reply_to_a_routines_question_answers_it(bot, monkeypatch):
+    made = bot([])
+    heard = []
+
+    async def answered(actor, text, **kw):
+        heard.append(text)
+        return 'Yes to "Send it?" — it carries on now.'
+
+    made.service.vidhi = "vidhi"
+    monkeypatch.setattr(made.service.routines, "answer", answered)
+    update = in_topic("blue door", None, 8)
+    update["message"]["reply_to_message"] = {
+        "message_id": 3, "from": {"id": 1, "is_bot": True},
+        "text": "Answer in a few words: /routines say W2R7ZH your words"}
+    asyncio.run(made._handle(update))
+    assert heard == ["/routines say W2R7ZH blue door"]

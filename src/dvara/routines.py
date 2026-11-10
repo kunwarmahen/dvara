@@ -11,6 +11,7 @@ of these is a turn -- no model, no allowance spent:
     /routines no K7Q2MX
     /routines pick K7Q2MX 2   one of its choices (by number, or its words)
     /routines say K7Q2MX ...  a question that takes a few typed words
+    /routines K7Q2MX ...      the same, by the question's code alone
     /routines stop RUN        stop a run that is going or waiting
 
 A QUESTION IS ANSWERED FROM ANY CHANNEL. A run that stopped to ask puts
@@ -23,6 +24,12 @@ token (push.py). Vidhi takes an answer only for its own person's question
 (``vidhi answer --as``), and only once: a second press says what the
 first one decided.
 
+THE CODE ALONE IS ENOUGH. ``/routines K7Q2MX blue door`` -- the code
+with the verb left out -- answers that question the way its kind takes:
+yes or no, a choice, or the words. Before, it was read as a routine's
+name, and the person who had just been asked was told they had no such
+routine.
+
 THE OWNER'S COMPUTER ROUTINES ARE THE OWNER'S. A routine installed at
 the computer is filed under ``local``, and its questions come to the
 owner's chat; so for the owner, ``/routines`` lists both, and an answer
@@ -34,6 +41,7 @@ does is drawn by a person, on Vidhi's own page.
 
 from __future__ import annotations
 
+import re
 import shutil
 
 from dvara.seen import ask_json
@@ -44,6 +52,34 @@ LOCAL = "local"
 RUNS_SHOWN = 3
 HOW = ("/routines N for how one went, /routines run N to start it. Ask me to set up one "
        "of the ready ones; a new kind is drawn on Vidhi's page.")
+
+
+#: A run's question code (Vidhi's: six letters and digits).
+CODE = re.compile(r"[A-Za-z0-9]{6}")
+#: What a yes-or-no question takes, as people type it.
+YES_NO = {"yes": "yes", "y": "yes", "yeah": "yes", "yep": "yes", "ok": "yes",
+          "okay": "yes", "no": "no", "n": "no", "nope": "no"}
+#: A question's own answer words, in the message that asked it.
+ASKED = re.compile(r"/routines (yes|pick|say) ([A-Za-z0-9]{6})\b")
+
+
+def replied_answer(asked: str, text: str) -> str | None:
+    """A reply to a run's question, as the words that answer it.
+
+    A REPLY IS AN ANSWER. Pressing reply on the question and typing
+    "blue door" (or "yes", or "Cool") answers it: the question's code is
+    in the message replied to, in the words it gave to answer it. A
+    yes-or-no question takes yes or no only; anything else typed back is
+    left as a message to the agent. ``None`` when it isn't an answer."""
+    found = ASKED.search(asked or "")
+    said = " ".join((text or "").split())
+    if not found or not said or said.startswith("/"):
+        return None
+    verb, code = found.groups()
+    if verb == "yes":
+        word = YES_NO.get(said.lower().strip(" .!"))
+        return f"{ROUTINES} {word} {code}" if word else None
+    return f"{ROUTINES} {verb} {code} {said}"
 
 
 def word_of(text: str) -> bool:
@@ -77,6 +113,10 @@ class Routines:
             return await self._start(program, people, words[1], via)
         if verb == "stop" and len(words) == 2:
             return await self._stop(program, people, words[1])
+        if words and CODE.fullmatch(words[0]) and not words[0].isdigit():
+            question = await self._asked(program, people, words[0])
+            if question is not None:
+                return await self._by_code(program, people, question, words[1:], via)
         listing = await self._list(program, people)
         if isinstance(listing, str):
             return listing
@@ -116,6 +156,29 @@ class Routines:
             out.append(f"{n}. {card.get('title')}{paused} — {card.get('cost')}")
         out += ["", HOW]
         return "\n".join(out)
+
+    async def _asked(self, program: str, people: list[str], code: str) -> dict | None:
+        """The waiting question with this code, for one of these people."""
+        for person in people:
+            open_now, _ = await ask_json([program, "questions", f"--as={person}", "--json"])
+            for q in open_now or []:
+                if isinstance(q, dict) and str(q.get("code", "")).upper() == code.upper():
+                    return q
+        return None
+
+    async def _by_code(self, program: str, people: list[str], question: dict,
+                       rest: list[str], via: str) -> str:
+        """A question answered by its code alone, the way its kind takes."""
+        code = str(question.get("code"))
+        kind = question.get("kind") or "yesno"
+        said = " ".join(rest)
+        if kind == "yesno":
+            word = YES_NO.get(said.lower().strip(" .!"))
+            if word:
+                return await self._answer(program, people, code, word, via)
+        elif said:
+            return await self._answer(program, people, code, said, via)
+        return f"\"{question.get('text')}\" -- answer it with {how_to_answer(question)}"
 
     async def _runs(self, program: str, cards: list[dict], which: str) -> str:
         card = _which(cards, which)

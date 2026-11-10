@@ -167,6 +167,7 @@ from dvara import carrying, past, remembering, spoken
 from dvara.accounts import is_command, scrub, tap_label, taps
 from dvara.attached import KEEP_LIMIT, Attachment
 from dvara.menu import remembers as _remembers
+from dvara.routines import replied_answer
 from dvara.routines import word_of as routines_word
 from dvara.menu import words_for
 from dvara.menu import writes_files as _writes_files
@@ -593,11 +594,21 @@ class TelegramBot:
                 return
             text = message.get("caption") or ""
         if text is None:
-            # A sticker, a voice note. One sentence rather than silence,
+            if not any(key in message for key in UNREAD):
+                # TELEGRAM'S OWN NOTE, NOT THEIRS. A chat with topics on
+                # gets "topic created" (and pinned, renamed...) as a
+                # message with nothing in it; answering that told the
+                # person their own words couldn't be read.
+                return
+            # A sticker, a video. One sentence rather than silence,
             # because this person IS on the list and a bot that ignores
             # them is a bot they think is broken.
             await self._send(chat, "I can read words, pictures and files, not this.")
             return
+        replied_to = message.get("reply_to_message") or {}
+        if replied_to.get("from", {}).get("is_bot"):
+            # a reply to a routine's question answers it (routines.py)
+            text = replied_answer(replied_to.get("text") or "", text) or text
         if text.strip().split()[:1] == ["/start"]:
             await self._send(chat, self._introduction())
             return
@@ -1389,6 +1400,12 @@ class TelegramBot:
             return body.get("result")
         raise TelegramError(f"{method}: gave up after a rate limit")
 
+
+#: What a person sends that isn't words, a picture or a file: answered
+#: with one sentence. Anything else with no words is Telegram's own note
+#: (a topic made, a message pinned) and isn't answered at all.
+UNREAD = frozenset({"sticker", "video", "video_note", "animation", "location", "venue",
+                    "contact", "poll", "dice", "game", "story", "paid_media", "checklist"})
 
 #: Calls about one message or the bot itself, where a topic means nothing
 #: (Telegram finds the message by its id) or is not a parameter at all.
