@@ -165,6 +165,10 @@ def test_each_kind_of_question_says_its_own_words_to_answer_it():
     assert how_to_answer({"code": "K7", "kind": "choice", "choices": ["Heat", "Cool"]}) == (
         "/routines pick K7 1 for Heat  or  /routines pick K7 2 for Cool")
     assert how_to_answer({"code": "K7", "kind": "words"}) == "/routines say K7 your words"
+    assert how_to_answer({"code": "K7", "kind": "words", "expects": "number:1:8"}) == (
+        "/routines say K7 4 (a number from 1 to 8)")
+    assert how_to_answer({"code": "K7", "kind": "words", "expects": "time"}) == (
+        "/routines say K7 07:30 (a time of day)")
     assert how_to_answer({"code": "K7"}) == "/routines yes K7  or  /routines no K7"
 
 

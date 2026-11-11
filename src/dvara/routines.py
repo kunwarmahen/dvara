@@ -10,7 +10,8 @@ of these is a turn -- no model, no allowance spent:
     /routines yes K7Q2MX      answer a run's question (the buttons send this)
     /routines no K7Q2MX
     /routines pick K7Q2MX 2   one of its choices (by number, or its words)
-    /routines say K7Q2MX ...  a question that takes a few typed words
+    /routines say K7Q2MX ...  a question that takes a few typed words (or
+                              a number, or a time of day, which Vidhi checks)
     /routines K7Q2MX ...      the same, by the question's code alone
     /routines stop RUN        stop a run that is going or waiting
 
@@ -18,7 +19,11 @@ A QUESTION IS ANSWERED FROM ANY CHANNEL. A run that stopped to ask puts
 its question on the person's channels with buttons -- Yes and No, or
 its two or three choices -- which send ``/routines yes CODE`` (``pick
 CODE N``) as if typed, by the person who pressed. One that takes words
-has no buttons: the words are typed after ``/routines say CODE``. On a
+has no buttons: the words are typed after ``/routines say CODE``. One
+that must be a number (in a range) or a time of day says so, with an
+example; a wrong answer comes back in Vidhi's words and the question
+stays open. A choice may be a whole line an earlier step found: the
+button shows its start, the answer is the line. On a
 phone's ntfy notification the same buttons come marked, never with a
 token (push.py). Vidhi takes an answer only for its own person's question
 (``vidhi answer --as``), and only once: a second press says what the
@@ -275,8 +280,28 @@ def how_to_answer(question: dict) -> str:
         return "  or  ".join(f"/routines pick {code} {n} for {c}"
                              for n, c in enumerate(question.get("choices") or [], 1))
     if question.get("kind") == "words":
-        return f"/routines say {code} your words"
+        return f"/routines say {code} {_typed_example(question.get('expects') or '')}"
     return f"/routines yes {code}  or  /routines no {code}"
+
+
+def _typed_example(expects: str) -> str:
+    """An answer Vidhi would take, and what it must be: "4 (a number
+    from 1 to 8)", "07:30 (a time of day)", or "your words"."""
+    kind, *rest = expects.split(":")
+    if kind == "number":
+        try:
+            low, high = (float(v) for v in rest)
+        except ValueError:
+            return "72 (a number)"
+        middle = round((low + high) / 2)
+        return f"{middle} (a number from {_n(low)} to {_n(high)})"
+    if kind == "time":
+        return "07:30 (a time of day)"
+    return "your words"
+
+
+def _n(value: float) -> str:
+    return str(int(value)) if value == int(value) else str(value)
 
 
 def _which(cards: list[dict], which: str) -> dict | None:

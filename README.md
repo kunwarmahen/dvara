@@ -1376,8 +1376,12 @@ dvara --ask --vidhi /path/to/vidhi serve --port 8765
   `/routines yes CODE` answers, once, only for its own person; for the
   owner, a routine installed at the computer (`local`) answers too
   ([notes/83](notes/83-routines-from-the-chat.md)). A question with
-  choices has a button for each (`/routines pick CODE 2`); one that takes
-  words is `/routines say CODE ...`. The code alone answers too
+  choices has a button for each (`/routines pick CODE 2`), and a choice
+  can be a whole line an earlier step found (the button shows its
+  start); one that takes words is `/routines say CODE ...`, and one that
+  must be a number or a time of day says so (`/routines say CODE 4 (a
+  number from 1 to 8)`): a wrong answer comes back in Vidhi's words and
+  the question waits for a right one. The code alone answers too
   (`/routines CODE blue door`), the way the question's kind takes, and on
   Telegram so does a reply to the question. On ntfy the same buttons are
   drawn, each with a mark for that person and word, never a key; a

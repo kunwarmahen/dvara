@@ -105,7 +105,12 @@ in ntfy: its buttons send fixed words and have no box to type in.
 ## Choices, words, and the same buttons on ntfy
 
 A question can offer two or three choices, or take a few typed words
-(Vidhi's notes/05). Their words are `/routines pick CODE N` (the
+(Vidhi's notes/05). The choices can be lines an earlier step found,
+each button showing a line's start; the answer is the whole line. Typed
+words can have to be a number in a range, or a time of day (Vidhi's
+notes/07): `/routines` then says so with an example (`/routines say
+CODE 4 (a number from 1 to 8)`), and a wrong answer comes back in
+Vidhi's words with the question still open. Their words are `/routines pick CODE N` (the
 buttons, one a choice, labelled with it) and `/routines say CODE the
 wifi is HouseGuest` (no buttons: typed). `/routines` lists a waiting
 question with the words that answer its kind.
