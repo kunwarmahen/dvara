@@ -544,3 +544,67 @@ class TestWhichSkills:
             listed, = run(service, say(service, "/skills", actor=person))
             assert "check-the-orders" in listed.text
             assert "owners-linkedin" not in listed.text
+
+
+def fake_samay_editing(tmp_path, cards) -> str:
+    """A samay that lists ``cards`` and, on ``edit``, writes down what it
+    was asked and answers with the card changed (or Samay's own no)."""
+    (tmp_path / "cards.json").write_text(json.dumps(cards))
+    program = tmp_path / "samay"
+    program.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = list ]; then cat {tmp_path}/cards.json; exit 0; fi\n"
+        f"printf '%s\\n' \"$@\" >> {tmp_path}/asked\n"
+        "case \"$3\" in --when=sometimes) echo \"error: cannot read 'sometimes'\" >&2; "
+        "exit 1;; esac\n"
+        "echo '{\"prompt\": \"the weather\", \"sentence\": \"every day at 07:30\"}'\n")
+    program.chmod(program.stat().st_mode | stat.S_IEXEC)
+    return str(program)
+
+
+SCHEDULE_CARDS = [
+    {"id": "s1aa", "owner": "maya", "agent": "greeter", "prompt": "the weather",
+     "sentence": "every day at 08:00", "state": "active"},
+    {"id": "s2bb", "owner": "owner", "agent": "greeter", "prompt": "the owner's",
+     "sentence": "every day at 09:00", "state": "active"},
+]
+
+
+class TestChangingByHand:
+    def test_a_schedule_s_time_by_its_number(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE,
+                               samay=fake_samay_editing(tmp_path, SCHEDULE_CARDS))
+        listed, = run(service, say(service, "/schedules", actor="maya", agent="greeter"))
+        assert "1. the weather" in listed.text and "/schedules when NUMBER" in listed.text
+        reply, = run(service, say(service, "/schedules when 1 at 07:30", actor="maya",
+                                  agent="greeter"))
+        assert reply.text.startswith('Done. "the weather": every day at 07:30.')
+        assert (tmp_path / "asked").read_text().split("\n")[:3] == [
+            "edit", "s1aa", "--when=at 07:30"]
+
+    def test_what_it_does_and_the_only_one_needs_no_number(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE,
+                               samay=fake_samay_editing(tmp_path, SCHEDULE_CARDS))
+        run(service, say(service, "/schedules does the weather and my calendar",
+                         actor="maya", agent="greeter"))
+        assert (tmp_path / "asked").read_text().split("\n")[:3] == [
+            "edit", "s1aa", "--prompt=the weather and my calendar"]
+
+    def test_someone_else_s_number_finds_nothing_and_samay_s_no_is_passed_on(
+            self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE,
+                               samay=fake_samay_editing(tmp_path, SCHEDULE_CARDS))
+        reply, = run(service, say(service, "/schedules when 2 at 07:00", actor="maya",
+                                  agent="greeter"))
+        assert reply.text.startswith("You have no schedule 2")
+        reply, = run(service, say(service, "/schedules when 1 sometimes", actor="maya",
+                                  agent="greeter"))
+        assert reply.text == "Samay said: cannot read 'sometimes'"
+
+    def test_a_watch_s_line_moves_with_its_words(self, make_service, tmp_path):
+        service = make_service([], actors=PEOPLE, prahari=fake_prahari(tmp_path, WATCH_CARDS))
+        reply, = run(service, say(service, "/watches when 1 below 40", actor="maya",
+                                  agent="greeter"))
+        assert reply.text.startswith('Done. "ALAB under $50"')
+        assert (tmp_path / "asked").read_text().split() == [
+            "edit", "w1aa", "--when=below", "40", "--carry-words", "--json"]

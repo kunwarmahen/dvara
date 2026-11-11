@@ -61,9 +61,10 @@ def menu(spec: Any, *, schedules: bool = False, watches: bool = False,
     if phone:
         words += [("phone", "Your phone's screen and its last steps; /phone NAME for another")]
     if schedules:
-        words += [("schedules", "Your schedules")]
+        words += [("schedules", "Your schedules; /schedules when N at 08:00, does N new words")]
     if watches:
-        words += [("watches", "What I watch for you; /watches every N 6h, pause N, resume N"),
+        words += [("watches", "What I watch for you; /watches every N 6h, when N above 80, "
+                              "pause N, resume N"),
                   ("indriyas", "Readings for your watches; /indriyas N, what happened")]
     if routines:
         words += [("routines", "Your routines; /routines run N, /routines N how it went")]

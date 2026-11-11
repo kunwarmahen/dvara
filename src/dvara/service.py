@@ -1105,7 +1105,7 @@ class Service:
                                              owner=self.owner or "", text=text)
                     if word == seen.INDRIYAS else
                     await self.seen.schedules(actor, self.samay,
-                                              enabled=self.samay is not None))
+                                              enabled=self.samay is not None, text=text))
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="seen")
         if not unattended and (household.for_everyone(text) is not None

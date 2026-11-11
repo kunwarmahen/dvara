@@ -155,7 +155,9 @@ runs on every channel, a job of several steps offered back as a skill
 the person keeps for themselves, and `/tools`, `/schedules`,
 `/watches` and `/indriyas` answered from the record (`/watches every 2
 6h` changes how often one looks, `/watches pause 2` and `resume 2`
-whether it does; `/indriyas` lists the readings watches share); and with `--prahari`, its owner's agent offers to tell
+whether it does, `/watches when 2 above 80` what it waits for;
+`/schedules when 2 at 08:00` and `/schedules does 2 …` change a
+schedule in place; `/indriyas` lists the readings watches share); and with `--prahari`, its owner's agent offers to tell
 them when something happens; and with `--vidhi`, their routines on every
 channel (`/routines`, and a run's question answered with Yes and No); and limits for a child (hours, messages a
 day, an approver), facts everyone in the house knows, and a ready-made
@@ -1213,9 +1215,12 @@ for either phone (Yantra's notes/133). An agent sees only its package's skills (
 `skills/` folder) and the person's own, never the ones in
 `~/.yantra/skills` on this computer. `/tools`, `/schedules`,
 `/watches` and `/indriyas` answer from the record, with no turn,
-`/watches every N 6h` changes how often watch N looks, and `/watches
-pause N` / `resume N` stop and start it
-([notes/42](notes/42-seeing-the-work.md)).
+`/watches every N 6h` changes how often watch N looks, `/watches
+pause N` / `resume N` stop and start it, and `/watches when N above 80`
+moves its line, its name and words with it. `/schedules when N at 08:00`
+and `/schedules does N …` change schedule N's time or what it does, its
+runs and allowed tools kept
+([notes/42](notes/42-seeing-the-work.md), [notes/84](notes/84-changed-from-the-chat.md)).
 
 Every request carries `Authorization: Bearer $DVARA_TOKEN`. **The token
 authenticates the caller, not the person**: a caller is a channel adapter
@@ -1341,8 +1346,15 @@ dvara --ask --prahari /path/to/prahari serve --port 8765
 * `/watches` lists their own watches, numbered, with no turn;
   `/watches every 2 6h` changes how often the second one looks (and
   Prahari still refuses anything under 5 minutes); `/watches pause 2`
-  stops it looking, kept, and `/watches resume 2` starts it again
-  ([notes/42](notes/42-seeing-the-work.md)).
+  stops it looking, kept, and `/watches resume 2` starts it again;
+  `/watches when 2 above 80` changes what it waits for, and its name
+  and words that said the old number say the new one
+  ([notes/42](notes/42-seeing-the-work.md), [notes/84](notes/84-changed-from-the-chat.md)).
+* `/schedules` lists their own schedules, numbered; `/schedules when 2
+  at 08:00` moves the second one's time and `/schedules does 2 the
+  weather and my calendar` changes what it does, through `samay edit`:
+  same schedule, its runs and the tools it was allowed kept
+  ([notes/84](notes/84-changed-from-the-chat.md)).
 * `/indriyas` lists the readings they may use (their own, then the
   ones shared with the house), each with its value and age; `/indriyas
   2` says what happened to the second, reading by reading, with what
@@ -1712,7 +1724,7 @@ reads that person's key from `<state>/memory.json`
 | `watch.py` | a turn watched while it runs: its words, each step as a line, never what a tool read; a watcher that breaks is dropped, never the turn ([notes/42](notes/42-seeing-the-work.md)) |
 | `learning.py` | Yantra's learner behind the answer, asking nobody; offers kept per person per agent; `/learn` (a look asked for now); `/learn start|watch|done|stop|clear`, a lesson kept on disk per person per agent, no look halfway ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/skills`, `/skills keep|drop|forget`, a kept skill in the keeper's own folder; an agent sees only its package's skills and its person's own, never the computer's ([notes/42](notes/42-seeing-the-work.md)) |
 | `toolbox.py` | every tool an agent could be given, for the settings page's checkboxes: Yantra's built-ins, `send_file`, and Samay's, Prahari's and Sparsh's families filled in from what turns met ([notes/43](notes/43-a-box-for-each-tool.md)) |
-| `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay; `/watches`, theirs from Prahari, `/watches every N 6h` and `/watches pause|resume N`; `/indriyas`, the readings they may read, asked as them ([notes/42](notes/42-seeing-the-work.md)) |
+| `seen.py` | `/tools`, what the last turn was given; `/schedules`, the person's own from Samay, `/schedules when|does N …` changing one in place; `/watches`, theirs from Prahari, `/watches every N 6h`, `/watches pause|resume N` and `/watches when N above 80`; `/indriyas`, the readings they may read, asked as them ([notes/42](notes/42-seeing-the-work.md), [notes/84](notes/84-changed-from-the-chat.md)) |
 | `web.py` | the web channel: each person's lines on disk (what they said on a page, the answers, every notice, and the notices by themselves for a page's bell, with how far each person has read them, kept here so every page and address agrees, [notes/71](notes/71-one-conversation-two-chats.md)); a voice note's words on the person's own line ([notes/47](notes/47-a-voice-note.md)); an answer's steps from the kept conversation once the chat moved on, and each step's picture by line, step and number, only as an image ([notes/60](notes/60-a-run-step-by-step.md)); turns that run behind the request, the page's own conversation ([notes/34](notes/34-a-chat-on-a-page.md)); a running turn as `live`, and a skill offered on its notice ([notes/42](notes/42-seeing-the-work.md)); each open lesson as `lessons`, for a page's lesson bar ([notes/49](notes/49-a-job-taught-step-by-step.md)); `/new`'s answer marked `fresh`, and a page shown only from the newest one ([notes/34](notes/34-a-chat-on-a-page.md)); each page conversation its own chat, every line and live view saying its conversation, `working` in each look ([notes/79](notes/79-each-conversation-its-own-chat.md)); each agent's `/` words on a page's first look, and a look back's facts on its notice ([notes/80](notes/80-one-menu-and-a-keep-button.md)) |
 | `notices.py` | telling a person something nobody asked about: their channels, routed or kept for collection ([notes/17](notes/17-nobody-wrote-first.md)); one may carry a file, a scheduled run's `send_file` ([notes/26](notes/26-the-file-itself.md)); read aloud too for someone who chose "always", in their voice ([notes/65](notes/65-whose-voice-and-which-language.md)) |
 | `telegram.py` | the long poll, the 4096-character cap and the button ([notes/07](notes/07-four-thousand-and-ninety-six.md)), which loses its buttons however the question ended ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and the two under a turn that stopped to wait ([notes/16](notes/16-kept-for-when-you-are-back.md)); a person's file sent as a document ([notes/26](notes/26-the-file-itself.md)), a picture as a photo, falling back to a document, several pictures as one album ([notes/69](notes/69-a-picture-and-a-pdf.md)); an answer's Markdown as bold and italic, not asterisks ([notes/70](notes/70-bold-not-asterisks.md)); the `/` menu from `menu.py` ([notes/80](notes/80-one-menu-and-a-keep-button.md)); a question's picture sent as a photo above its buttons ([notes/32](notes/32-the-ring-in-the-chat.md)); **approve all for this task** under a question asked only because of a read ([notes/72](notes/72-asked-less-not-never.md)); a *Working…* message with a turn's last steps, and Keep / Not now under a skill offered ([notes/42](notes/42-seeing-the-work.md)); Keep / No under each fact a look back noticed, and Keep all / None of these, by the fact's mark, the buttons of what was answered taken away ([notes/81](notes/81-keep-on-every-road.md)); a reply to an old answer carries its conversation on, and `/chats` has a button for each ([notes/78](notes/78-carried-on-where-it-was-written.md)); each topic of a private chat with topics on its own conversation, answered inside it, the chat itself when Telegram refuses the topic ([notes/82](notes/82-a-topic-is-a-conversation.md)); a notice's `taps` (a routine's Yes and No) side by side, a press sending its word ([notes/83](notes/83-routines-from-the-chat.md)) |

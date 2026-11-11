@@ -1938,9 +1938,22 @@ could use on your last message, grouped by where each tool came from.
 `/watches` your watches from Prahari (with `--prahari`), numbered, each
 under its name with what you asked for, in your words. None
 is a turn, so they cost nothing. `/watches every 2 6h` changes how often
-your second watch looks (Prahari won't go under 5 minutes). Anything
-else about a schedule or a watch, ask the agent; to change what an agent
-may use, change its package ([notes/42](notes/42-seeing-the-work.md)).
+your second watch looks (Prahari won't go under 5 minutes).
+
+You can change a few things straight from the chat, too:
+
+```
+/schedules when 1 at 08:00        your first schedule now runs at 8
+/schedules does 1 the weather and my calendar
+/watches when 2 above 80          your second watch now waits for above 80
+```
+
+The schedule stays the same schedule: its past runs and the tools it may
+use are kept. A watch's name and words move with its number, so *Cool
+the guestroom above 70* becomes *…above 80*. Its next look starts fresh.
+Anything else about a schedule or a watch, ask the agent; to change what
+an agent may use, change its package
+([notes/42](notes/42-seeing-the-work.md), [notes/84](notes/84-changed-from-the-chat.md)).
 
 If the owner changes your `zone` because you moved, your schedules move
 with you: "every day at 8" is 8 where you are now, and you get a line

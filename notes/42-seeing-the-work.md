@@ -336,3 +336,6 @@ own_skills_only=True: []
 * ~~**Sending a file from a page into the person's folder.**~~ The
   paperclip, and a photo or document to the bot
   ([notes/44](44-what-they-send.md)).
+* ~~**Changing a schedule's time or words from the chat.**~~ `/schedules
+  when N` and `/schedules does N`, and a watch's line with `/watches when
+  N` ([notes/84](84-changed-from-the-chat.md)).

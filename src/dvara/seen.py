@@ -17,18 +17,25 @@ each turn writes down the tools it was given (``state/tools/<person>/
 <agent>.json``), and ``/tools`` reads that. Before a first turn there is
 nothing to read, and it says so.
 
-SEEING, NOT CHANGING. What a package may use is the owner's, in its
+SEEING, NOT WIDENING. What a package may use is the owner's, in its
 files (and on Sarathi's settings); a chat word that widened it would be
 a way around them. A schedule is paused or removed by asking the agent,
-which asks the person on their channel first (Samay's tools), so there
-is one way to change one.
+which asks the person on their channel first (Samay's tools).
 
-HOW OFTEN, AND WHETHER, ARE THE ONLY CHANGES. ``/watches every 2 6h``
+WHEN AND WHAT, BY HAND. ``/schedules when 2 at 08:00`` and ``/schedules
+does 2 the weather and my calendar`` change their second schedule in
+place, through ``samay edit`` -- its runs and allowed tools stay, so new
+words can't reach anything the old ones couldn't. Found among their own
+only, by its number in ``/schedules``.
+
+HOW OFTEN, WHETHER, AND ITS LINE. ``/watches every 2 6h``
 changes how often their second watch looks, through ``prahari edit``,
 the same change Prahari's page and Yantra's panel make with their Every
 box; ``/watches pause 2`` and ``/watches resume 2`` stop it looking and
-start it again (``prahari pause|resume``), both undone by the other. It
-is the person's own watch and only its pace: what it checks, what the
+start it again (``prahari pause|resume``), both undone by the other.
+``/watches when 2 above 80`` moves its line, and the number goes into
+its name and words too (``--carry-words``), so the list never says 70
+for a watch acting at 80. It is the person's own watch: what it checks, what the
 agent may do when it fires, and removing it still go through the agent,
 which asks. A watch is
 found among THEIR OWN first (Prahari files them under the person's name,
@@ -124,8 +131,10 @@ class Seen:
         out.append("What it may use is set by whoever runs this for you.")
         return "\n".join(out)
 
-    async def schedules(self, actor: str, samay: str | None, *, enabled: bool) -> str:
-        """Their schedules, as Samay says them."""
+    async def schedules(self, actor: str, samay: str | None, *, enabled: bool,
+                        text: str = "") -> str:
+        """Their schedules, as Samay says them; ``/schedules when N W`` and
+        ``/schedules does N WORDS`` change one in place."""
         if not enabled:
             return "Schedules aren't switched on here."
         program = samay or shutil.which("samay")
@@ -141,11 +150,16 @@ class Seen:
         if not isinstance(cards, list):
             return "Samay didn't list its schedules. Try again soon."
         mine = [c for c in cards if isinstance(c, dict) and c.get("owner") == actor]
+        rest = text.strip().split(maxsplit=3)[1:]
+        if rest and rest[0].lower() in ("when", "does"):
+            return await self._change_schedule(program, mine, rest[0].lower(), rest[1:])
+        if rest:
+            return f"I don't know \"/schedules {' '.join(rest)}\". " + CHANGE_HOW
         if not mine:
             return ("You have no schedules. Ask me to do something at a time — "
                     "\"every morning at 8, tell me the weather\" — and I'll set one up.")
         out = ["Your schedules:"]
-        for card in mine:
+        for n, card in enumerate(mine, 1):
             state = card.get("state") or ""
             paused = (f" — paused: {card.get('paused_because')}" if state != "active"
                       and card.get("paused_because") else
@@ -155,11 +169,29 @@ class Seen:
                    f"{_when(last.get('ended_at') or last.get('due_at'))}."
                    if last.get("outcome") else "")
             agent = Path(str(card.get("agent") or "")).name
-            out.append(f"• {card.get('prompt') or '(no words)'} ({agent}, id {card.get('id')})")
+            out.append(f"{n}. {card.get('prompt') or '(no words)'} ({agent}, id {card.get('id')})")
             out.append(f"  {card.get('sentence') or ''}{paused}.{how}")
         out.append("")
-        out.append("To pause, change or remove one, just ask me.")
+        out.append(CHANGE_HOW + " To pause or remove one, just ask me.")
         return "\n".join(out)
+
+    async def _change_schedule(self, program: str, mine: list[dict], word: str,
+                               words: list[str]) -> str:
+        if words and not words[0].isdigit() and len(mine) == 1:
+            words = ["1", " ".join(words)]      # the one schedule they have
+        if len(words) != 2 or not words[1].strip():
+            return CHANGE_HOW
+        card = _which(mine, words[0])
+        if card is None:
+            return (f"You have no schedule {words[0]}. Send /schedules to see their "
+                    "numbers." if mine else "You have no schedules.")
+        flag = "--when" if word == "when" else "--prompt"
+        changed, trouble = await ask_json([program, "edit", str(card["id"]),
+                                            f"{flag}={words[1].strip()}", "--json"])
+        if trouble or not isinstance(changed, dict):
+            return trouble or "Samay didn't change it. Try again soon."
+        return (f"Done. \"{changed.get('prompt')}\": {changed.get('sentence') or ''}. "
+                "Its past runs and what it may use are kept.")
 
     async def watches(self, actor: str, text: str, prahari: str | None, *,
                       enabled: bool, is_owner: bool = False) -> str:
@@ -180,9 +212,11 @@ class Seen:
             return await self._every(program, mine, rest[1:])
         if rest and rest[0].lower() in ("pause", "resume"):
             return await self._pause(program, mine, rest[0].lower(), rest[1:])
+        if rest and rest[0].lower() == "when":
+            return await self._line(program, mine, rest[1:])
         if rest:
             return (f"I don't know \"/watches {' '.join(rest)}\". "
-                    + EVERY_HOW + " " + PAUSE_HOW)
+                    + EVERY_HOW + " " + PAUSE_HOW + " " + LINE_HOW)
         if not mine:
             return ("You have no watches. Ask me to tell you when something happens — "
                     "\"tell me when ALAB drops below $50\" — and I'll set one up.")
@@ -205,7 +239,8 @@ class Seen:
                 out.append(f"  You asked: \"{card['asked']}\"")
             out.append(f"  {card.get('sentence') or ''}{paused}.{how}")
         out.append("")
-        out.append(EVERY_HOW + " " + PAUSE_HOW + " To mend or remove one, just ask me.")
+        out.append(EVERY_HOW + " " + PAUSE_HOW + " " + LINE_HOW
+                   + " To mend more or remove one, just ask me.")
         return "\n".join(out)
 
     async def indriyas(self, actor: str, prahari: str | None, *, enabled: bool,
@@ -317,6 +352,26 @@ class Seen:
         return f"Done. \"{changed.get('name')}\": {changed.get('sentence') or ''}."
 
 
+    async def _line(self, program: str, mine: list[dict], words: list[str]) -> str:
+        """``/watches when N above 80``: its test, and its words with it."""
+        if words and not words[0].isdigit() and len(mine) == 1:
+            words = ["1", *words]         # the one watch they have
+        if len(words) < 2:
+            return LINE_HOW
+        card = _which(mine, words[0])
+        if card is None:
+            return (f"You have no watch {words[0]}. Send /watches to see their numbers."
+                    if mine else "You have no watches.")
+        changed, trouble = await ask_json([program, "edit", str(card["id"]),
+                                            f"--when={' '.join(words[1:])}",
+                                            "--carry-words", "--json"])
+        if trouble or not isinstance(changed, dict):
+            return trouble or "Prahari didn't change it. Try again soon."
+        renamed = (f" (was \"{card.get('name')}\")"
+                   if changed.get("name") and changed.get("name") != card.get("name") else "")
+        return (f"Done. \"{changed.get('name')}\"{renamed}: "
+                f"{changed.get('sentence') or ''}. It starts fresh at its next look.")
+
     async def _pause(self, program: str, mine: list[dict], word: str,
                      words: list[str]) -> str:
         if not words and len(mine) == 1:
@@ -345,6 +400,11 @@ class Seen:
 HISTORY_SHOWN = 5
 #: How to change how often, said wherever it helps.
 EVERY_HOW = "To change how often one looks: /watches every NUMBER 6h (30m, 3h, 1d)."
+#: How to move a watch's line.
+LINE_HOW = "To change what it waits for: /watches when NUMBER above 80."
+#: How to change a schedule by hand.
+CHANGE_HOW = ("To change one: /schedules when NUMBER at 08:00, or /schedules does "
+              "NUMBER what to do each time.")
 #: How to stop and start one.
 PAUSE_HOW = "To stop one looking: /watches pause NUMBER (and /watches resume NUMBER)."
 
