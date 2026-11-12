@@ -164,7 +164,7 @@ day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
 read aloud on this machine, after the words, for whoever wants to hear
 them, in their own voice or one for the answer's language — covered by
-1303 tests. The API is not stable.
+1333 tests. The API is not stable.
 
 ## The shape of it
 

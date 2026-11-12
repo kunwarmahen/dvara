@@ -39,7 +39,7 @@ Your routines:
 1. Morning brief — 1 model ask per run
 2. Coat check — 1 model ask per run
 
-/routines N for how one went, /routines run N to start it. …
+/routines N for how one went and what starts it, /routines run N to start it, …
 ```
 
 `/routines 2` is the second one's last three runs, step by step;
@@ -54,7 +54,9 @@ doesn't exist. A second answer says what the first one decided.
 **THE COMPUTER'S ROUTINES ARE THE OWNER'S.** A routine installed at the
 computer is filed under `local`, and its questions come to the owner's
 chat (`VIDHI_DVARA_ACTOR`). For the owner, `/routines` lists both, and an
-answer not theirs by name is tried as `local`.
+answer not theirs by name is tried as `local`. Vidhi itself now reads the
+owner's Dvara name as `local`, so the two names give the same routines,
+each listed once (below).
 
 ## Their agent
 
