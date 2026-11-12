@@ -1379,8 +1379,14 @@ dvara --ask --vidhi /path/to/vidhi serve --port 8765
 ```
 
 * `/routines` lists their routines and any question a run is waiting
-  on; `/routines 2` says how the second one's last runs went, step by
-  step; `/routines run 2` starts it. None is a turn.
+  on; `/routines 2` says what fills its blanks, what starts it and how
+  its last runs went, step by step; `/routines run 2` starts it. None is
+  a turn.
+* `/routines set 2 line=40` fills a blank; `/routines at 2 20:00` starts
+  it every day then (a Samay schedule); `/routines on 2 outside-temp
+  below 35` starts it when a reading crosses a line (a Prahari watch, no
+  model); `/routines drop 2 samay:ID` stops one. Each is made by Vidhi
+  with Samay's or Prahari's own commands, so it is on their pages too.
 * A run that stops to ask puts its question in their chat with **Yes**
   and **No**: `/notify` takes `taps`, at most three slash words a
   channel draws as buttons and a press sends as if typed. Telegram draws

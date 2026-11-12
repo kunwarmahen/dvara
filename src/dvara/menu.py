@@ -67,7 +67,8 @@ def menu(spec: Any, *, schedules: bool = False, watches: bool = False,
                               "pause N, resume N"),
                   ("indriyas", "Readings for your watches; /indriyas N, what happened")]
     if routines:
-        words += [("routines", "Your routines; /routines run N, /routines N how it went")]
+        words += [("routines", "Your routines; /routines run N, /routines N how it went and "
+                               "what starts it, /routines at N 20:00, /routines set N x=1")]
     return words
 
 

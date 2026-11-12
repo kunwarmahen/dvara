@@ -173,3 +173,58 @@ line: there the question sits under the bell with its own buttons and a
 box for words, and a page line saying "reply" would point at nothing. An
 ntfy notification gets none either: nothing typed reaches it. The line is
 never added twice, and a message that isn't a question gets none.
+
+## What fills it and what starts it
+
+A routine in the chat could be started and answered, never set up. Its
+blanks (which reading, which line, what to send) were filled on Vidhi's
+page or by the agent, and nothing said what starts it by itself.
+
+**`/routines 2` SAYS ALL OF IT.** Its blanks as they are filled, every
+Samay schedule and Prahari watch that starts it, each with the words that
+drop it, and then the last runs. Four words change it, none a turn:
+
+| Words | What it does |
+|---|---|
+| `/routines set 2 line=33` | fills a blank (`vidhi inputs`); several pairs, and a value with spaces: `message=Bring the cat in` |
+| `/routines at 2 07:15` | a Samay schedule that starts it (`vidhi starts --at`); `at 07:30 on mon-fri` and `every 2h` too |
+| `/routines on 2 outside-temp below 35` | a Prahari watch on that reading that starts it (`vidhi starts --on`): no model, decided on every reading |
+| `/routines drop 2 samay:ID` | that one stops starting it (only one of this routine's own) |
+
+Vidhi makes each one with Samay's or Prahari's own commands
+([Vidhi's notes/09](https://github.com/kunwarmahen/vidhi/blob/main/notes/09-what-starts-it-and-a-step-tried.md)),
+so it is an ordinary schedule or watch, on their pages and in
+`/schedules` and `/watches`. Their own rules hold: a second watch on the
+same reading is refused in Prahari's words, with the one to mend
+instead.
+
+**ONE ROUTINE IS LISTED ONCE.** Vidhi now reads Dvara's name for the
+owner as `local`, so the owner's chat, which asks for both names, would
+get every routine twice. Each is kept once, by whose and what it is, and
+so is each waiting question, by its code.
+
+### Live receipt
+
+Dvara's own `Routines`, the owner, against a scratch Vidhi, Samay and
+Prahari:
+
+```
+>>> /routines 1
+Cold night warning
+Blanks: reading=outside-temp, line=35, message=It's going to be a cold night: cover the plants and bring the cat in.  (/routines set 1 name=value)
+Starts it:
+  Samay: at 20:00 (active)  — /routines drop 1 samay:0a0d1da6
+  Prahari: Cold night warning: outside-temp below 35 (active)  — /routines drop 1 prahari:5bfbc4e7
+Last runs:
+• 2026-11-12 03:07 — waiting: waiting for your answer (go)
+    The temperature now: done (read 3 min ago)
+    Below the line?: done (31 is below 35)
+    Ask me first: waiting (asked you (323NSM))
+>>> /routines set 1 line=33
+Cold night warning: reading=outside-temp, line=33, message=It's going to be a cold night: cover the plants and bring the cat in.
+>>> /routines at 1 07:15
+Cold night warning now starts by itself (Samay c9f55796): every day at 07:15 -- next: Thu 12 Nov 07:15, Fri 13 Nov 07:15, Sat 14 Nov 07:15 (America/New_York)
+>>> /routines on 1 outside-temp below 20
+Vidhi-scratch said: Prahari didn't make it: local already has a watch on exactly this: 5bfbc4e7 (Cold night warning: outside-temp below 35) -- … Mend that one (its test, how often) instead of making a second; ask the person first
+```
+

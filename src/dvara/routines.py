@@ -14,6 +14,13 @@ of these is a turn -- no model, no allowance spent:
                               a number, or a time of day, which Vidhi checks)
     /routines K7Q2MX ...      the same, by the question's code alone
     /routines stop RUN        stop a run that is going or waiting
+    /routines set 2 line=40   fill its blanks (several: line=40 message=Bring the cat in)
+    /routines at 2 20:00      start it every day then (a Samay schedule:
+                              "at 07:30 on mon-fri", "every 2h")
+    /routines on 2 outside-temp below 35
+                              start it when a reading crosses a line (a
+                              Prahari watch, no model)
+    /routines drop 2 samay:ID stop one schedule or watch starting it
 
 A QUESTION IS ANSWERED FROM ANY CHANNEL. A run that stopped to ask puts
 its question on the person's channels with buttons -- Yes and No, or
@@ -40,6 +47,16 @@ the computer is filed under ``local``, and its questions come to the
 owner's chat; so for the owner, ``/routines`` lists both, and an answer
 that isn't theirs by name is tried as ``local``.
 
+WHAT STARTS IT IS SAID WITH IT. ``/routines 2`` says its blanks as they
+are filled and every schedule and watch that starts it, each with the
+words that drop it. ``at`` and ``on`` make an ordinary Samay schedule or
+Prahari watch (``vidhi starts``: Vidhi asks them with their own
+commands), there on their pages too.
+
+ONE ROUTINE IS LISTED ONCE. Vidhi reads Dvara's name for the owner as
+``local``, so asking for both names gives the same routines twice; each
+is kept once, by whose and what it is.
+
 DRAWING ONE IS VIDHI'S PAGE. Nothing here writes a step: what a routine
 does is drawn by a person, on Vidhi's own page.
 """
@@ -55,8 +72,12 @@ ROUTINES = "/routines"
 LOCAL = "local"
 #: Runs shown for one routine.
 RUNS_SHOWN = 3
-HOW = ("/routines N for how one went, /routines run N to start it. Ask me to set up one "
-       "of the ready ones; a new kind is drawn on Vidhi's page.")
+HOW = ("/routines N for how one went and what starts it, /routines run N to start it, "
+       "/routines set N name=value to fill a blank, /routines at N 20:00 or /routines on N "
+       "READING below 35 to start it by itself. Ask me to set up one of the ready ones; a "
+       "new kind is drawn on Vidhi's page.")
+#: ``/routines set 2 line=40 message=Bring the cat in``: a pair starts at NAME=
+PAIR = re.compile(r"^[A-Za-z0-9_-]+=")
 
 
 #: A run's question code (Vidhi's: six letters and digits).
@@ -134,6 +155,12 @@ class Routines:
             return await self._start(program, people, words[1], via)
         if verb == "stop" and len(words) == 2:
             return await self._stop(program, people, words[1])
+        if verb in ("set", "at", "on", "drop"):
+            if len(words) < 3:
+                return {"set": "/routines set N name=value", "at": "/routines at N 20:00",
+                        "on": "/routines on N READING below 35",
+                        "drop": "/routines drop N samay:ID (the words /routines N gives)"}[verb]
+            return await self._change(program, people, verb, words[1], words[2:])
         if words and CODE.fullmatch(words[0]) and not words[0].isdigit():
             question = await self._asked(program, people, words[0])
             if question is not None:
@@ -149,11 +176,16 @@ class Routines:
 
     async def _list(self, program: str, people: list[str]) -> list[dict] | str:
         found: list[dict] = []
+        seen: set[tuple] = set()
         for person in people:
             cards, trouble = await ask_json([program, "list", f"--as={person}", "--json"])
             if trouble:
                 return trouble
-            found += [c for c in cards or [] if isinstance(c, dict)]
+            for card in cards or []:
+                key = (card.get("owner"), card.get("name")) if isinstance(card, dict) else None
+                if key and key not in seen:
+                    seen.add(key)
+                    found.append(card)
         return found
 
     async def _overview(self, program: str, people: list[str], cards: list[dict]) -> str:
@@ -161,7 +193,8 @@ class Routines:
         asks = []
         for person in people:
             open_now, _ = await ask_json([program, "questions", f"--as={person}", "--json"])
-            asks += [q for q in open_now or [] if isinstance(q, dict)]
+            asks += [q for q in open_now or [] if isinstance(q, dict)
+                     and q.get("code") not in {a.get("code") for a in asks}]
         if asks:
             out.append("Waiting for your answer:")
             for q in asks:
@@ -210,9 +243,10 @@ class Routines:
                                         "--json"])
         if trouble:
             return trouble
+        out = await self._about(program, card, which)
         if not runs:
-            return f"{card.get('title')} hasn't run yet. /routines run {which} starts it."
-        out = [f"{card.get('title')}, last runs:"]
+            return "\n".join(out + [f"It hasn't run yet. /routines run {which} starts it."])
+        out.append("Last runs:")
         for run in runs:
             out.append(f"• {run.get('created_at', '')[:16].replace('T', ' ')} — "
                        f"{run.get('state')}" + (f": {run.get('detail')}"
@@ -224,6 +258,66 @@ class Routines:
                 out.append(f"    {step.get('title')}: {step.get('state')}"
                            + (f" ({said})" if said else ""))
         return "\n".join(out)
+
+    async def _about(self, program: str, card: dict, which: str) -> list[str]:
+        """Its blanks as they are filled, and what starts it."""
+        out = [f"{card.get('title')}"]
+        filled = card.get("inputs") or {}
+        if filled:
+            out.append("Blanks: " + ", ".join(f"{k}={v}" for k, v in filled.items())
+                       + f"  (/routines set {which} name=value)")
+        started, trouble = await ask_json([program, "starts", str(card["name"]),
+                                           f"--as={card['owner']}", "--json"])
+        items = (started or {}).get(str(card["name"])) or [] if not trouble else []
+        if items:
+            out.append("Starts it:")
+            out += [f"  {x.get('words')} ({x.get('state')})  — /routines drop {which} "
+                    f"{x.get('by')}:{x.get('id')}" for x in items]
+        elif not trouble:
+            out.append(f"Nothing starts it by itself: /routines at {which} 20:00, or "
+                       f"/routines on {which} READING below 35.")
+        return out
+
+    async def _change(self, program: str, people: list[str], verb: str, which: str,
+                      rest: list[str]) -> str:
+        cards = await self._list(program, people)
+        if isinstance(cards, str):
+            return cards
+        card = _which(cards, which)
+        if card is None:
+            return f"You have no routine {which}. Send /routines to see them."
+        name, owner, title = str(card["name"]), f"--as={card['owner']}", card.get("title")
+        if verb == "set":
+            pairs: list[str] = []
+            for word in rest:
+                if PAIR.match(word) or not pairs:
+                    pairs.append(word)
+                else:
+                    pairs[-1] += " " + word
+            said, trouble = await ask_json([program, "inputs", name, *pairs, owner, "--json"])
+            if trouble:
+                return trouble
+            return f"{title}: " + ", ".join(f"{k}={v}" for k, v in
+                                           (said.get("inputs") or {}).items())
+        if verb == "at":
+            when = " ".join(rest)
+            if when[:1].isdigit():
+                when = "at " + when
+            argv = [program, "starts", name, "--at", when, owner, "--json"]
+        elif verb == "on":
+            if len(rest) < 3:
+                return "/routines on N READING below 35 (or above 80)"
+            argv = [program, "starts", name, "--on", rest[0], "--when", " ".join(rest[1:]),
+                    owner, "--json"]
+        else:
+            argv = [program, "starts", name, "--rm", rest[0], owner, "--json"]
+        said, trouble = await ask_json(argv)
+        if trouble:
+            return trouble
+        if "removed" in said:
+            return f"{said['removed']} no longer starts {title}."
+        where = "Samay" if said.get("by") == "samay" else "Prahari"
+        return f"{title} now starts by itself ({where} {said.get('made')}): {said.get('sentence')}"
 
     # -- doing ----------------------------------------------------------------------
 

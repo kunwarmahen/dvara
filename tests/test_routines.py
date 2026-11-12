@@ -30,10 +30,12 @@ open(sys.argv[0] + ".log", "a").write(json.dumps(argv) + "\\n")
 who = next((a.split("=", 1)[1] for a in argv if a.startswith("--as=")), "local")
 if argv[0] == "list":
     cards = {"asha": [{"name": "brief", "title": "Morning brief", "state": "active",
-                       "cost": "1 model ask per run", "owner": "asha"}],
+                       "cost": "1 model ask per run", "owner": "asha",
+                       "inputs": {"city": "Cary"}}],
              "local": [{"name": "cold-night", "title": "Cold night", "state": "paused",
                         "cost": "no model", "owner": "local"}]}
-    print(json.dumps(cards.get(who, [])))
+    # Vidhi reads Dvara's name for the owner as local: both give local's
+    print(json.dumps(cards.get("local" if who == "owner" else who, [])))
 elif argv[0] == "questions":
     qs = {"local": [{"code": "K7Q2MX", "text": "Send it?", "owner": "local"}]}
     print(json.dumps(qs.get(who, [])))
@@ -45,6 +47,18 @@ elif argv[0] == "answer":
                       "run": {"state": "queued"}}))
 elif argv[0] == "start":
     print(json.dumps({"id": "ab12cd34", "state": "queued"}))
+elif argv[0] == "starts" and "--at" in argv:
+    print(json.dumps({"made": "s9", "by": "samay", "sentence": "every day at 20:00"}))
+elif argv[0] == "starts" and "--on" in argv:
+    print(json.dumps({"made": "w9", "by": "prahari", "sentence": "senses outside-temp"}))
+elif argv[0] == "starts" and "--rm" in argv:
+    print(json.dumps({"removed": argv[argv.index("--rm") + 1].split(":")[1]}))
+elif argv[0] == "starts":
+    print(json.dumps({argv[1]: [{"by": "samay", "id": "s1", "state": "active",
+                                 "words": "Samay: at 07:00"}]}))
+elif argv[0] == "inputs":
+    print(json.dumps({"name": argv[1], "inputs": dict(a.split("=", 1) for a in argv[2:]
+                                                     if "=" in a and not a.startswith("--"))}))
 elif argv[0] == "runs":
     print(json.dumps([{"created_at": "2026-11-09T07:00:00", "state": "done", "detail": "",
                        "steps": [{"title": "Weather", "state": "done", "why": ""},
@@ -109,7 +123,36 @@ def test_a_run_is_started_as_the_routines_own_person(vidhi):
 
 def test_how_a_routine_went(vidhi):
     said = _say(vidhi, "asha", "/routines 1")
-    assert "Morning brief, last runs:" in said and "Send: done (sent to you)" in said
+    assert said.startswith("Morning brief\nBlanks: city=Cary")
+    assert "Samay: at 07:00 (active)  — /routines drop 1 samay:s1" in said
+    assert "Last runs:" in said and "Send: done (sent to you)" in said
+
+
+def test_the_owners_routines_are_listed_once_though_asked_by_both_names(vidhi):
+    said = _say(vidhi, "owner", "/routines", is_owner=True)
+    assert said.count("Cold night") == 1
+
+
+def test_a_blank_is_filled_from_the_chat_words_and_all(vidhi):
+    said = _say(vidhi, "asha", "/routines set 1 city=Chapel Hill unit=celsius")
+    assert said == "Morning brief: city=Chapel Hill, unit=celsius"
+    sent = next(a for a in _log(vidhi) if a[0] == "inputs")
+    assert sent[:4] == ["inputs", "brief", "city=Chapel Hill", "unit=celsius"]
+    assert "--as=asha" in sent
+
+
+def test_a_time_or_a_reading_starts_it_and_drop_stops_one(vidhi):
+    assert "now starts by itself (Samay s9)" in _say(vidhi, "asha", "/routines at 1 20:00")
+    at = next(a for a in _log(vidhi) if "--at" in a)
+    assert at[at.index("--at") + 1] == "at 20:00" and "--as=asha" in at
+    assert "(Prahari w9)" in _say(vidhi, "asha", "/routines on 1 outside-temp below 35")
+    on = next(a for a in _log(vidhi) if "--on" in a)
+    assert on[on.index("--on") + 1] == "outside-temp" and on[on.index("--when") + 1] == "below 35"
+    assert _say(vidhi, "asha", "/routines drop 1 samay:s1") == "s1 no longer starts Morning brief."
+
+
+def test_a_change_word_with_too_little_says_how(vidhi):
+    assert _say(vidhi, "asha", "/routines at 1") == "/routines at N 20:00"
 
 
 def test_with_no_vidhi_it_says_so(tmp_path, monkeypatch):
