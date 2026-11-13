@@ -164,7 +164,7 @@ day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
 read aloud on this machine, after the words, for whoever wants to hear
 them, in their own voice or one for the answer's language — covered by
-1353 tests. The API is not stable.
+1355 tests. The API is not stable.
 
 ## The shape of it
 
@@ -364,6 +364,14 @@ under it; `receipt = "remaining"` puts what is left of their allowance,
 and, under a turn that kept them waiting, how much waiting is left today
 ([notes/15](notes/15-where-the-waiting-shows.md)). Absent — the default —
 puts nothing.
+
+**When the model didn't answer.** Under every answer that a model standing
+by gave (Yantra's `YANTRA_FALLBACK`; Sarathi's *When it doesn't answer*),
+one line says so — *↪ qwen3.8-64k:latest (ollama) didn't answer (nothing
+is listening there), so gemma4:12b … answered* — and the run's `detail`
+keeps it. A turn whose model didn't answer at all is told *The model
+didn't answer …, so nothing was done. Ask again in a little while.*,
+instead of *that went wrong at my end* (Yantra's notes/159).
 
 Two keys rather than one boolean because two readers want two different
 numbers: an owner is watching a bill, and a person on an allowance is

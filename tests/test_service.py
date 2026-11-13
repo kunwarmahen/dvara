@@ -769,3 +769,38 @@ def test_a_refused_turn_carries_no_receipt(make_service):
     actors = ActorBook.from_dict({"actor": {"owner": {"receipt": "cost"}}})
     service = make_service(actors=actors)
     assert deliver(service, agent="nope").receipt is None
+
+
+def _down(provider):
+    import httpx
+
+    async def astream(**kwargs):
+        raise httpx.ConnectError("[Errno 111] Connection refused")
+        yield  # pragma: no cover
+    provider.astream = astream
+    provider.stream = None
+
+
+def test_a_model_that_didnt_answer_is_said_in_words(make_service):
+    service = make_service()
+    _down(service.scripted)
+    reply = deliver(service)
+    assert reply.stop_reason == "error"
+    assert reply.text.startswith("The model didn't answer (nothing is listening there), "
+                                 "so nothing was done.")
+
+
+def test_a_model_standing_by_answers_and_the_person_hears_which(make_service, monkeypatch):
+    from tests.conftest import says
+    from yantra.providers import standby
+
+    from tests.conftest import ScriptedProvider
+    spare = ScriptedProvider([says("from the spare")])
+    spare.name = "ollama"
+    monkeypatch.setattr(standby, "standbys", lambda raw=None, say=None: [(spare, "gemma4:12b")])
+    service = make_service()
+    _down(service.scripted)
+    reply = deliver(service)
+    assert reply.text.startswith("from the spare")
+    assert "↪ test-model" in reply.text and "so gemma4:12b (ollama) answered" in reply.text
+    assert "gemma4:12b (ollama) answered" in service.runs.recent()[0].detail

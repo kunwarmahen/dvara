@@ -195,6 +195,13 @@ CLOCK_OFF = ("Samay's clock is not running on this service right now: when you "
              "starts it. Do not ask the person to run anything.")
 
 
+def _down_words(exc: BaseException) -> str | None:
+    """A failed turn's reply when the model didn't answer (Yantra's
+    providers/standby.py); None for any other failure."""
+    from yantra.providers.standby import down_words
+    return down_words(exc)
+
+
 def _default_provider(name: str) -> Provider:
     """Yantra's own resolution: settings from the environment, one pool."""
     return get_provider(name, load_settings(name))
@@ -1235,7 +1242,8 @@ class Service:
             except Exception as exc:  # noqa: BLE001 -- see the docstring
                 run.stop_reason = "error"
                 run.detail = f"{type(exc).__name__}: {exc}"
-                run.reply = "that went wrong at my end"
+                # a model that didn't answer says so, and that nothing was done
+                run.reply = _down_words(exc) or "that went wrong at my end"
                 self.runs.record(run)
                 return Reply(text=run.reply, run_id=run.id, agent=agent,
                              actor=actor, stop_reason="error",
@@ -1342,7 +1350,7 @@ class Service:
                 except Exception as exc:  # noqa: BLE001 -- as deliver
                     run.stop_reason = "error"
                     run.detail = f"{type(exc).__name__}: {exc}"
-                    run.reply = "that went wrong at my end"
+                    run.reply = _down_words(exc) or "that went wrong at my end"
                     self.runs.record(run)
                     return Reply(text=run.reply, run_id=run.id, agent=run.agent,
                                  actor=actor, stop_reason="error",
@@ -2036,6 +2044,12 @@ class Service:
             kept = []
         if noticed := self._noticed(agent, run):
             run.reply = f"{run.reply}\n\n{noticed}"
+        if end is not None and end.switched:
+            # a model standing by answered (Yantra's providers/standby.py):
+            # the person hears whose words these are, and the ledger keeps it
+            said = "; ".join(end.switched)
+            run.reply = f"{run.reply}\n\n_↪ {said}._"
+            run.detail = f"{run.detail}; {said}" if run.detail else said
         self.runs.record(run)
         # Behind the answer: learned skills counted, and a look for one to
         # keep (learning.py) -- started now, run after this returns.
