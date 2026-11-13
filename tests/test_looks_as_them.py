@@ -246,3 +246,25 @@ class TestAPageOnASparePhone:
         asyncio.run(service.call(actor="owner", agent="greeter", tool="read_file",
                                  arguments={"path": "n.txt"}))
         assert started == []
+
+
+class TestAPictureForALookThatWillBeSeen:
+    def test_pictures_true_hands_the_picture_back_and_false_keeps_it(self, looks):
+        import base64
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        service = looks()
+        (folder(service, "guest") / "porch.png").write_bytes(png)
+        with TestClient(create_app(service, token=TOKEN)) as client:
+            asked = client.post("/call", headers={"Authorization": f"Bearer {TOKEN}"},
+                                json={"actor": "guest", "agent": "greeter",
+                                      "tool": "read_image", "args": {"path": "porch.png"},
+                                      "pictures": True}).json()
+            plain = client.post("/call", headers={"Authorization": f"Bearer {TOKEN}"},
+                                json={"actor": "guest", "agent": "greeter",
+                                      "tool": "read_image",
+                                      "args": {"path": "porch.png"}}).json()
+        assert asked["ok"], asked["detail"]
+        assert asked["pictures"][0]["media_type"] == "image/png"
+        assert base64.b64decode(asked["pictures"][0]["data"]) == png
+        assert plain["images"] == 1 and "pictures" not in plain

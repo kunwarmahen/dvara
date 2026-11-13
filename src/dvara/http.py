@@ -443,7 +443,9 @@ def create_app(service: Service, *, token: str,
         """One tool, once, as one person, with no model (service.call):
         a watch's look, made with its person's own accounts. 200 with
         ``yantra.call.v1`` either way -- a tool that failed or was refused
-        is the look's answer; 404 for a person watches are off for."""
+        is the look's answer; 404 for a person watches are off for.
+        ``pictures: true`` hands back a picture the tool answered with (a
+        camera's snapshot) inline, for a look that will be seen."""
         check(authorization)
         body = await request.json()
         missing = [f for f in ("actor", "agent", "tool")
@@ -465,7 +467,8 @@ def create_app(service: Service, *, token: str,
                                       tool=body["tool"], arguments=arguments,
                                       allow_tools=allow_tools,
                                       came_by=came_by if isinstance(came_by, str) else None,
-                                      label=label if isinstance(label, str) else "")
+                                      label=label if isinstance(label, str) else "",
+                                      pictures=body.get("pictures") is True)
         except Refused as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
 

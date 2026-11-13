@@ -619,7 +619,7 @@ class Service:
 
     async def call(self, *, actor: str, agent: str, tool: str, arguments: dict,
                    allow_tools: Sequence[str] = (), came_by: str | None = None,
-                   label: str = "") -> dict:
+                   label: str = "", pictures: bool = False) -> dict:
         """One tool, once, as this person, and no model (``POST /call``).
 
         A WATCH LOOKS WITH ITS PERSON'S ACCOUNTS. Prahari repeats a watch's
@@ -674,7 +674,7 @@ class Service:
                 asked=asked_by(came_by or "prahari", clean_label(label), who.id))
             try:
                 called = await asyncio.to_thread(call_once, looker, tool, arguments,
-                                                 list(allow_tools))
+                                                 list(allow_tools), pictures)
             finally:
                 if servers is not None:
                     await asyncio.to_thread(servers.shutdown)
