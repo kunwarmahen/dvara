@@ -2273,6 +2273,7 @@ Each topic, and the note that argues it:
 | `notes/77-kept-and-told.md` | on `yolo` the agent keeps a fact unasked: a *Kept about you* line under the answer, and the look back names what was already kept |
 | `notes/80-one-menu-and-a-keep-button.md` | one `/` menu for Telegram and the home page (`menu.py`), and **Keep** / **No** on a look back's notice, by the fact's words (`POST /web/remember`) |
 | `notes/81-keep-on-every-road.md` | Keep and No on a look back's notice on Telegram and a phone (one notification per fact there), each button carrying a short mark of its fact's words; one answer at a time for each person |
+| `notes/85-who-may-do-what.md` | `dvara grants` and the page's *Who may do what unasked*: every standing yes with what it was used for; a rule's `until`, after which it asks again |
 | `notes/51-starting-over-at-once.md` | `/new` answered at once, the look back behind it, and what it noticed sent as a message of its own |
 | `notes/52-googles-page-in-the-window.md` | `/connect gmail` with a window address: Google's page streamed to their phone, so its return to `127.0.0.1` lands here and nothing is pasted |
 | `notes/46-a-tool-from-their-skill.md` | a person's learned skill made a tool by the owner on the settings page: one test run, kept in their folder if it passed |
