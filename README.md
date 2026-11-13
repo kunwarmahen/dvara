@@ -1136,7 +1136,7 @@ POST /holds/{id}   {actor, answers: {call: true|false|"reason"}}  -> like /messa
 POST /ask          {actor, tool, summary, arguments, timeout}  -> {approved, reason, code, via}
 POST /phone/ready  {actor, wait, about}           -> {go, said}
 POST /notify       {actor, text}                 -> {sent, kept, failed, nowhere}
-POST /call         {actor, agent, tool, args, allow_tools}  -> yantra.call.v1
+POST /call         {actor, agent, tool, args, allow_tools, pictures?}  -> yantra.call.v1
 POST /mail-login   {actor, ref}                  -> their mail login, from their Setu folder
 GET  /notices?channel=                           -> {notices: [{id, to, text, file, ...}]}
 GET  /web?actor=&after=N                         -> {lines, agents, busy, live, asks, holds}

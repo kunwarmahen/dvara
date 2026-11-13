@@ -221,6 +221,16 @@ that cannot move. And a hosted model with no list price renders
 asked to watch a bill, and a zero there is a guess wearing a number's
 clothes.
 
+One more line can follow an answer, with no setting. When the house has
+a model standing by (Yantra's `YANTRA_FALLBACK`) and the usual one didn't
+answer, the reply ends *↪ qwen3.8-64k:latest (ollama) didn't answer
+(nothing is listening there), so gemma4:12b … answered*: whose words
+these are is the person's to know. With no standby, a turn whose model is
+down is answered *The model didn't answer …, so nothing was done* rather
+than *that went wrong at my end* (Yantra's notes/159). Either way the
+turn's model use is one line in the house's usage file, with the person's
+id and never their words (Yantra's notes/160).
+
 The line is a separate field, never appended to the reply text: `run.reply`
 is the archive of what the agent *said*, and a channel gets to pick how a
 footer looks in its own medium.
@@ -2363,5 +2373,5 @@ refusals and gaps, and each one is argued in the note that owns it.
 
 ---
 
-*dvara: 1039 offline tests passing. Copyright 2026 Mahen Singh, Apache
+*dvara: 1355 offline tests passing. Copyright 2026 Mahen Singh, Apache
 License 2.0.*
