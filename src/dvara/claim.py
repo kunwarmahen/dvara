@@ -96,7 +96,7 @@ class Claim:
         self.path = self.state / LOCKFILE
         self._handle = None
 
-    def take(self, what: str, at: str | None = None) -> None:
+    def take(self, what: str, at: str | None = None, rung: str | None = None) -> None:
         """Claim the directory, or refuse with who is already in it.
 
         ``what`` is the command doing the claiming, written into the file
@@ -132,7 +132,10 @@ class Claim:
         handle.truncate()
         handle.write(f"pid {os.getpid()}\n{what}\n"
                      f"since {datetime.now(UTC).isoformat(timespec='seconds')}\n"
-                     + (f"at {at}\n" if at else ""))
+                     + (f"at {at}\n" if at else "")
+                     # the house's own rung, so a reader (``dvara grants``)
+                     # can say what a person's turn really runs under
+                     + (f"rung {rung}\n" if rung else ""))
         handle.flush()
         self._handle = handle
 
@@ -168,10 +171,10 @@ def holder(state: Path) -> dict | None:
             return None
         handle.seek(0)
         lines = [line.strip() for line in handle.read().splitlines() if line.strip()]
-    said: dict = {"pid": None, "command": None, "since": None, "at": None}
+    said: dict = {"pid": None, "command": None, "since": None, "at": None, "rung": None}
     for line in lines:
         word, _, rest = line.partition(" ")
-        if word in ("pid", "since", "at"):
+        if word in ("pid", "since", "at", "rung"):
             said[word] = int(rest) if word == "pid" and rest.isdigit() else rest
         elif said["command"] is None:
             said["command"] = line

@@ -164,7 +164,7 @@ day, an approver), facts everyone in the house knows, and a ready-made
 morning brief, and `dvara keeps` for a backup of the house; and answers
 read aloud on this machine, after the words, for whoever wants to hear
 them, in their own voice or one for the answer's language — covered by
-1333 tests. The API is not stable.
+1351 tests. The API is not stable.
 
 ## The shape of it
 
@@ -786,6 +786,39 @@ not where it sits — so inserting a line at the top does not shuffle the
 counts, and editing a rule starts its count over, because you changed the
 standing answer.
 
+**A yes that ends.** `until = 2026-12-31` is the last day a rule answers
+(a TOML date, or the same as a string; Sarathi's rules editor has an
+*Until* box). From the day after, the rule is read as if it weren't
+written: an ended `allow` is asked again, an ended `deny` is left to the
+rung, never the reverse. Moving the date keeps the rule's count
+([notes/85](notes/85-who-may-do-what.md)).
+
+**Every standing yes in one list.** `dvara grants` (and the owner's page,
+*Who may do what unasked*) puts together what is otherwise in five
+places: the rules with what each settled and its last day, each person's
+rung as each of their agents really runs it (the strictest of house,
+person and agent), the sources they trust and who approves for them,
+every schedule's granted tools (Samay) and every watch's look and its
+turn's tools (Prahari), with how many calls ran for each person, how many
+with nobody watching, and how many were asked. At the bottom, what is
+worth a look: a rule ended or ending, an allow that settled nothing, a
+pattern grant, an agent that changes things unasked
+([notes/85](notes/85-who-may-do-what.md)):
+
+```
+$ dvara grants
+The house: changes things without asking (yolo)
+People
+  owner (owner): own rung yolo
+      minder: asks before a change
+      926 calls ran (383 with nobody watching), 65 asked, 0 by a rule, …
+Watches (6)
+  owner: Mayfield ice cream under $6.19 [active] looks with mcp__sparsh__open_url, then a line to you
+Worth a look (1)
+  • The rule allow bash command=podman ps ends on 2026-11-15
+      move its Until day if it should go on (Settings → Rules)
+```
+
 ### The failure loop
 
 An author writes the failures they can imagine. The ones that matter
@@ -1057,6 +1090,10 @@ Samay, CLI), with the tools it called and the refused ones in red
   shown only for yours. The page reads them with `samay list --json`
   (`dvara --samay PATH page`, `$DVARA_SAMAY`, or `samay` on PATH), and links
   to Samay's page for changes.
+* **Who may do what unasked**: every standing yes and what it was used
+  for, the same list as `dvara grants`, asked of Samay and Prahari at
+  most once a minute (`dvara --prahari PATH page`, `$DVARA_PRAHARI`, or
+  `prahari` on PATH) ([notes/85](notes/85-who-may-do-what.md)).
 * **Nothing else changes from it.** To change who is served or what
   they may spend, edit the actors file as before.
 * **Its own token.** Every `/api` call needs `$DVARA_PAGE_TOKEN`, or the one
@@ -1721,7 +1758,8 @@ reads that person's key from `<state>/memory.json`
 | `patience.py` | how long a person may be kept waiting on questions in a day, spent only where a question is actually put ([notes/14](notes/14-a-days-worth-of-being-asked.md)), and shown under the answer ([notes/15](notes/15-where-the-waiting-shows.md)); a scheduled run's own wait, after which a question lapses ([notes/33](notes/33-the-phone-on-a-schedule.md)) |
 | `ready.py` | before a scheduled run on the phone: in use (wait, then skip), locked (ask them to unlock it), asleep (wake it) ([notes/33](notes/33-the-phone-on-a-schedule.md)); of several, the one the schedule names ([notes/54](notes/54-each-phone-ones.md)) |
 | `gate.py` | nothing asked from behind a turn that is over (`NOBODY_ASKED`, [notes/42](notes/42-seeing-the-work.md)); one yes for the rest of a task, over a turn's after-reading questions only ([notes/72](notes/72-asked-less-not-never.md)); three rungs, and the tightest wins ([notes/02](notes/02-a-question-that-can-wait.md)); how a rung and a rule compose ([notes/03](notes/03-standing-answers.md)); answers given ahead of time, where a question would be put ([notes/17](notes/17-nobody-wrote-first.md)), each a grant that may be fixed to one thing ([notes/35](notes/35-a-question-for-a-run-that-is-not-ours.md)); no standing yes and no yolo rung covers an `always_ask` call (a spend, or a change after outside text), which is asked or refused in words ([notes/58](notes/58-outside-text-asks.md)) |
-| `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)) |
+| `rules.py` | standing allow/deny/ask answers, matched per call ([notes/03](notes/03-standing-answers.md)), and counted ([notes/10](notes/10-what-decided-this.md)); `until`, the last day one answers, after which it falls back to a question ([notes/85](notes/85-who-may-do-what.md)) |
+| `grants.py` | `dvara grants` and the page's `/api/grants`: every standing yes -- rules, each person's rung per agent, trusted sources, schedules' and watches' tools -- read from where each lives, with what each was used for and what is worth a look ([notes/85](notes/85-who-may-do-what.md)) |
 | `asks.py` | questions waiting for a person, the deadline on them ([notes/02](notes/02-a-question-that-can-wait.md)), which channels they go out on ([notes/05](notes/05-one-person-two-channels.md)), taking them down from all of them once they are over ([notes/12](notes/12-taken-down-everywhere-it-went.md)), and whether silence refuses or holds ([notes/16](notes/16-kept-for-when-you-are-back.md)); a picture the question needs, such as the spot a phone tap lands ([notes/32](notes/32-the-ring-in-the-chat.md)); a yes for the rest of a turn, kept per turn in memory ([notes/72](notes/72-asked-less-not-never.md)) |
 | `holds.py` | turns that stopped for an answer nobody gave, kept on disk until somebody does, and who may give it ([notes/16](notes/16-kept-for-when-you-are-back.md)) |
 | `runs.py` | every turn that happened, what it cost, which tools it called and what decided each one ([notes/08](notes/08-what-the-turn-actually-did.md), [notes/10](notes/10-what-decided-this.md)), which held turn it carried on ([notes/16](notes/16-kept-for-when-you-are-back.md)), which conversations a program started ([notes/24](notes/24-a-conversation-nobody-will-continue.md)), how many turns had no price ([notes/29](notes/29-the-owners-page.md)), which way each came in ([notes/36](notes/36-which-way-it-came-in.md)), and what the model kept about the person ([notes/77](notes/77-kept-and-told.md)) |

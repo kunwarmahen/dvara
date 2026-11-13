@@ -13,6 +13,7 @@ those at a time, in a terminal. This page shows them together:
     GET /api/files           each person's folder per agent: names, sizes, dates
     GET /api/file?agent=A&path=P          one of the owner's own files, as text
     GET /api/schedules       each person's schedules, as Samay says them
+    GET /api/grants          every standing yes, and what it was used for (grants.py)
     GET  /api/waiting        the owner's questions and held turns, from the door
     POST /api/asks/ID        {approve: true|false, for_turn?: true}
     POST /api/holds/ID       {answers: {call id: true|false|"reason"}}
@@ -115,6 +116,8 @@ TOKEN_FILE = "page.token"
 MAX_RUNS = 500
 MAX_BODY = 64 * 1024
 ENV_DOOR = "DVARA_URL"
+#: How long the grants are kept before Samay and Prahari are asked again.
+GRANTS_KEPT = 60.0
 #: A held turn answered runs the rest of the turn: minutes, on a slow model.
 RESUME_TIMEOUT = 600.0
 #: The most files listed for one folder; the rest are counted.
@@ -237,11 +240,17 @@ class Api:
     straight, and the handler below stays a thin skin."""
 
     def __init__(self, *, root: Path, actors: Path, state: Path, owner: str,
-                 now=None, door: Door | None = None, samay: str | None = None) -> None:
+                 now=None, door: Door | None = None, samay: str | None = None,
+                 policy: Path | None = None, prahari: str | None = None) -> None:
         self.root, self.actors, self.state = root, actors, state
         self.owner = owner
         #: The samay program to read schedules with (None: found on PATH).
         self.samay = samay
+        #: The standing rules (None: policy.toml beside the actors file) and
+        #: the prahari program (None: found on PATH), for the grants.
+        self.policy = policy or actors.parent / "policy.toml"
+        self.prahari = prahari
+        self._grants: tuple[float, dict] | None = None
         self._door = door
         self._now = now or (lambda: datetime.now(UTC))
         self._runs: RunStore | None = None
@@ -307,6 +316,8 @@ class Api:
                                        (query.get("path") or [""])[0])
         if parts == ["schedules"]:
             return 200, self.schedules()
+        if parts == ["grants"]:
+            return 200, self.grants(fresh=bool(query.get("fresh")))
         raise ApiError(404, f"no such endpoint: GET /api/{'/'.join(parts)}")
 
     def _answer(self, kind: str, item: str, body: dict) -> tuple[int, dict[str, Any]]:
@@ -463,6 +474,28 @@ class Api:
         rows.sort(key=lambda r: (r["person"] != self.owner, r["person"],
                                  r["next_at"] or "~"))
         return {"samay": {"found": True, "why": None, "page": page}, "schedules": rows}
+
+    def grants(self, *, fresh: bool = False) -> dict[str, Any]:
+        """Every standing yes (grants.py), kept a minute: it asks Samay and
+        Prahari, and the page refreshes far more often than grants change."""
+        import shutil
+        import time
+
+        from dvara import grants as grants_mod
+        from dvara.claim import holder
+        from dvara.rules import RuleBook
+
+        if not fresh and self._grants and time.monotonic() - self._grants[0] < GRANTS_KEPT:
+            return self._grants[1]
+        data = grants_mod.report(
+            book=self._book(), rules=RuleBook.from_toml(self.policy), roster=Roster(self.root),
+            runs=self.runs, house_rung=(holder(self.state) or {}).get("rung"),
+            serving=(holder(self.state) or {}).get("command") == "dvara serve",
+            owner=self.owner,
+            samay=self.samay or os.environ.get(ENV_SAMAY) or shutil.which("samay"),
+            prahari=self.prahari or os.environ.get("DVARA_PRAHARI") or shutil.which("prahari"))
+        self._grants = (time.monotonic(), data)
+        return data
 
     def agents(self) -> list[dict[str, Any]]:
         try:

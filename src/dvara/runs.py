@@ -474,6 +474,50 @@ class RunStore:
                         counts[name] = counts.get(name, 0) + 1
         return counts
 
+    def grant_use(self, since: datetime | None = None) -> dict:
+        """What each person's grants were used for, from the calls kept.
+
+        ``{"people": {actor: {"ran", "asked", "rule", "ahead", "for_turn",
+        "refused", "by_program"}}, "rules_last": {rule id: started_at}}``.
+        ``ran`` is every call that happened; the others say what settled
+        one that a rung alone did not (gate.Decisions): a person's yes
+        (``asked``), a standing rule, a schedule's grant made ahead
+        (``ahead``), one yes for the whole task (``for_turn``).
+        ``by_program`` counts calls that ran in turns nobody typed (a
+        schedule's, a watch's): the ones that ran with nobody watching.
+        Same Python-over-rows reasoning as ``rule_counts``.
+        """
+        people: dict[str, dict[str, int]] = {}
+        last: dict[str, str] = {}
+        where, params = "", []
+        if since is not None:
+            where, params = "WHERE started_at >= ?", [_stamp(since)]
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT actor, started_at, tools, unattended FROM runs {where} "
+                f"ORDER BY started_at", params).fetchall()
+        for actor, started, raw, unattended in rows:
+            tally = people.setdefault(actor, dict.fromkeys(
+                ("ran", "asked", "rule", "ahead", "for_turn", "refused", "by_program"), 0))
+            for step in _load(raw):
+                if not isinstance(step, list) or not step:
+                    continue
+                refusal = step[1] if len(step) > 1 else None
+                decided = str(step[2]) if len(step) > 2 and step[2] else ""
+                if refusal:
+                    tally["refused"] += 1
+                    continue
+                tally["ran"] += 1
+                if unattended:
+                    tally["by_program"] += 1
+                kind, _, name = decided.partition(":")
+                if kind == "rule" and name:
+                    tally["rule"] += 1
+                    last[name] = started
+                elif kind in ("asked", "ahead", "for_turn"):
+                    tally[kind] += 1
+        return {"people": people, "rules_last": last}
+
     def finished_unattended(self, before: datetime
                             ) -> list[tuple[str, str, str]]:
         """``(actor, agent, thread)`` for every conversation a program

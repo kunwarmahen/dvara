@@ -261,7 +261,10 @@ property this note opened with.
   day, not how much has been spent, not how many calls this turn has
   made. Each is defensible and each needs its own argument; a rule that
   matched on the clock would also need a story about what a *pending*
-  question does when the hour changes.
+  question does when the hour changes. One exception was made since: a
+  rule's last day (`until`, [note 85](85-who-may-do-what.md)). It is a
+  day, not an hour, and it only ever takes a rule away, so a question
+  already pending was asked under the rules of the day it was asked.
 * **A way to see which rule fired.** The model is told a rule refused it;
   the owner reading `dvara runs` is not told which one. That belongs with
   the trajectory work below rather than as a column here.

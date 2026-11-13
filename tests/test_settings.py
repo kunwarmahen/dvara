@@ -101,6 +101,20 @@ def test_the_rules_are_written_and_a_wide_allow_refused(tmp_path):
     assert policy.read_text() == before
 
 
+def test_a_rules_last_day_is_shown_as_text_and_saved_back(tmp_path):
+    import json
+    policy = tmp_path / "policy.toml"
+    policy.write_text('[[rule]]\ntool = "bash"\nverdict = "deny"\nuntil = 2030-01-31\n')
+    (tmp_path / "agents").mkdir()
+    shown = settings.show(root=tmp_path / "agents", actors=tmp_path / "actors.toml",
+                          policy=policy)
+    json.dumps(shown)                         # a page reads it: a date must be text
+    assert shown["rules"][0]["until"] == "2030-01-31"
+    settings.set_rules(policy, shown["rules"])
+    from dvara.rules import RuleBook
+    assert next(iter(RuleBook.from_toml(policy))).until.isoformat() == "2030-01-31"
+
+
 def agent(root, name="greeter"):
     folder = root / name
     folder.mkdir(parents=True)

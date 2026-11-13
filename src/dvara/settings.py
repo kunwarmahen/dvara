@@ -96,6 +96,9 @@ def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None
     ptext = _read(policy)
     try:
         rules = tomllib.loads(ptext).get("rule", []) if ptext else []
+        # a hand-written ``until = 2026-12-31`` is a date; a page reads text
+        rules = [{k: (v.isoformat() if hasattr(v, "isoformat") else v)
+                  for k, v in r.items()} if isinstance(r, dict) else r for r in rules]
         out["rules"], out["policy_problem"] = rules, None
     except tomllib.TOMLDecodeError as exc:
         out["rules"], out["policy_problem"] = [], f"{policy}: {exc}"

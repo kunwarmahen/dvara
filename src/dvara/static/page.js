@@ -453,6 +453,72 @@ async function drawSchedules() {
   box.replaceChildren(...rows);
 }
 
+// -- grants ---------------------------------------------------------------------------
+
+const RUNG = { read_only: "only reads", ask: "asks before a change",
+               yolo: "changes things without asking" };
+
+function grantRule(r) {
+  const args = Object.entries(r.args || {}).map(([k, v]) => `${k}=${v.join("|")}`).join(", ");
+  const until = r.state === "ended" ? `ended ${r.until}` : r.until ? `until ${r.until}` : "";
+  return h("article.run", {},
+    h("div.run-head", {},
+      h("span.run-who", {}, `${r.verdict} · ${r.tool}${args ? " " + args : ""}`),
+      h("span.run-meta", {}, until)),
+    h("div.meta", {}, r.settled
+      ? `settled ${r.settled} call${r.settled === 1 ? "" : "s"}, last ${ago(r.last)}`
+      : "settled nothing in this window"));
+}
+
+function grantPerson(p) {
+  const d = p.did;
+  const extra = [p.trusted.length ? `trusts ${p.trusted.join(", ")}` : "",
+    p.approver ? `asks ${p.approver} first` : "", p.accounts || "",
+    p.phones.length ? `phones ${p.phones.join(", ")}` : ""].filter(Boolean).join(" · ");
+  return h("article.run", {},
+    h("div.run-head", {},
+      h("span.run-who", {}, p.id + (p.owner ? " (you)" : "")),
+      h("span.run-meta", {}, p.rung ? `own rung ${p.rung}` : "no rung of their own")),
+    ...p.agents.map((a) => h("div.who", {}, `${a.agent}: ${RUNG[a.rung] || a.rung}`)),
+    extra ? h("div.meta", {}, extra) : null,
+    h("div.meta", {}, `${d.ran} calls ran (${d.by_program} with nobody watching) · ` +
+      `${d.asked} asked · ${d.rule} by a rule · ${d.ahead} by a schedule's grant · ` +
+      `${d.for_turn} by a yes for the task · ${d.refused} refused`));
+}
+
+async function drawGrants() {
+  const data = await api("/api/grants");
+  const box = document.getElementById("grants");
+  document.getElementById("n-grants").textContent = data.look.length
+    ? `${data.look.length} worth a look` : "";
+  const rung = data.house.rung || "ask";
+  const rows = [h("p.meta", {}, `The house ${RUNG[rung] || rung}` +
+    (!data.house.assumed ? "." : data.house.serving
+      ? " (assumed: Dvara was started before it wrote its rung down; it says after its next start)."
+      : " (assumed: Dvara isn't running; the rung Sarathi starts it on)."))];
+  for (const item of data.look) {
+    rows.push(h("div.warn", {}, item.said, h("br"), h("small", {}, item.fix)));
+  }
+  rows.push(h("h3", {}, `Standing rules (${data.rules.length})`));
+  rows.push(...(data.rules.length ? data.rules.map(grantRule)
+    : [h("p.empty", {}, "None: every change is decided by the rung alone.")]));
+  rows.push(h("h3", {}, "People"), ...data.people.map(grantPerson));
+  rows.push(h("h3", {}, `Schedules with tools of their own (${data.schedules.length})`));
+  if (data.asked.samay) rows.push(h("p.empty", {}, `Samay: ${data.asked.samay}`));
+  rows.push(...data.schedules.map((s) => h("article.run", {},
+    h("div.run-head", {}, h("span.run-who", {}, s.person), h("span.run-meta", {}, s.state)),
+    h("div.who", {}, s.sentence), h("div.meta", {}, `may use ${s.tools.join(", ")}`))));
+  rows.push(h("h3", {}, `Watches (${data.watches.length})`));
+  if (data.asked.prahari) rows.push(h("p.empty", {}, `Prahari: ${data.asked.prahari}`));
+  rows.push(...data.watches.map((w) => h("article.run", {},
+    h("div.run-head", {}, h("span.run-who", {}, `${w.person} · ${w.name}`),
+      h("span.run-meta", {}, w.state)),
+    h("div.meta", {}, (w.looks_with ? `looks with ${w.looks_with}` : w.senses
+      ? `senses ${w.senses}` : w.listens ? "listens" : "looks") + `, then ${w.then}` +
+      (w.then_tools.length ? `; its turn may use ${w.then_tools.join(", ")}` : "")))));
+  box.replaceChildren(...rows);
+}
+
 let filesSeen = "";
 
 async function drawFiles() {
@@ -525,7 +591,7 @@ async function refresh() {
     drawAgents(agents.agents);
     await drawRuns();
     await drawWaiting();
-    await Promise.all([drawSchedules(), drawFiles()]);
+    await Promise.all([drawSchedules(), drawFiles(), drawGrants()]);
     document.getElementById("updated").textContent =
       `Updated ${new Date().toLocaleTimeString()}`;
   } catch (err) {

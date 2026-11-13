@@ -255,9 +255,11 @@ good faith, that has never matched anything.
   one decides it; only the decider is recorded. The other is indisputably
   doing nothing, and reports a dot, which is either exactly right or
   slightly unfair depending on how you look at it.
-* **Nothing counts the questions that WERE asked.** "How often am I woken
+* ~~**Nothing counts the questions that WERE asked.** "How often am I woken
   up, and for what" is the same rows and a different `GROUP BY`, and
-  nobody has wanted it yet.
+  nobody has wanted it yet.~~ `dvara grants` counts them per person, with
+  what ran unasked and what a rule settled, beside every other standing
+  yes in the house ([notes/85](85-who-may-do-what.md)).
 * **A version is the package's own word.** Nothing checks that an edited
   package bumped it, so two different prompts can both call themselves
   `0.1.0` and the ledger will say nothing changed. A content hash would

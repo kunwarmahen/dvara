@@ -58,16 +58,26 @@ One matching rule with no argument in it: ``fnmatchcase``, never
 ``fnmatch``. The second consults the platform, and a policy file whose
 meaning depends on which machine the service woke up on is not a policy
 file.
+
+**A GRANT THAT RUNS OUT FALLS BACK TO A QUESTION.** ``until = 2026-12-31``
+(a TOML date, or the same as a string) is the last day a rule answers.
+From the day after, the rule is read as if it were not written: an
+``allow`` that ended is asked again, a ``deny`` that ended is decided by
+the rung. Never the reverse -- an ended rule cannot turn a question into a
+yes. The day is the computer's own, because the person who wrote the date
+was thinking of their own calendar. ``until`` is not part of a rule's id:
+moving the date is not changing what the rule says, so its count carries
+on (``dvara grants`` shows both).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import date
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
@@ -82,7 +92,7 @@ VERDICTS = ("deny", "ask", "allow")
 #: misspelled ``verdict`` that silently means "no opinion" turns a
 #: standing denial into a decoration, which is the whole failure this
 #: file exists to prevent.
-RULE_KEYS = frozenset({"tool", "args", "verdict", "reason"})
+RULE_KEYS = frozenset({"tool", "args", "verdict", "reason", "until"})
 
 #: The characters that make a wildcard dangerous in an ``allow``.
 GLOB_CHARS = "*?["
@@ -102,6 +112,13 @@ class Rule:
     #: refuses. "use the deploy agent for that" is worth far more to it
     #: than a second copy of the word "denied".
     reason: str | None = None
+    #: The last day this rule answers (rules.py: a grant that runs out
+    #: falls back to a question). None: it never ends.
+    until: date | None = None
+
+    def ended(self, today: date | None = None) -> bool:
+        """Past its last day: read as if it were not written."""
+        return self.until is not None and (today or date.today()) > self.until
 
     @property
     def id(self) -> str:
@@ -191,7 +208,9 @@ class RuleBook:
         about the verdict by definition.
         """
         rank = {verdict: i for i, verdict in enumerate(VERDICTS)}
-        matching = [r for r in self._rules if r.matches(tool, arguments)]
+        today = date.today()
+        matching = [r for r in self._rules
+                    if not r.ended(today) and r.matches(tool, arguments)]
         if not matching:
             return None
         return min(matching, key=lambda r: rank[r.verdict])
@@ -293,7 +312,27 @@ def _rule(entry: Any, index: int, where) -> Rule:
             f"anyone: a reason is what the model reads when a rule REFUSES")
 
     return Rule(tool=tool, verdict=verdict, reason=reason,
-                args=_args(entry.get("args"), at, verdict))
+                args=_args(entry.get("args"), at, verdict),
+                until=_until(entry.get("until"), at))
+
+
+def _until(value: Any, at: str) -> date | None:
+    """``until`` as written: a TOML date, or ``"YYYY-MM-DD"`` (what a page
+    sends), or absent. A time of day is refused rather than rounded: a
+    grant written to end at 17:00 that ran to midnight is not what was
+    written."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, date) and not hasattr(value, "hour"):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip())
+        except ValueError:
+            pass
+    raise ConfigProblem(
+        f"{at} until = {value!r} is not a day; write the last day the rule "
+        f"answers, like until = 2026-12-31")
 
 
 def _args(value, at: str, verdict: str) -> dict[str, tuple[str, ...]]:

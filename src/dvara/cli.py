@@ -307,6 +307,15 @@ def build_parser() -> argparse.ArgumentParser:
                        help="count over the last N days (default 30); 0 "
                             "counts everything ever recorded")
 
+    grants = subs.add_parser(
+        "grants", help="every standing yes in the house -- rules, people, schedules, "
+                       "watches -- and what each was used for")
+    grants.add_argument("--days", type=int, default=30, metavar="N",
+                        help="count over the last N days (default 30); 0 counts "
+                             "everything ever recorded")
+    grants.add_argument("--json", action="store_true", dest="json_out",
+                        help="the same, as dvara.grants.v1")
+
     telegram = subs.add_parser(
         "telegram", help="answer messages as a Telegram bot")
     telegram.add_argument(
@@ -727,7 +736,9 @@ def main(argv: list[str] | None = None) -> int:
             claim = Claim(Path(args.state))
             at = (f"http://{args.host}:{args.port}" if args.command == "serve"
                   else None)
-            claim.take(f"dvara {args.command}", at=at)
+            claim.take(f"dvara {args.command}", at=at,
+                       rung=("yolo" if getattr(args, "yolo", False) else "ask")
+                       if args.command == "serve" else None)
         if args.command == "serve":
             return _serve(args)
         service = _service(args)
@@ -755,6 +766,8 @@ def main(argv: list[str] | None = None) -> int:
             return _case(service, args)
         if args.command == "rules":
             return _rules(service, args)
+        if args.command == "grants":
+            return _grants(service, args)
         if args.command == "telegram":
             return _telegram(service, args)
     finally:
@@ -772,8 +785,11 @@ def _page(args) -> int:
     try:
         # `dvara --samay PATH page` names the program schedules are read with
         samay = args.samay if args.samay not in (None, "on", "off") else None
+        prahari = getattr(args, "prahari", None)
+        prahari = prahari if prahari not in (None, "on", "off") else None
         api = Api(root=Path(args.root).expanduser(), actors=Path(args.actors).expanduser(),
-                  state=state, owner=args.owner, samay=samay)
+                  state=state, owner=args.owner, samay=samay,
+                  policy=_policy_path(args), prahari=prahari)
         server = PageServer(api, page_token(state), host=args.host, port=args.port)
     except (ConfigProblem, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -1166,6 +1182,28 @@ def _rules(service: Service, args) -> int:
         print("  ·  = never matched a call in this window. A rule you "
               "edited starts over: the count follows what a rule SAYS, "
               "not where it sits in the file.")
+    return 0
+
+
+def _grants(service: Service, args) -> int:
+    """Every standing yes, read from where each one lives (grants.py).
+
+    The house's rung is the RUNNING service's, from its claim -- this
+    command's own ``--yolo`` says nothing about the door answering
+    people."""
+    from dvara import grants
+    from dvara.claim import holder
+
+    held = holder(service.state) or {}
+    data = grants.report(book=service.actors, rules=service.policy.rules,
+                         roster=service.roster, runs=service.runs,
+                         house_rung=held.get("rung"), owner=service.owner,
+                         serving=held.get("command") == "dvara serve",
+                         samay=service.samay, prahari=service.prahari, days=args.days)
+    if args.json_out:
+        print(json.dumps(data, indent=2))
+    else:
+        print("\n".join(grants.lines(data)))
     return 0
 
 

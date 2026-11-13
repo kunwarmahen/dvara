@@ -459,3 +459,18 @@ def test_no_samay_is_said_on_the_page_not_an_error(api, monkeypatch):
     data = api.schedules()
     assert data["samay"]["found"] is False and "--samay" in data["samay"]["why"]
     assert data["schedules"] == []
+
+
+def test_the_grants_say_who_may_do_what_and_never_anyones_words(served, door, monkeypatch):
+    from dvara import grants
+    # never the real Samay or Prahari on this computer
+    monkeypatch.setattr(grants, "_ask", lambda program, *argv: (None, "not asked in a test"))
+    (door["actors"].parent / "policy.toml").write_text(
+        '[[rule]]\ntool = "send_message"\nverdict = "allow"\nuntil = 2020-01-01\n')
+    reply = get(served, "/api/grants")
+    assert reply.status_code == 200
+    data = reply.json()
+    assert data["format"] == "dvara.grants.v1"
+    assert {p["id"] for p in data["people"]} == {"owner", "priya"}
+    assert data["rules"][0]["state"] == "ended"
+    assert "my bank pin" not in reply.text
