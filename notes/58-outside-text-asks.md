@@ -45,4 +45,11 @@ Being asked less without being asked never came next: one yes for the
 rest of a task, and servers a person trusts
 ([note 72](72-asked-less-not-never.md)).
 
+A look that could carry words out is asked the same way: after outside
+text, a `web_fetch` or `browser_open` to an address the turn didn't
+already have in front of it (Yantra's notes/158). With nobody to ask, the
+refusal names the address (`sends_to`): *opening …, an address it didn't
+show and the person didn't write (what's in it could carry words out),
+needs a person's yes, which nobody here can give.*
+
 Tests: `tests/test_outside_text.py`.

