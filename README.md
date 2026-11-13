@@ -365,6 +365,11 @@ and, under a turn that kept them waiting, how much waiting is left today
 ([notes/15](notes/15-where-the-waiting-shows.md)). Absent — the default —
 puts nothing.
 
+**Every turn on the house's meter.** Each turn's model use is one line in
+Yantra's usage file (no words: the person's id and the way it came in,
+the model, tokens, seconds, dollars), which `sarathi usage` reads for the
+whole house (Yantra's notes/160).
+
 **When the model didn't answer.** Under every answer that a model standing
 by gave (Yantra's `YANTRA_FALLBACK`; Sarathi's *When it doesn't answer*),
 one line says so — *↪ qwen3.8-64k:latest (ollama) didn't answer (nothing

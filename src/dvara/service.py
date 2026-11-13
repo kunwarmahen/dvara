@@ -1929,6 +1929,8 @@ class Service:
         self._rehydrate(agent, key)
         # the turn's steps are noted under its run id (runsteps.py)
         agent.turn_tag = run.id
+        # and its line in the house's usage file is theirs (Yantra's usage_log)
+        agent.usage_who = f"{who.id} via {run.came_by}" if run.came_by else who.id
         # EVERY STEP IS SAVED, not only the turn's end: a restart in the
         # middle of a job leaves it here as far as it got (carrying.py).
         # And the person's history (past.py) follows it: a question is in

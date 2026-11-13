@@ -714,6 +714,9 @@ def _settings(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # the Yantra turns this starts say whose they are in the house's usage
+    # file (Yantra's usage_log.py)
+    os.environ.setdefault("YANTRA_USAGE_BY", "dvara")
     args = build_parser().parse_args(argv)
     # THE COMMAND CLAIMS, NOT THE SERVICE. A `Service` an embedder built
     # inside their own process is not a second dvara (claim.py), and the
