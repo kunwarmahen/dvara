@@ -346,7 +346,9 @@ page, whatever a connection returned), asks every time: the card starts
 Neither the yolo rung nor an `allow` rule in `policy.toml` covers it.
 With somebody to ask it's a question, and with nobody it's refused, and
 the model is told not to act on that text ([notes/58](notes/58-outside-text-asks.md);
-Yantra's notes/142).
+Yantra's notes/142). A look (`web_fetch`, `browser_open`) after such a
+read asks too when its address isn't one the turn already had, and a
+refusal names the address (Yantra's notes/158).
 
 Two things keep that from becoming a question on every step
 ([notes/72](notes/72-asked-less-not-never.md)). Such a card has a third
@@ -828,6 +830,30 @@ A rule is named by what it **says** — a hash of tool, verdict and
 patterns — not by where it sits, so inserting a line at the top does not
 shuffle the counts. Edit a rule and it starts at zero, which is right:
 you changed the standing answer.
+
+**A yes for a while.** Add `until = 2026-12-31` to a rule and it answers
+up to that day; from the next, it's as if it weren't written, so you're
+asked again (never the reverse). Moving the day keeps its count.
+
+**Every standing yes at once.** Rules are one of five places a yes lives.
+`dvara grants` puts all of them together: the rules (with what each
+settled, when last, and its last day), each person's rung as each agent
+really runs it, who they trust, every schedule's and watch's granted
+tools, and at the bottom what's worth a look
+([notes/85](notes/85-who-may-do-what.md)):
+
+```
+$ dvara grants
+The house: changes things without asking (yolo)
+People
+  owner (owner): own rung yolo
+      minder: asks before a change
+      926 calls ran (383 with nobody watching), 65 asked, 0 by a rule, …
+Worth a look (1)
+  • The rule allow bash command=podman ps ends on 2026-11-15
+```
+
+The owner's page shows the same under *Who may do what unasked*.
 
 **Where were you when you approved this?** This is the one that sent a
 feature back into the framework. A gate's answer and the `ToolExecuted`
