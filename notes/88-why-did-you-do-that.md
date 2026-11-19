@@ -8,7 +8,7 @@ the chat's own turns, never a watch's or a schedule's), and what the
 agent believed about the person wasn't kept anywhere at all.
 
 ```
-/why       the last thing this agent did for you: typed, scheduled or watched
+/why       the last thing your agents did for you: typed, scheduled or watched
 /why 2     the one before it (as far back as 20)
 ```
 
@@ -67,8 +67,9 @@ Runs from before this have none.
 
 ## Theirs only
 
-`/why` finds runs by the person and the agent they're talking to,
-nothing else, so it can never show another person's. It is answered
+`/why` finds runs by the person, any of their agents', nothing else, so
+it can never show another person's. (Any agent's, so that `/brief`'s
+`/why N` beside each run names the right one: [notes/89](89-the-house-s-own-brief.md).) It is answered
 here, never by a model, and costs nothing. The receipt above found two
 faults before this was committed: a watch's framing has brackets inside
 brackets (*(every hour)*), and cutting at the first closing one showed

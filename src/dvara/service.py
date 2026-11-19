@@ -123,6 +123,7 @@ from yantra.unattended import scope as unattended_scope
 from dvara import (attached, carrying, checkup, files, fresh, heard, household, learning, limits,
                    money, moved, past, patience, phoneview, printed, ready, remembering, seen,
                    signins, spoken)
+from dvara import brief as asked_brief
 from dvara import why as asked_why
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
@@ -1141,6 +1142,21 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
+        if asked_brief.word_of(text):
+            # the house's own account of their last day, read not written: not a turn
+            when = None if unattended else asked_brief.morning_word(text)
+            if when is not None:
+                said = (f"I can't read \"{when[1]}\" as a time. Try /brief "
+                        f"{asked_brief.MORNING} 6:45 (or 7am, 18:30)." if when[0] == "bad"
+                        else await asked_brief.morning(who, agent, when[0] == "on",
+                                                       self.samay, at=when[1]))
+            else:
+                said = await self._brief(who)
+                if not unattended and self.samay:
+                    said += (f"\n\nSend /brief {asked_brief.MORNING} to have this every "
+                             "morning.")
+            return Reply(text=said, run_id=None, agent=agent, actor=actor,
+                         stop_reason="brief")
         if checkup.is_word(text):
             # what's wrong with what is theirs, in plain words: not a turn
             if unattended:
@@ -2961,19 +2977,43 @@ class Service:
         work.mkdir(parents=True, exist_ok=True)
         return work
 
+    async def _brief(self, who: Actor) -> str:
+        """``/brief``: their last day from the ledger, Samay and Prahari (brief.py)."""
+        from dvara.seen import LOCAL, ask_json
+        names = {who.id} | ({LOCAL} if who.id == self.owner else set())
+
+        async def mine(program: str | None, on: bool, what: str):
+            if not on or not program:
+                return None, f"{what} aren't switched on here"
+            cards, trouble = await ask_json([program, "list", "--json"])
+            if trouble or not isinstance(cards, list):
+                return None, trouble or f"{what} couldn't be read just now"
+            return [c for c in cards if isinstance(c, dict) and c.get("owner") in names], ""
+
+        schedules, schedules_why = await mine(self.samay, self.samay is not None, "schedules")
+        watches, watches_why = await mine(self.prahari, self.watches_for(who.id), "watches")
+        return asked_brief.compose(
+            runs=self.runs.recent(actor=who.id, limit=200), schedules=schedules,
+            watches=watches, now=limits.now_for(who.zone),
+            schedules_why=schedules_why, watches_why=watches_why)
+
     def _why_words(self, who: Actor, agent: str, spec: AgentSpec, text: str) -> str:
-        """``/why``, ``/why N``: their own runs of this agent, newest first,
+        """``/why``, ``/why N``: their own runs, any agent's, newest first,
         typed or started by their schedule or watch (why.py)."""
         back = asked_why.which(text)
         if isinstance(back, str):
             return back
-        runs = [r for r in self.runs.recent(actor=who.id, agent=agent,
-                                            limit=asked_why.WHY_BACK + 10)
+        runs = [r for r in self.runs.recent(actor=who.id, limit=asked_why.WHY_BACK + 10)
                 if r.stop_reason not in ("looked_back", "new")]
         if len(runs) < back:
             return asked_why.nothing(back)
-        rung = self.policy.effective(who.permissions, spec.permissions_mode)
-        return asked_why.explain(runs[back - 1], rung=rung, back=back)
+        picked = runs[back - 1]
+        try:            # the rung of the agent that did it, not the one asked
+            mode = self.roster.spec(picked.agent).permissions_mode
+        except Exception:  # noqa: BLE001 -- an agent since removed: the person's own
+            mode = None
+        rung = self.policy.effective(who.permissions, mode)
+        return asked_why.explain(picked, rung=rung, back=back)
 
     def _steps_words(self, key: str, text: str) -> str:
         from yantra import steps

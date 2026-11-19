@@ -580,6 +580,9 @@ And anyone can start their conversation with an agent over:
 /steps                         what your last turn did, step by step (/steps 2: turn 2)
 /why                           what started the last thing it did (you, a schedule, a watch),
                                what let each step happen, what it went by about you (/why 2)
+/brief                         your house's last 24 hours, no model: what ran unseen, what's
+                               due today, watches, what was kept, model use
+/brief every morning [7am]     that, every day (off stops it)
 /doctor                        what's wrong with what's yours, and the fix
 /doctor every morning          checked at 07:30 your time, told only what's new (off: stop;
                                a time after it, 6:45 or 7am, moves it)
@@ -669,12 +672,19 @@ carry on from there -- I'll look again before I do anything. Anything
 else leaves it.
 ```
 
-**Why it did that.** `/why` answers for the last thing this agent did
+**Why it did that.** `/why` answers for the last thing any of your agents did
 for you, typed or not: who or what started it (*Your watch "Guestroom
 heat when below 70°F" (Prahari)…*), each call and what let it happen
 (your yes on Telegram, a standing rule, a schedule's grant, the rung),
 and what it seems to have gone by about you. `/why 2` is the one before
 ([notes/88](notes/88-why-did-you-do-that.md)).
+
+**The house's own brief.** `/brief` reads the ledger, Samay and Prahari
+and asks no model: the runs nobody typed in the last 24 hours (each with
+the `/why N` that explains it), what's still due today, how many watches
+are looking and which stopped, what was kept about you, and the day's
+model use. `/brief every morning` sends it daily, quiet days too
+([notes/89](notes/89-the-house-s-own-brief.md)).
 
 **What a turn did.** `/steps` answers with the last turn one step at a
 time (the tool, what it was given, what came back, how long, who said
@@ -1777,6 +1787,7 @@ reads that person's key from `<state>/memory.json`
 | `printed.py` | a conversation as a PDF for `/chats export N pdf` and `?as=pdf`: an escaped HTML page with nothing to fetch, printed by the machine's own headless Chrome so every script prints; an answer's bold, italics, code, lists and links read by `marked.py` as Telegram's are; no browser, the Markdown file and why ([notes/69](notes/69-a-picture-and-a-pdf.md)) |
 | `phoneview.py` | `/phone`: the phone's screen (picture + Sparsh's list, a peek) and its last steps, for its one person, never a turn ([notes/30](notes/30-do-this-on-my-phone.md)); `/phone NAME`, one of theirs ([notes/54](notes/54-each-phone-ones.md)) |
 | `past.py` | `/chats`: every conversation kept as it goes, one log per person (Yantra's `history.ConversationLog`); `/chats WORDS` finds (in the words, then in what a tool returned, said so), `/chats N` goes back in, `/chats delete N sure` deletes for good; the page's `/web/chats` routes ([notes/45](notes/45-going-back.md), [notes/50](notes/50-every-conversation-kept.md)); one conversation open on several chats, each taking the row again when another wrote it, the turn holding the conversation's lock, rename and pin, each row's `here` for the page's own chat ([notes/71](notes/71-one-conversation-two-chats.md)); words carried on in the conversation they were written under, waiting for a chat still answering, and which conversation each Telegram message was in, for a reply to carry it on ([notes/78](notes/78-carried-on-where-it-was-written.md)); `/keep test` and `/chats test N [turn K]` keep one as a test in the person's own suite, which Yantra's `--tests` runs with everyone's; `/tests` lists them with each one's last result, `/tests delete N` takes one back ([notes/57](notes/57-a-test-of-your-own.md)) |
+| `brief.py` | `/brief` and `/brief every morning`: a person's last 24 hours from the ledger, Samay's schedules and Prahari's watches, with no model; the morning schedule is Samay's, `notify = always` ([notes/89](notes/89-the-house-s-own-brief.md)) |
 | `why.py` | `/why`: a person's own runs read back from the ledger -- who or what started one (the thread a program names, the channel), what settled each call (`decided_by`, else the rung), what the answer leaned on about them (`leaned_on`, from Yantra's `Memory.leaned`) ([notes/88](notes/88-why-did-you-do-that.md)) |
 | `runsteps.py` | a run, step by step: its own turn in its conversation (tagged with its run id), whole for the door and the owner's own runs, as shape only for anybody else's on the owner's page; `/steps` in the chat; an answer's own on a page's chat, by its line (`web.py`) ([notes/60](notes/60-a-run-step-by-step.md)) |
 | `checkup.py` | `/doctor`: a person's own check in red, amber and green -- their accounts (`setu status` in their folder), schedules' runs of the last day, watches, phones, and today's limits -- each with a fix they can use; only what is filed under them (the owner: `local` too) ([notes/67](notes/67-a-check-of-your-own.md)); `/doctor every morning`, a Samay schedule whose run says only what's new ([notes/75](notes/75-a-check-every-morning.md)) |

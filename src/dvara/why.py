@@ -11,7 +11,7 @@ The ledger already kept the first two for every run (``came_by``, the
 thread a program names, and each call's ``decided_by``), so ``/why``
 reads them back in words, for the person's own runs and nobody else's:
 
-    /why       the last run of this agent for you: typed, scheduled or watched
+    /why       your last run, any agent's: typed, scheduled or watched
     /why 2     the one before it (up to WHY_BACK)
 
 WHAT LET IT HAPPEN, CALL BY CALL. A call that ran was let through by one
@@ -28,8 +28,8 @@ from words in the answer, not the model's own account of its reasons,
 and the reply says so: "it seems to have gone by".
 
 THE PERSON'S OWN, NOT A TURN. Answered here, never by a model, and it
-costs nothing. A run is found by its person and agent only, so ``/why``
-can never show anyone else's.
+costs nothing. A run is found by its person only (any of their agents'),
+so ``/why`` can never show anyone else's.
 """
 
 from __future__ import annotations
