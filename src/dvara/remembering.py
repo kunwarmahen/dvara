@@ -8,14 +8,31 @@ was never kept, because nothing looked back over a conversation here.
 And a person could not see what was kept about them, or take one back,
 without the owner opening the store.
 
-    /memory              what is kept about you, with each one's id
-    /memory forget ID    that one, gone
+    /memory              what is kept about you, with each one's id, and
+                         what every conversation starts with: the facts
+                         (F1, F2 …) and the guesses (B1 …), with how sure
+    /memory forget ID    that one, gone (an F or a B too: never in a
+                         prompt again, and never drawn again)
+    /memory fix ID WORDS put it right: the new words in its place
     /remember 1 3        keep what I noticed (the numbers I listed)
     /remember all        keep all of it
     /remember not 2      not that one, and never offered again
     /remember none       none of it, never offered again
     /remember declined   what they turned down, newest first
     /remember undo 1     that one may be offered again: back on the list
+
+WHAT THE AGENT IS TOLD, NOT ONLY WHAT WAS KEPT. A store like Smritikosh
+turns the kept memories into facts and guesses, and since those go into
+every prompt (Yantra's note 162) a person whose agent "knew" something
+wrong had nowhere to look: ``/memory`` listed the memories, never the
+facts made of them. So the list ends with both, numbered, each fact
+with how sure the store is and how many memories said it, each guess
+with how sure; and ``forget`` and ``fix`` take those numbers. A guess
+can be forgotten and not fixed: it is the store's reading of many
+memories, and the words to fix are in those. A fixed FACT is turned down
+and the new words kept as a memory, from which the store draws the
+fact again; a fixed MEMORY is written in the old one's place first and
+the old one let go after, so a failure between keeps both.
 
 THE LOOK BACK IS YANTRA'S, AND SO IS WHAT IT NOTICES MID-TURN. Yantra's
 own look back (its memory/reflect.py) asks the agent's model once what
@@ -441,6 +458,59 @@ def kept_words(statements: list[str]) -> str:
     if not statements:
         return "Nothing was kept."
     return "Kept:\n" + "\n".join(f"- {s}" for s in statements)
+
+
+#: How a fact or a guess is named in the chat: F2, B1.
+_KNOWN = re.compile(r"^([fb])(\d+)$", re.I)
+
+
+def known_pick(word: str) -> tuple[str, int] | None:
+    """("fact"|"belief", n) for ``F2`` / ``b1``; None for anything else."""
+    found = _KNOWN.match(word.strip().lstrip("#"))
+    if not found:
+        return None
+    return ("fact" if found.group(1).lower() == "f" else "belief", int(found.group(2)))
+
+
+def _sure(confidence: float) -> str:
+    return f"{round(confidence * 100)}% sure" if confidence else ""
+
+
+def shown_known(profile, listed_ids):
+    """The profile with the facts that are listed memories left out: on a
+    store whose facts ARE memories (Yantra's own), the facts would be the
+    list again. Both ``/memory`` and its F numbers use this, so F2 is the
+    F2 the person saw."""
+    if profile is None:
+        return None
+    from dataclasses import replace
+    ids = set(listed_ids)
+    return replace(profile, facts=[f for f in profile.facts if f.id not in ids])
+
+
+def known_lines(profile) -> list[str]:
+    """The facts and guesses every conversation starts with, numbered for
+    ``/memory forget F2`` and ``/memory fix F2 …``. Nothing when the store
+    keeps neither."""
+    if profile is None or not (profile.facts or profile.beliefs):
+        return []
+    lines = []
+    if profile.facts:
+        lines += ["", "What every conversation is told about you:"]
+        for n, fact in enumerate(profile.facts, 1):
+            how = ", ".join(x for x in (
+                _sure(getattr(fact, "confidence", 0.0)),
+                (f"said {fact.seen} times" if getattr(fact, "seen", 0) > 1 else ""),
+                ("always told" if fact.core else "told when it fits")) if x)
+            lines.append(f"F{n}  {fact.statement}  ({how})")
+    if profile.beliefs:
+        lines += ["", "What I guess about you (from many memories, not said by you):"]
+        lines += [f"B{n}  {belief.statement}"
+                  + (f"  ({_sure(belief.confidence)})" if belief.confidence else "")
+                  for n, belief in enumerate(profile.beliefs, 1)]
+    lines.append("Send /memory forget F1 to stop it being told, /memory fix F1 <the "
+                 "right words> to put it right.")
+    return lines
 
 
 def memory_list(items, short) -> str:

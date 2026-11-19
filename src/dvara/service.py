@@ -2632,12 +2632,17 @@ class Service:
                 gone = self.offered.take(who.id, pick, decline=True)
                 return remembering.declined_words([o.statement for o in gone])
             picked = pick
-        forget = None
+        forget = fix = None
         if word == "/memory" and rest:
             verb, _, target = rest.partition(" ")
-            if verb.lower() not in ("forget", "remove", "delete") or not target.strip():
-                return "Send /memory to see what I remember, or /memory forget ID."
-            forget = target.strip()
+            verb, target = verb.lower(), target.strip()
+            if verb in ("fix", "correct") and len(target.split(maxsplit=1)) == 2:
+                fix = tuple(target.split(maxsplit=1))
+            elif verb in ("forget", "remove", "delete") and target:
+                forget = target
+            else:
+                return ("Send /memory to see what I remember, /memory forget ID, or "
+                        "/memory fix ID <the right words>.")
         async with self._remembered(spec, who, key) as agent:
             if agent is None:
                 return remembering.NO_STORE
@@ -2651,21 +2656,69 @@ class Service:
                     self.offered.take(who.id, picked)
                     # a new home names the one it replaced: "… (instead of: …)"
                     return remembering.kept_words([line for _, line in kept])
+                target = (fix or (forget,))[0] if (fix or forget) else None
+                if target is not None and "forget" in memory.cannot():
+                    return "Where your memories are kept, I can't change one from here."
+                if target is not None and (pick := remembering.known_pick(target)):
+                    return await asyncio.to_thread(self._mend_known, memory, pick,
+                                                   fix[1] if fix else None)
+                if fix is not None:
+                    _, was = await asyncio.to_thread(memory.correct, *fix)
+                    return f"Put right. It was: {was.statement}\nNow: {fix[1].strip()}"
                 if forget is not None:
-                    if "forget" in memory.cannot():
-                        return "Where your memories are kept, I can't remove one from here."
                     gone = await asyncio.to_thread(memory.forget, forget)
                     return (f"Forgot #{forget.lstrip('#')}." if gone else
                             f"There's no memory #{forget.lstrip('#')}. Send /memory to see them.")
                 if "list" in memory.cannot():
                     return "Where your memories are kept, I can't list them from here."
                 items = await asyncio.to_thread(memory.list, 100)
-                return remembering.memory_list(items, short_id)
+                known = await asyncio.to_thread(self._known, memory, who)
+                lines = remembering.known_lines(
+                    remembering.shown_known(known, [i.id for i in items]))
+                if not items and lines:
+                    return "\n".join(lines).strip()
+                return "\n".join([remembering.memory_list(items, short_id), *lines])
             except MemoryStoreError as exc:
                 return f"That didn't work: {exc}"
             except Exception as exc:  # noqa: BLE001 -- a store down is a sentence
                 self._note(f"dvara: {who.id}: {word} failed -- {type(exc).__name__}: {exc}")
                 return "I couldn't reach where your memories are kept just now. Try again soon."
+
+    def _known(self, memory, who: Actor):
+        """The facts and guesses a conversation starts with, or None. A
+        store that can't say them is no reason the memories go unlisted."""
+        try:
+            return memory.known()
+        except Exception as exc:  # noqa: BLE001 -- the list still shows
+            self._note(f"dvara: {who.id}: /memory profile failed -- "
+                       f"{type(exc).__name__}: {exc}")
+            return None
+
+    @staticmethod
+    def _mend_known(memory, pick: tuple[str, int], words: str | None) -> str:
+        """``/memory forget F2`` / ``fix F2 …`` / ``forget B1``: the number
+        found again now, in the same order ``/memory`` listed them."""
+        kind, n = pick
+        known = memory.known()
+        if known is not None and kind == "fact" and "list" not in memory.cannot():
+            known = remembering.shown_known(known, [i.id for i in memory.list(100)])
+        rows = (known.facts if kind == "fact" else known.beliefs) if known else []
+        name = f"{'F' if kind == 'fact' else 'B'}{n}"
+        if not 1 <= n <= len(rows):
+            return f"There's no {name} now. Send /memory to see them again."
+        row = rows[n - 1]
+        if words is not None and kind == "belief":
+            return (f"{name} is a guess from many memories, so there are no words of it "
+                    f"to fix. Send /memory forget {name} to drop it, or /remember the "
+                    "right thing.")
+        if not memory.turn_down(row.id):
+            return f"{name} wasn't there to take back. Send /memory to see them again."
+        if words is None:
+            return (f"I won't be told \"{row.statement}\" again"
+                    + (", and won't guess it again." if kind == "belief" else "."))
+        memory.remember(words.strip(), kind="correction")
+        return (f"Put right. It was: {row.statement}\nNow kept: {words.strip()} "
+                "(every conversation is told it once the memory store has taken it in).")
 
     def _remember_extra(self, actor: str, agent: str) -> dict:
         """What a page draws beside a look back's notice: the facts it

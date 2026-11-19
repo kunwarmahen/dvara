@@ -208,3 +208,7 @@ offers the two words only where the package remembers.
 * ~~**A look back without `/new`.**~~ A conversation nobody has written
   in for 30 minutes is looked back over too, and the person sent what it
   noticed ([note 39](39-while-nobody-is-writing.md)).
+
+The facts and guesses a store makes of these memories are on `/memory`
+too now, and a memory can be put right in place (`/memory fix`):
+[notes/86](86-what-you-are-told.md).

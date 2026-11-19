@@ -555,3 +555,87 @@ def test_the_page_is_handed_the_same_words_telegrams_menu_is(make_service, remem
                                         for w, said in words_for(service, spec)]
     assert {"/remember", "/new"} <= {w for w, _ in look["words"]["greeter"]}
     assert "words" not in service.web.look("guest", after=5)    # the first look's
+
+
+# ---- what every conversation is told, seen and put right ---------------------
+# The bias: an agent that "knows" something wrong about a person, with no
+# way for them to see it from their chat or say what's right. The facts
+# and guesses a store made of their memories go into every prompt, so
+# /memory shows them with how sure, and forget / fix take their numbers --
+# the same numbers the list showed, and only ever that person's.
+
+@pytest.fixture
+def kosh_like(monkeypatch):
+    """The built-in store, answering ``profile`` as Smritikosh does: facts
+    and guesses with ids of their own, and a forget that takes them."""
+    from yantra.memory import Belief, Fact, Profile
+    from yantra.memory.local import LocalStore
+    turned_down = []
+    profile = Profile(
+        facts=[Fact("fact:location/city", "Lives in Cary, NC", "location", True, ("e1",),
+                    0.85, 3),
+               Fact("fact:finance/broker", "Banks with Fidelity", "finance", False, (),
+                    0.6, 1)],
+        beliefs=[Belief("belief:b1", "Prefers short answers", 0.7)], memories=[])
+    real_forget = LocalStore.forget
+
+    def forget(self, user, memory_id):
+        if memory_id.startswith(("fact:", "belief:")):
+            turned_down.append((user, memory_id))
+            return True
+        return real_forget(self, user, memory_id)
+    monkeypatch.setattr(LocalStore, "profile", lambda self, user, query: profile)
+    monkeypatch.setattr(LocalStore, "forget", forget)
+    return turned_down
+
+
+def test_memory_shows_the_facts_and_guesses_with_how_sure(make_service, remembers,
+                                                           kosh_like):
+    listed = say(make_service([]), "/memory").text
+    assert "F1  Lives in Cary, NC  (85% sure, said 3 times, always told)" in listed
+    assert "F2  Banks with Fidelity  (60% sure, told when it fits)" in listed
+    assert "not said by you" in listed and "B1  Prefers short answers  (70% sure)" in listed
+
+
+def test_a_fact_is_turned_down_by_the_number_shown(make_service, remembers, kosh_like):
+    service = make_service([])
+    said = say(service, "/memory forget F2").text
+    assert said == 'I won\'t be told "Banks with Fidelity" again.'
+    assert kosh_like == [("owner", "fact:finance/broker")]
+    assert service.scripted.requests == []          # no model was asked
+
+
+def test_a_fixed_fact_is_turned_down_and_the_right_words_kept(make_service, remembers,
+                                                              kosh_like):
+    said = say(make_service([]), "/memory fix F1 Lives in Apex, NC").text
+    assert said.startswith("Put right. It was: Lives in Cary, NC\nNow kept: Lives in Apex")
+    assert kosh_like == [("owner", "fact:location/city")]
+    assert kept("owner") == ["Lives in Apex, NC"]
+
+
+def test_a_guess_can_be_forgotten_but_not_fixed(make_service, remembers, kosh_like):
+    service = make_service([])
+    assert "no words of it to fix" in say(service, "/memory fix B1 Likes detail").text
+    assert kosh_like == [] and kept("owner") == []
+    assert "won't guess it again" in say(service, "/memory forget B1").text
+    assert kosh_like == [("owner", "belief:b1")]
+
+
+def test_a_number_that_isnt_there_changes_nothing(make_service, remembers, kosh_like):
+    assert "There's no F9 now" in say(make_service([]), "/memory forget F9").text
+    assert kosh_like == []
+
+
+def test_a_kept_memory_is_put_right_in_its_place(make_service, remembers):
+    from yantra.memory.local import LocalStore
+    mine = LocalStore().remember("owner", "Has a cat called Biscuit", {})
+    said = say(make_service([]), f"/memory fix {mine[:8]} Has a dog called Biscuit").text
+    assert said == "Put right. It was: Has a cat called Biscuit\nNow: Has a dog called Biscuit"
+    assert kept("owner") == ["Has a dog called Biscuit"]
+
+
+def test_on_the_built_in_store_a_fact_is_not_listed_twice(make_service, remembers):
+    from yantra.memory.local import LocalStore
+    LocalStore().remember("owner", "Lives in Pune", {"topic": "home", "slot": "home||city"})
+    listed = say(make_service([]), "/memory").text
+    assert listed.count("Lives in Pune") == 1 and "F1" not in listed
