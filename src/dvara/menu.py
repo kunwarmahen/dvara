@@ -40,7 +40,8 @@ def menu(spec: Any, *, schedules: bool = False, watches: bool = False,
              ("chats", "Our conversations: find, open, delete"),
              ("tests", "Answers kept as tests, and how each did"),
              ("doctor", "What's wrong with yours; /doctor every morning"),
-             ("brief", "Your house's last day, no model; /brief every morning")]
+             ("brief", "Your house's last day, no model; /brief every morning"),
+             ("repeats", "What you ask again and again, as schedules")]
     if writes_files(spec):
         words += [("files", "What I keep for you"),
                   ("file", "Send one of them: /file NAME")]

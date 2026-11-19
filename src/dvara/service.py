@@ -124,6 +124,7 @@ from dvara import (attached, carrying, checkup, files, fresh, heard, household, 
                    money, moved, past, patience, phoneview, printed, ready, remembering, seen,
                    signins, spoken)
 from dvara import brief as asked_brief
+from dvara import repeats
 from dvara import why as asked_why
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
@@ -415,6 +416,8 @@ class Service:
         self.holds = HoldBook(self.state / "holds.sqlite3", keep_for=hold_for)
         #: What a look back noticed, waiting for the person's /remember.
         self.offered = remembering.Offered(self.state)
+        #: asks they keep making, offered as schedules (repeats.py)
+        self.repeats = repeats.Offers(self.state)
         #: Each person's own /voice choice (spoken.py).
         self.voices = spoken.Choices(self.state)
         #: Skills offered after an answer and kept on the person's word
@@ -1142,6 +1145,10 @@ class Service:
                 return Reply(text=said, run_id=None, agent=agent, actor=actor,
                              stop_reason="accounts")
 
+        if not unattended and repeats.word_of(text):
+            # the asks they keep making, offered as schedules: theirs to answer
+            return Reply(text=await self._repeats_words(who, text), run_id=None,
+                         agent=agent, actor=actor, stop_reason="repeats")
         if asked_brief.word_of(text):
             # the house's own account of their last day, read not written: not a turn
             when = None if unattended else asked_brief.morning_word(text)
@@ -2070,6 +2077,8 @@ class Service:
             kept = []
         if noticed := self._noticed(agent, run):
             run.reply = f"{run.reply}\n\n{noticed}"
+        if repeated := self._repeat_hint(who, run):
+            run.reply = f"{run.reply}\n\n{repeated}"
         if end is not None and end.switched:
             # a model standing by answered (Yantra's providers/standby.py):
             # the person hears whose words these are, and the ledger keeps it
@@ -2976,6 +2985,48 @@ class Service:
         work = self.state / "work" / actor / agent
         work.mkdir(parents=True, exist_ok=True)
         return work
+
+    def _repeat_hint(self, who: Actor, run: Run) -> str:
+        """The line under an answer that is the latest of a habit, once
+        (repeats.py). Never raises: an offer is no reason to lose a turn."""
+        if run.unattended or not run.ok or not self.samay:
+            return ""
+        try:
+            found = repeats.habit(run.message, run.agent,
+                                  self.runs.recent(actor=who.id, limit=300),
+                                  limits.now_for(who.zone))
+            if found is None or self.repeats.known(who.id, found):
+                return ""
+            return repeats.hint(found, self.repeats.offer(who.id, found))
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"dvara: {who.id}: looking for a habit failed -- {exc}")
+            return ""
+
+    async def _repeats_words(self, who: Actor, text: str) -> str:
+        """``/repeats``, ``/repeats yes N``, ``/repeats no N`` (repeats.py)."""
+        from dvara.seen import ask_json
+        picked = repeats.pick(text)
+        if picked is None:
+            return repeats.listing(self.repeats.waiting(who.id))
+        if isinstance(picked, str):
+            return picked
+        verb, n = picked
+        if verb == "yes" and not self.samay:
+            return "Schedules aren't switched on here, so I can't make one."
+        found = self.repeats.take(who.id, n, decline=verb == "no")
+        if found is None:
+            return f"There's no {n} on the list. Send /repeats to see it."
+        if verb == "no":
+            return f"I won't offer \"{found.words}\" again."
+        made, trouble = await ask_json(
+            [self.samay, "add", found.words, "--when", found.when(), "--runner", "dvara",
+             "--as", who.id, "--agent", found.agent, "--notify", "always", "--json"],
+            env={"SAMAY_TZ": who.zone} if who.zone else None)
+        if trouble or not isinstance(made, dict):
+            self.repeats.offer(who.id, found)          # back on the list: nothing made
+            return trouble or "Samay didn't make it. It's still on /repeats; try again soon."
+        return (f"Done: \"{found.words}\" {made.get('sentence') or found.when()}. "
+                "/schedules shows it; ask me to change or stop it.")
 
     async def _brief(self, who: Actor) -> str:
         """``/brief``: their last day from the ledger, Samay and Prahari (brief.py)."""
