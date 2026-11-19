@@ -112,7 +112,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
            "model, input_tokens, output_tokens, cache_read_tokens, "
            "cache_write_tokens, cost_usd, stop_reason, detail, tools, "
            "answered_from, agent_version, waited_seconds, resumes, "
-           "unattended, came_by, kept")
+           "unattended, came_by, kept, leaned_on")
 
 #: Columns added after the first row was ever written, and the type each
 #: one gets. ADDED, NEVER REBUILT: there is a runs.sqlite3 in somebody's
@@ -123,7 +123,7 @@ COLUMNS = ("id, actor, agent, thread, started_at, ended_at, message, reply, "
 ADDED = (("tools", "TEXT"), ("answered_from", "TEXT"),
          ("agent_version", "TEXT"), ("waited_seconds", "REAL"),
          ("resumes", "TEXT"), ("unattended", "INTEGER"),
-         ("came_by", "TEXT"), ("kept", "TEXT"))
+         ("came_by", "TEXT"), ("kept", "TEXT"), ("leaned_on", "TEXT"))
 
 #: The ways a turn can come in, as ``came_by`` writes them. Not enforced
 #: -- an HTTP bridge may name its own -- but these are the ones Dvara's
@@ -259,6 +259,10 @@ class Run:
     #: and what a look back finding nothing new says was kept already
     #: (``kept_since_look_back``). Empty on a row older than this field.
     kept: list[str] = field(default_factory=list)
+    #: What the answer leaned on about the person -- the memories, facts
+    #: and guesses it drew on, in their words (Yantra's ``Memory.leaned``):
+    #: what ``/why`` says the agent went by. Empty on a row older than this.
+    leaned_on: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -364,8 +368,9 @@ class RunStore:
                 "ended_at, message, reply, model, input_tokens, "
                 "output_tokens, cache_read_tokens, cache_write_tokens, "
                 "cost_usd, stop_reason, detail, tools, answered_from, "
-                "agent_version, waited_seconds, resumes, unattended, came_by, kept) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "agent_version, waited_seconds, resumes, unattended, came_by, kept, "
+                "leaned_on) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run.id, run.actor, run.agent, run.thread,
                  _stamp(run.started_at), _stamp(ended),
                  run.message, run.reply, run.model,
@@ -376,7 +381,7 @@ class RunStore:
                         for step in run.tools]),
                  _dump(list(run.answered_from)), run.agent_version,
                  run.waited_seconds, run.resumes, int(run.unattended),
-                 run.came_by, _dump(list(run.kept))),
+                 run.came_by, _dump(list(run.kept)), _dump(list(run.leaned_on))),
             )
             self._db.commit()
         return run.id
@@ -662,6 +667,7 @@ def _row_to_run(row: tuple) -> Run:
         unattended=bool(row[21]),
         came_by=row[22],
         kept=[k for k in _load(row[23]) if isinstance(k, str)],
+        leaned_on=[k for k in _load(row[24]) if isinstance(k, str)],
     )
 
 

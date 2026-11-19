@@ -75,3 +75,6 @@ the guest's run as a file: 403 "only your own runs make one"
   folded shut fetches none.
 * **A step's pictures on Telegram.** `/steps` is words, and a picture
   per step would be a burst of photos in a chat.
+
+Who or what started a run, and what let each step happen, in words for
+the person: `/why` ([notes/88](88-why-did-you-do-that.md)).

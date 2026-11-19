@@ -123,6 +123,7 @@ from yantra.unattended import scope as unattended_scope
 from dvara import (attached, carrying, checkup, files, fresh, heard, household, learning, limits,
                    money, moved, past, patience, phoneview, printed, ready, remembering, seen,
                    signins, spoken)
+from dvara import why as asked_why
 from dvara.accounts import AccountDesk, is_command, looks_pasted, owners_client_file
 from dvara.unlocked import seal_loose
 from dvara.actors import OWN_SETU, Actor, ActorBook, Channel
@@ -1157,6 +1158,10 @@ class Service:
                              f"each morning, told only when something is new.")
             return Reply(text=said, run_id=None, agent=agent, actor=actor,
                          stop_reason="doctor")
+        if not unattended and asked_why.word_of(text):
+            # what started their last run and what let each step happen: not a turn
+            return Reply(text=self._why_words(who, agent, spec, text), run_id=None,
+                         agent=agent, actor=actor, stop_reason="steps")
         if not unattended and text.strip().lower().split()[:1] == ["/steps"]:
             # what their last turn (or turn N) did, step by step: not a turn
             return Reply(text=self._steps_words(key, text), run_id=None, agent=agent,
@@ -2491,6 +2496,10 @@ class Service:
         person's permission mode; whether they hear of it is not: a write
         they let through unasked is still never a silent one."""
         memory = getattr(agent, "memory", None)
+        # what the answer went by about them, for /why (why.py)
+        run.leaned_on = [statement for _, statement in getattr(memory, "leaned", None) or []]
+        if memory is not None and hasattr(memory, "leaned"):
+            memory.leaned = []      # a turn that ends with no answer leaned on nothing
         kept = list(getattr(memory, "kept", None) or [])
         if not kept:
             return []
@@ -2951,6 +2960,20 @@ class Service:
         work = self.state / "work" / actor / agent
         work.mkdir(parents=True, exist_ok=True)
         return work
+
+    def _why_words(self, who: Actor, agent: str, spec: AgentSpec, text: str) -> str:
+        """``/why``, ``/why N``: their own runs of this agent, newest first,
+        typed or started by their schedule or watch (why.py)."""
+        back = asked_why.which(text)
+        if isinstance(back, str):
+            return back
+        runs = [r for r in self.runs.recent(actor=who.id, agent=agent,
+                                            limit=asked_why.WHY_BACK + 10)
+                if r.stop_reason not in ("looked_back", "new")]
+        if len(runs) < back:
+            return asked_why.nothing(back)
+        rung = self.policy.effective(who.permissions, spec.permissions_mode)
+        return asked_why.explain(runs[back - 1], rung=rung, back=back)
 
     def _steps_words(self, key: str, text: str) -> str:
         from yantra import steps
