@@ -1478,10 +1478,13 @@ class Service:
     def _desk_for(self, who: Actor):
         """Where this person's questions go: to them, or, when the owner
         named an approver for them, to the approver (limits.py)."""
-        if who.approver is None or self.asks is None:
+        # a child's questions go to the house's owner unless one was named
+        named = who.approver or (self.owner if who.role == "child"
+                                 and self.owner and self.owner != who.id else None)
+        if named is None or self.asks is None:
             return self.asks
         try:
-            approver = self.actors.get(who.approver)
+            approver = self.actors.get(named)
         except Refused:
             return self.asks
         return limits.ForApproval(self.asks, approver=approver.id,

@@ -289,6 +289,9 @@ permissions      = "read_only"     # served, but never asked to approve
 permissions      = "ask"           # may be asked to approve a write...
 max_wait_per_day = 300             # ...for up to five minutes of waiting a day
 
+[actor.anya]
+role              = "child"        # a child's safe settings in one word (or "guest")
+
 [actor.kid]
 permissions       = "ask"          # changes are questions...
 approver          = "owner"        # ...put to the owner, not to them
@@ -324,7 +327,7 @@ An unknown key is an error, not a shrug:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, connectors, hours, max_turns_per_day,
 max_usd_per_day, max_usd_per_turn, max_wait_per_day, permissions, phone, phones,
-receipt, setu, setu_accounts, setu_manage, speak, trusted, voice, zone
+receipt, role, setu, setu_accounts, setu_manage, speak, trusted, voice, zone
 ```
 
 **Limits for a child.** `hours` is when their agents answer, on their
@@ -338,6 +341,14 @@ says `For kid: …`, can't be answered by the child, and is refused rather
 than held if nobody answers. Their `permissions` still decides whether
 there is a question at all, so pair it with `"ask"`
 ([notes/61](notes/61-limits-for-a-child.md)).
+
+**A role, in one word.** `role = "child"` fills every one of those left
+out: 07:00-21:00, 60 messages and $1.00 a day, `"ask"`, and the questions
+go to the owner (`--owner`) unless an `approver` is named. `role =
+"guest"` is read only (never changes anything, so never asks), 30
+messages and $0.25 a day. What you write by hand wins; the page shows a
+role's values greyed and leaves their boxes empty, so a Save keeps them
+the role's ([notes/87](notes/87-a-role-in-one-word.md)).
 
 **Someone who isn't where this machine is.** `zone` is their own time
 zone, by its IANA name (`Europe/London`, `Asia/Kolkata`). Their agent is
@@ -1796,7 +1807,7 @@ reads that person's key from `<state>/memory.json`
 | `keeps.py` | `dvara keeps --json` (`dvara.keeps.v1`): where the agents, the actors file, the rules and the state are, asked with the same folders as `status`, for Sarathi's `sarathi backup`; people's browser caches, the folder's lock and the page's answers read aloud (`voice-cache`) left out, nothing opened; `dvara keeps --rehome OLD NEW` after a restore on a new home: the actors file's, the rules' and `signins.json`'s paths moved, and each person's Setu folder asked to move its own (`setu keeps --rehome`) |
 | `household.py` | what everyone in the house may know: the owner's facts, shown whole in every agent's turn; `/remember for everyone` keeps (the owner) or offers (anyone else), `/household` lists and answers ([notes/62](notes/62-what-everyone-knows.md)) |
 | `moved.py` | a person's `zone` changed: their schedules in the zone they left moved by Samay (`samay zone`), and they're told ([notes/74](notes/74-their-schedules-move-with-them.md)) |
-| `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)) |
+| `limits.py` | a person's limits that aren't money: the hours their agents answer (on their own `zone`'s clock, `now_for`), a day's messages, and the approver their questions go to ([notes/61](notes/61-limits-for-a-child.md), [notes/66](notes/66-their-own-clock.md)); a `role` (child, guest) fills those a person's table leaves out, in actors.py ([notes/87](notes/87-a-role-in-one-word.md)) |
 | `memory.py` | whose memories a turn reads, and where: each person under their own name, and with `--memory` the owner's store, started per turn with that person's own key from `memory.json` ([notes/37](notes/37-their-own-memories.md)) |
 | `menu.py` | the words an agent answers, as one list: Telegram's `/` menu at the bot's start, and the web channel's `words` on a page's first look, so the page's + menu and `/` list are the same words ([notes/28](notes/28-starting-over.md)); `/memory` and `/remember` where its package remembers ([notes/38](notes/38-what-they-said-in-passing.md)); one list for both roads ([notes/80](notes/80-one-menu-and-a-keep-button.md)); `/routines` when Vidhi is on ([notes/83](notes/83-routines-from-the-chat.md)) |
 | `routines.py` | `/routines`: a person's routines from Vidhi, how one went, `run N`, and a run's question answered (`yes|no CODE`, `pick CODE N`, `say CODE words`: the buttons' words; the code alone, or a Telegram reply to the question, answers it too, and the question says so there), as them ([notes/83](notes/83-routines-from-the-chat.md)) |

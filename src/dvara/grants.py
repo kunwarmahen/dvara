@@ -126,7 +126,9 @@ def report(*, book, rules, roster, runs, house_rung: str | None, owner: str | No
         people.append({
             "id": pid, "owner": pid == owner, "rung": actor.permissions,
             "agents": agents, "trusted": list(actor.trusted),
-            "approver": actor.approver,
+            "approver": actor.approver or (owner if actor.role == "child" and owner
+                                           and owner != pid else None),
+            "role": actor.role,
             "accounts": ("own folder" if actor.setu == "own" else
                          "shared folder" if actor.setu else None),
             "setu_accounts": list(actor.setu_accounts) if actor.setu_accounts is not None
@@ -291,7 +293,8 @@ def lines(data: dict) -> list[str]:
     out.append("People")
     for p in data["people"]:
         own = f"own rung {p['rung']}" if p["rung"] else "no rung of their own"
-        out.append(f"  {p['id']}{' (owner)' if p['owner'] else ''}: {own}")
+        role = f", a {p['role']}" if p.get("role") and p["role"] != "adult" else ""
+        out.append(f"  {p['id']}{' (owner)' if p['owner'] else ''}{role}: {own}")
         for a in p["agents"]:
             out.append(f"      {a['agent']}: {RUNG_WORDS.get(a['rung'], a['rung'])}")
         extra = []

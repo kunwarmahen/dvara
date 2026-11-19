@@ -61,7 +61,7 @@ def person(actor) -> dict:
     telegram = [c.id for c in actor.channels if c.kind == "telegram"]
     setu = ("none" if actor.setu is None else "own" if actor.setu == OWN_SETU
             else actor.setu)
-    return {"id": actor.id, "agents": list(actor.agents) if actor.agents is not None else None,
+    shown = {"id": actor.id, "agents": list(actor.agents) if actor.agents is not None else None,
             "permissions": actor.permissions, "max_usd_per_day": actor.max_usd_per_day,
             "max_usd_per_turn": actor.max_usd_per_turn, "receipt": actor.receipt,
             "setu": setu, "setu_accounts": list(actor.setu_accounts or []) or None,
@@ -75,6 +75,12 @@ def person(actor) -> dict:
             "trusted": list(actor.trusted) or None,
             "other_channels": [f"{c.kind}:{c.id}" for c in actor.channels
                                if c.kind != "telegram"]}
+    # a role's values are shown as the role's, beside the form's boxes, and
+    # the boxes left blank: a Save then keeps them the role's, not the owner's
+    role_fills = {key: shown.get(key) for key in actor.from_role}
+    for key in actor.from_role:
+        shown[key] = None
+    return {**shown, "role": actor.role, "role_fills": role_fills}
 
 
 def show(*, root: Path, actors: Path, policy: Path, examples: Path | None = None,

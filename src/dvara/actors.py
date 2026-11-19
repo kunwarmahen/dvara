@@ -32,6 +32,31 @@ up to approve a shell command, on a service where the owner themselves is
 asked. Absent means the tightest rung, which is what a person who was
 never considered should get.
 
+## A role: the safe defaults for a child or a guest, in one word
+
+    [actor.anya]
+    role = "child"
+
+A child needs six settings to be safe -- hours, a day's messages, a
+day's dollars, asking before changes, and who is asked -- and an owner
+setting one up for the first time knows none of their names. ``role``
+fills the ones the owner didn't write (``ROLE_DEFAULTS``):
+
+* ``child``: answers 07:00-21:00, 60 messages and $1.00 a day, asked
+  before anything changes, and the question goes to the house's owner,
+  not the child (a spend, or a lock, is the owner's yes).
+* ``guest``: looks and never changes anything (the tightest rung), 30
+  messages and $0.25 a day, none of the house's accounts.
+* ``adult``: nothing filled; it says so on the page.
+
+WHAT THE OWNER WROTE WINS. A role only fills keys left out, so ``role =
+"child"`` with ``hours = "06:30-20:00"`` is a child with an earlier
+bedtime. The page shows which values came from the role (``from_role``),
+so saving the form never turns a role's defaults into hand-written
+ones by accident. A guest's never-changing comes from the rung, the same
+gate every call already goes through, not from a list of tools that
+would be out of date the day a new connector arrives.
+
 ## One person, several channels
 
     [[actor.mahen.channel]]
@@ -127,11 +152,22 @@ from dvara.limits import Hours
 #: ``max_usd_per_day`` that quietly means "no ceiling" is the exact
 #: failure a ceiling exists to prevent (the same rule Yantra's package
 #: loader applies to ``agent.toml``).
-ACTOR_KEYS = frozenset({"agents", "max_usd_per_turn", "max_usd_per_day",
+ACTOR_KEYS = frozenset({"role", "agents", "max_usd_per_turn", "max_usd_per_day",
                         "max_wait_per_day", "permissions", "channel",
                         "receipt", "setu", "setu_accounts", "setu_manage", "connectors",
                         "phone", "phones", "hours", "max_turns_per_day",
                         "approver", "speak", "voice", "zone", "trusted"})
+
+#: What a role fills in, for keys the owner left out (module docstring).
+#: A child's approver is the house's owner, which only the service knows,
+#: so it is filled where questions are sent (``Service._desk_for``).
+ROLE_DEFAULTS: dict[str, dict] = {
+    "adult": {},
+    "child": {"hours": "07:00-21:00", "max_turns_per_day": 60, "max_usd_per_day": 1.0,
+              "permissions": "ask"},
+    "guest": {"max_turns_per_day": 30, "max_usd_per_day": 0.25,
+              "permissions": "read_only"},
+}
 
 #: ``setu = true``: a Setu folder of the person's own, under the
 #: service's state. Any other value is a path to one that exists already.
@@ -248,6 +284,11 @@ class Actor:
     #: (Yantra's outside.py): ``samay``, or one tool by its full name. A
     #: change after reading one asks nothing new. () trusts nothing.
     trusted: tuple[str, ...] = ()
+    #: ``adult``, ``child`` or ``guest`` (ROLE_DEFAULTS), or None.
+    role: str | None = None
+    #: The keys the role filled in, not the owner: shown as the role's on
+    #: the page, and left out when the page saves.
+    from_role: tuple[str, ...] = ()
 
     @property
     def has_phone(self) -> bool:
@@ -416,8 +457,11 @@ class ActorBook:
                     f"{', '.join(unknown)}; known: "
                     f"{', '.join(sorted(ACTOR_KEYS))}"
                 )
+            role = _role(body, name, where)
+            from_role = tuple(k for k in ROLE_DEFAULTS.get(role or "", {}) if k not in body)
+            body = {**ROLE_DEFAULTS.get(role or "", {}), **body}
             actors[name] = Actor(
-                id=name,
+                id=name, role=role, from_role=from_role,
                 agents=_agents(body.get("agents"), name, where),
                 max_usd_per_turn=_money(body, "max_usd_per_turn", name, where),
                 max_usd_per_day=_money(body, "max_usd_per_day", name, where),
@@ -731,6 +775,17 @@ def _count(body: dict, key: str, name: str, where) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ConfigProblem(f"{where}: [actor.{name}] {key} must be a whole "
                             f"number above zero (got {value!r})")
+    return value
+
+
+def _role(body: dict, name: str, where) -> str | None:
+    value = body.get("role")
+    if value is None:
+        return None
+    if value not in ROLE_DEFAULTS:
+        raise ConfigProblem(f"{where}: [actor.{name}] role must be one of "
+                            f"{', '.join(ROLE_DEFAULTS)} (got {value!r}); leave it out "
+                            f"to set everything by hand")
     return value
 
 

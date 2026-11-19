@@ -192,3 +192,6 @@ refused | I'm not answering now -- your hours here are 03:00-04:00. Ask again af
 * **More messages on the approver's yes.** "Ask whoever looks after this"
   is the sentence. A button that raised the day's limit from the chat
   would be a limit the child could talk their way past.
+
+All of these, in one word: `role = "child"` (or `"guest"`), with what
+the owner writes by hand still winning: [notes/87](87-a-role-in-one-word.md).

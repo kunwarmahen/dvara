@@ -154,7 +154,7 @@ are errors too:
 error: ~/dvara/actors.toml: [actor.guest] has unknown key(s) max_usd_per_dayz;
 known: agents, approver, channel, connectors, hours, max_turns_per_day,
 max_usd_per_day, max_usd_per_turn, max_wait_per_day, permissions, phone, phones,
-receipt, setu, setu_accounts, setu_manage, speak, trusted, voice, zone
+receipt, role, setu, setu_accounts, setu_manage, speak, trusted, voice, zone
 ```
 
 A misspelled ceiling that quietly means "no ceiling" is exactly the
@@ -2040,8 +2040,17 @@ in Prahari's README.
 
 ## 26 · Limits for a child
 
-Money and waiting had limits already (sections 5 and 7). For a child
-you want three more, none of them in dollars:
+Money and waiting had limits already (sections 5 and 7). The short way
+is one word, and the questions come to you (the `--owner`):
+
+```toml
+[actor.anya]
+role = "child"     # 07:00-21:00, 60 messages and $1.00 a day, changes asked of you
+```
+
+`role = "guest"` is a visitor: read only, 30 messages and $0.25 a day.
+Anything you write beside the role wins (notes/87). Box by box, for a
+child you want three more limits, none of them in dollars:
 
 ```toml
 [actor.kid]
